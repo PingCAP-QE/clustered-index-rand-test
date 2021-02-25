@@ -68,6 +68,16 @@ func NewState() *State {
 	return s
 }
 
+func NewState2(EnableTestTiFlash bool) *State {
+	s := &State{
+		ctrl:             DefaultControlOption(),
+		enabledClustered: true,
+	}
+	s.ctrl.EnableTestTiFlash = EnableTestTiFlash
+	s.CreateScope()
+	return s
+}
+
 type ControlOption struct {
 	// the initial number of tables.
 	InitTableCount int
@@ -85,6 +95,8 @@ type ControlOption struct {
 	CanReadGCSavePoint bool
 	// Test SELECT OUTFILE and LOAD DATA
 	EnableSelectOutFileAndLoadData bool
+	// Test TiFlash
+	EnableTestTiFlash bool
 }
 
 func DefaultControlOption() *ControlOption {
@@ -96,6 +108,7 @@ func DefaultControlOption() *ControlOption {
 		StrictTransTable:               true,
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
+		EnableTestTiFlash:              false,
 	}
 }
 

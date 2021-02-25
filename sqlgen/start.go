@@ -139,14 +139,20 @@ func NewGenerator(state *State) func() string {
 
 	adminCheck = NewFn("adminCheck", func() Fn {
 		tbl := state.GetRandTable()
-		if len(tbl.indices) == 0 {
-			return Strs("admin check table", tbl.name)
+		if state.ctrl.EnableTestTiFlash {
+			// Error: Error 1815: Internal : Can't find a proper physical plan for this query
+			// https://github.com/pingcap/tidb/issues/22947
+			return Str("")
+		} else {
+			if len(tbl.indices) == 0 {
+				return Strs("admin check table", tbl.name)
+			}
+			idx := tbl.GetRandomIndex()
+			return Or(
+				Strs("admin check table", tbl.name),
+				Strs("admin check index", tbl.name, idx.name),
+			)
 		}
-		idx := tbl.GetRandomIndex()
-		return Or(
-			Strs("admin check table", tbl.name),
-			Strs("admin check index", tbl.name, idx.name),
-		)
 	})
 
 	createTable = NewFn("createTable", func() Fn {
@@ -219,6 +225,10 @@ func NewGenerator(state *State) func() string {
 			)
 		})
 		PreEvalWithOrder(&colDefs, &partitionDef, &idxDefs)
+		if state.ctrl.EnableTestTiFlash {
+			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.name))
+			state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
+		}
 		return And(
 			Str("create table"),
 			Str(tbl.name),
@@ -261,6 +271,12 @@ func NewGenerator(state *State) func() string {
 				prepare.ToPrepare().AppendColumns(paramCols...)
 			}
 			return And(Str("select"),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("/*+ read_from_storage(tiflash["),
+						Str(tbl.name),
+						Str("]) */"),
+					)),
 				Str(PrintColumnNamesWithoutPar(cols, "*")),
 				Str("from"),
 				Str(tbl.name),
@@ -281,7 +297,14 @@ func NewGenerator(state *State) func() string {
 			intCol := tbl.GetRandIntColumn()
 			if intCol == nil {
 				return And(
-					Str("select count(*) from"),
+					Str("select"),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("/*+ read_from_storage(tiflash["),
+							Str(tbl.name),
+							Str("]) */"),
+						)),
+					Str("count(*) from"),
 					Str(tbl.name),
 					Str("where"),
 					predicate,
@@ -289,13 +312,27 @@ func NewGenerator(state *State) func() string {
 			}
 			return Or(
 				And(
-					Str("select count(*) from"),
+					Str("select"),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("/*+ read_from_storage(tiflash["),
+							Str(tbl.name),
+							Str("]) */"),
+						)),
+					Str("count(*) from"),
 					Str(tbl.name),
 					Str("where"),
 					predicate,
 				),
 				And(
-					Str("select sum("),
+					Str("select"),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("/*+ read_from_storage(tiflash["),
+							Str(tbl.name),
+							Str("]) */"),
+						)),
+					Str("sum("),
 					Str(intCol.name),
 					Str(")"),
 					Str("from"),
@@ -560,6 +597,14 @@ func NewGenerator(state *State) func() string {
 		if len(group) == 0 {
 			return And(
 				Str("select"),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("/*+ read_from_storage(tiflash["),
+						Str(tbl1.name),
+						Str(","),
+						Str(tbl2.name),
+						Str("]) */"),
+					)),
 				Str(PrintFullQualifiedColName(tbl1, cols1)),
 				Str(","),
 				Str(PrintFullQualifiedColName(tbl2, cols2)),
@@ -572,6 +617,14 @@ func NewGenerator(state *State) func() string {
 
 		return And(
 			Str("select"),
+			OptIf(state.ctrl.EnableTestTiFlash,
+				And(
+					Str("/*+ read_from_storage(tiflash["),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str("]) */"),
+				)),
 			Str(PrintFullQualifiedColName(tbl1, cols1)),
 			Str(","),
 			Str(PrintFullQualifiedColName(tbl2, cols2)),

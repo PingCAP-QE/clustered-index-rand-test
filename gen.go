@@ -14,6 +14,7 @@ type genTestOptions struct {
 	RecurLimit int
 	NumTxn     int
 	Debug      bool
+	TiFlash    bool
 }
 
 func genTest(opts genTestOptions) (test Test, err error) {
@@ -22,7 +23,7 @@ func genTest(opts genTestOptions) (test Test, err error) {
 }
 
 func genTestWithoutGrammarFile(opts genTestOptions) (test Test, err error) {
-	state := sqlgen.NewState()
+	state := sqlgen.NewState2(opts.TiFlash)
 	state.InjectTodoSQL("set @@tidb_enable_clustered_index=true")
 	gen := sqlgen.NewGenerator(state)
 	for i := 0; i < opts.NumTxn; i++ {

@@ -195,6 +195,7 @@ func genTestCmd(g *global) *cobra.Command {
 	cmd.Flags().IntVar(&opts.RecurLimit, "recur-limit", 15, "max recursion level for sql generation")
 	cmd.Flags().IntVar(&opts.NumTxn, "txn", 5, "number of transactions per test")
 	cmd.Flags().BoolVar(&opts.Debug, "debug", false, "enable debug option of generator")
+	cmd.Flags().BoolVar(&opts.TiFlash, "tiflash", false, "enable test TiFlash (default false)")
 	return cmd
 }
 
