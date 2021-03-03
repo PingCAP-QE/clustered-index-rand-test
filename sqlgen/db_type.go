@@ -31,7 +31,6 @@ var DefaultWeight = Weight{
 	Query_DML_DEL:               1,
 	Query_DML_UPDATE:            1,
 	Query_DML_INSERT:            1,
-	Query_DML_INSERT_Normal:     3,
 	Query_DML_INSERT_ON_DUP:     4,
 	Query_DML_Can_Be_Replace:    true,
 	Query_DDL:                   5,
@@ -53,7 +52,6 @@ type Weight struct {
 	Query_Select                int
 	Query_DML_DEL               int
 	Query_DML_INSERT            int
-	Query_DML_INSERT_Normal     int
 	Query_DML_INSERT_ON_DUP     int
 	Query_DML_Can_Be_Replace    bool
 	Query_DML_UPDATE            int

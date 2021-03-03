@@ -385,11 +385,11 @@ func NewGenerator(state *State) func() string {
 
 		onDuplicateUpdate = NewFn("onDuplicateUpdate", func() Fn {
 			return Or(
-				Empty().SetW(w.Query_DML_INSERT_Normal),
+				Empty().SetW(3),
 				And(
 					Str("on duplicate key update"),
 					Or(
-						onDupAssignment.SetW(w.Query_DML_INSERT_ON_DUP),
+						onDupAssignment.SetW(4),
 						And(onDupAssignment, Str(","), onDupAssignment),
 					),
 				),
@@ -420,7 +420,7 @@ func NewGenerator(state *State) func() string {
 				Str(PrintColumnNamesWithPar(cols, "")),
 				Str("values"),
 				multipleRowVals,
-				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
+				OptIf(insertOrReplace == "insert", onDuplicateUpdate).SetW(w.Query_DML_INSERT_ON_DUP),
 			),
 		)
 	})
