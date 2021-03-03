@@ -14,6 +14,10 @@ type State struct {
 	weight     *Weight
 }
 
+func (s *State) WithWeight(w *Weight) {
+	s.weight = w
+}
+
 var DefaultWeight = Weight{
 	CreateTable:                 13,
 	CreateTable_MoreCol:         2,
