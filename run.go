@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/tangenta/tp-test/sqlgen"
+	"github.com/tangenta/clustered-index-rand-test/sqlgen"
 	"github.com/zyguan/sqlz"
 	"github.com/zyguan/sqlz/resultset"
 
