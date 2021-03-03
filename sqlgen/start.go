@@ -392,7 +392,7 @@ func NewGenerator(state *State) func() string {
 						onDupAssignment.SetW(4),
 						And(onDupAssignment, Str(","), onDupAssignment),
 					),
-				),
+				).SetW(w.Query_DML_INSERT_ON_DUP),
 			)
 		})
 
@@ -420,7 +420,7 @@ func NewGenerator(state *State) func() string {
 				Str(PrintColumnNamesWithPar(cols, "")),
 				Str("values"),
 				multipleRowVals,
-				OptIf(insertOrReplace == "insert", onDuplicateUpdate).SetW(w.Query_DML_INSERT_ON_DUP),
+				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
 			),
 		)
 	})
