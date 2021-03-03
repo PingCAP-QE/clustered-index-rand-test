@@ -35,7 +35,7 @@ type runABTestOptions struct {
 	Store Store
 }
 
-func runInteractTest(ctx context.Context, db1, db2 *sql.DB, state *sqlgen.State, sql string) error {
+func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *sqlgen.State, sql string) error {
 	log.Printf("%s", sql)
 	rs1, err1 := runQuery(ctx, db1, sql)
 	rs2, err2 := runQuery(ctx, db2, sql)

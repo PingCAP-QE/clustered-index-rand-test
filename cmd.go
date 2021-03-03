@@ -121,7 +121,7 @@ func interactCmd() *cobra.Command {
 						return err
 					}
 
-					err = runInteractTest(context.Background(), db1, db2, state, gen())
+					err = RunInteractTest(context.Background(), db1, db2, state, gen())
 					if err != nil {
 						return err
 					}
