@@ -32,6 +32,11 @@ func NewGenerator(state *State) func() string {
 		}
 	}
 
+	w := state.weight
+	if w == nil {
+		w = &DefaultWeight
+	}
+
 	start = NewFn("start", func() Fn {
 		if sql, ok := state.PopOneTodoSQL(); ok {
 			return Str(sql)
@@ -44,17 +49,17 @@ func NewGenerator(state *State) func() string {
 			adminCheck,
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
-					createTable.SetW(4),
+					createTable.SetW(w.CreateTable_WithoutLike),
 					createTableLike,
 				),
-			).SetW(13),
+			).SetW(w.CreateTable),
 			If(len(state.tables) > 0,
 				Or(
-					dmlStmt.SetW(20),
-					ddlStmt.SetW(5),
-					//splitRegion.SetW(2),
-					//commonAnalyze.SetW(2),
-					prepareStmt.SetW(2),
+					dmlStmt.SetW(w.Query_DML),
+					ddlStmt.SetW(w.Query_DDL),
+					splitRegion.SetW(w.Query_Split),
+					commonAnalyze.SetW(w.Query_Analyze),
+					prepareStmt.SetW(w.Query_Prepare),
 					If(len(state.prepareStmts) > 0,
 						deallocPrepareStmt,
 					).SetW(1),
@@ -70,7 +75,7 @@ func NewGenerator(state *State) func() string {
 						),
 					).SetW(1),
 				),
-			).SetW(15),
+			).SetW(w.Query),
 		)
 	})
 
@@ -84,13 +89,13 @@ func NewGenerator(state *State) func() string {
 
 	dmlStmt = NewFn("dmlStmt", func() Fn {
 		return Or(
-			query,
+			query.SetW(w.Query_Select),
 			If(len(state.prepareStmts) > 0,
 				queryPrepare,
 			),
-			//commonDelete,
-			//commonInsert,
-			//commonUpdate,
+			commonDelete.SetW(w.Query_DML_DEL),
+			commonInsert.SetW(w.Query_DML_INSERT),
+			commonUpdate.SetW(w.Query_DML_UPDATE),
 		)
 	})
 
@@ -167,7 +172,7 @@ func NewGenerator(state *State) func() string {
 		})
 		colDefs = NewFn("colDefs", func() Fn {
 			colDef = NewFn("colDef", func() Fn {
-				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID))
+				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 				tbl.AppendColumn(col)
 				return And(Str(col.name), Str(PrintColumnType(col)))
 			})
@@ -176,12 +181,12 @@ func NewGenerator(state *State) func() string {
 			}
 			return Or(
 				colDef,
-				And(colDef, Str(","), colDefs).SetW(2),
+				And(colDef, Str(","), colDefs).SetW(w.CreateTable_MoreCol),
 			)
 		})
 		idxDefs = NewFn("idxDefs", func() Fn {
 			idxDef = NewFn("idxDef", func() Fn {
-				idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+				idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
 				if idx.IsUnique() {
 					partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn)
 					if !partitionedCol.IsNil() {
@@ -203,7 +208,7 @@ func NewGenerator(state *State) func() string {
 			})
 			return Or(
 				idxDef.SetW(1),
-				And(idxDef, Str(","), idxDefs).SetW(2),
+				And(idxDef, Str(","), idxDefs).SetW(w.CreateTable_IndexMoreCol),
 			)
 		})
 
@@ -380,11 +385,11 @@ func NewGenerator(state *State) func() string {
 
 		onDuplicateUpdate = NewFn("onDuplicateUpdate", func() Fn {
 			return Or(
-				Empty().SetW(3),
+				Empty().SetW(w.Query_DML_INSERT_Normal),
 				And(
 					Str("on duplicate key update"),
 					Or(
-						onDupAssignment.SetW(4),
+						onDupAssignment.SetW(w.Query_DML_INSERT_ON_DUP),
 						And(onDupAssignment, Str(","), onDupAssignment),
 					),
 				),
@@ -534,7 +539,7 @@ func NewGenerator(state *State) func() string {
 
 	addIndex = NewFn("addIndex", func() Fn {
 		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-		idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+		idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
 		tbl.AppendIndex(idx)
 
 		return Strs(
@@ -556,7 +561,7 @@ func NewGenerator(state *State) func() string {
 
 	addColumn = NewFn("addColumn", func() Fn {
 		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-		col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID))
+		col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 		tbl.AppendColumn(col)
 		return Strs(
 			"alter table", tbl.name,

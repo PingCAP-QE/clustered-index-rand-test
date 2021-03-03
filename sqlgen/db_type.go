@@ -11,6 +11,49 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
+	weight     *Weight
+}
+
+var DefaultWeight = Weight{
+	CreateTable:                 13,
+	CreateTable_MoreCol:         2,
+	CreateTable_IndexMoreCol:    2,
+	CreateTable_MustPrefixIndex: false,
+	CreateTable_MustStrCol:      false,
+	CreateTable_WithoutLike:     4,
+	Query:                       15,
+	Query_DML:                   20,
+	Query_Select:                1,
+	Query_DML_DEL:               1,
+	Query_DML_UPDATE:            1,
+	Query_DML_INSERT:            1,
+	Query_DML_INSERT_Normal:     3,
+	Query_DML_INSERT_ON_DUP:     4,
+	Query_DDL:                   5,
+	Query_Split:                 0,
+	Query_Analyze:               0,
+	Query_Prepare:               2,
+}
+
+type Weight struct {
+	CreateTable                 int
+	CreateTable_MoreCol         int
+	CreateTable_WithoutLike     int
+	CreateTable_IndexMoreCol    int
+	CreateTable_MustPrefixIndex bool
+	CreateTable_MustStrCol      bool
+	Query                       int
+	Query_DML                   int
+	Query_Select                int
+	Query_DML_DEL               int
+	Query_DML_INSERT            int
+	Query_DML_INSERT_Normal     int
+	Query_DML_INSERT_ON_DUP     int
+	Query_DML_UPDATE            int
+	Query_DDL                   int
+	Query_Split                 int
+	Query_Analyze               int
+	Query_Prepare               int
 }
 
 type Table struct {
