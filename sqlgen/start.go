@@ -379,7 +379,7 @@ func NewGenerator(state *State) func() string {
 			cols = tbl.GetRandColumns()
 		}
 		insertOrReplace := "insert"
-		if rand.Intn(3) == 0 {
+		if rand.Intn(3) == 0 && w.Query_DML_Can_Be_Replace {
 			insertOrReplace = "replace"
 		}
 
@@ -533,7 +533,7 @@ func NewGenerator(state *State) func() string {
 	maybeLimit = NewFn("maybeLimit", func() Fn {
 		return Or(
 			Empty().SetW(3),
-			Strs("limit", RandomNum(1, 10)),
+			Strs("limit", RandomNum(1, 10)).SetW(w.Query_HasLimit),
 		)
 	})
 
