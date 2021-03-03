@@ -1,7 +1,10 @@
 package sqlgen
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"github.com/zyguan/sqlz/resultset"
 	"log"
 	"math/rand"
 	"path"
@@ -710,4 +713,56 @@ func NewGenerator(state *State) func() string {
 		return Str(assignments[0])
 	})
 	return retFn
+}
+
+func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	log.Printf("%s", sql)
+	rs1, err1 := runQuery(ctx, db1, sql)
+	rs2, err2 := runQuery(ctx, db2, sql)
+	if !ValidateErrs(err1, err2) {
+		return fmt.Errorf("errors mismatch: %v <> %v %q", err1, err2, sql)
+	}
+	if rs1 == nil || rs2 == nil {
+		return nil
+	}
+	h1, h2 := rs1.DataDigest(), rs2.DataDigest()
+	if h1 != h2 {
+		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
+	}
+	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
+		return fmt.Errorf("rows affected mismatch: %d != %d %q",
+			rs1.ExecResult().RowsAffected, rs2.ExecResult().RowsAffected, sql)
+	}
+	return nil
+}
+
+func runQuery(ctx context.Context, db *sql.DB, sql string) (*resultset.ResultSet, error) {
+	rows, err := db.QueryContext(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return resultset.ReadFromRows(rows)
+}
+
+func ValidateErrs(err1 error, err2 error) bool {
+	ignoreErrMsgs := []string{
+		"with index covered now",                         // 4.0 cannot drop column with index
+		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
+		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
+		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
+	}
+	for _, msg := range ignoreErrMsgs {
+		match := OneOfContains(err1, err2, msg)
+		if match {
+			return true
+		}
+	}
+	return (err1 == nil && err2 == nil) || (err1 != nil && err2 != nil)
+}
+
+func OneOfContains(err1, err2 error, msg string) bool {
+	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
+	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
+	return c1 || c2
 }
