@@ -24,6 +24,9 @@ func GenNewColumn(id int, w *Weight) *Column {
 	if w.CreateTable_MustStrCol {
 		col.tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
+	if w.CreateTable_MustIntCol {
+		col.tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
+	}
 	switch col.tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:

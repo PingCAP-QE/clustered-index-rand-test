@@ -48,11 +48,11 @@ type ColumnType int64
 
 const (
 	ColumnTypeInt ColumnType = iota
-	ColumnTypeBoolean
 	ColumnTypeTinyInt
 	ColumnTypeSmallInt
 	ColumnTypeMediumInt
 	ColumnTypeBigInt
+	ColumnTypeBoolean
 	ColumnTypeFloat
 	ColumnTypeDouble
 	ColumnTypeDecimal

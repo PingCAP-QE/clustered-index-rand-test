@@ -213,7 +213,7 @@ func NewGenerator(state *State) func() string {
 		})
 
 		partitionDef = NewFn("partitionDef", func() Fn {
-			if rand.Intn(5) != 0 {
+			if !w.CreateTable_ForceHashPartition && rand.Intn(5) != 0 {
 				return Empty()
 			}
 			partitionedCol := tbl.GetRandColumnForPartition()
