@@ -602,6 +602,46 @@ func NewGenerator(state *State) func() string {
 				Str(col2.name),
 			)
 		})
+		joinHint = NewFn("joinHint", func() Fn {
+			return Or(
+				Empty(),
+				And(
+					Str("MERGE_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_HASH_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_MERGE_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("HASH_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+			)
+		})
 		if len(group) == 0 {
 			return And(
 				Str("select"),
@@ -615,44 +655,7 @@ func NewGenerator(state *State) func() string {
 							Str(tbl2.name),
 							Str("])"),
 						)),
-					Or(
-						Empty(),
-						And(
-							Str("/*+ MERGE_JOIN("),
-							Str(tbl1.name),
-							Str(","),
-							Str(tbl2.name),
-							Str(") */"),
-						),
-						And(
-							Str("/*+ INL_JOIN("),
-							Str(tbl1.name),
-							Str(","),
-							Str(tbl2.name),
-							Str(") */"),
-						),
-						And(
-							Str("/*+ INL_HASH_JOIN("),
-							Str(tbl1.name),
-							Str(","),
-							Str(tbl2.name),
-							Str(") */"),
-						),
-						And(
-							Str("/*+ INL_MERGE_JOIN("),
-							Str(tbl1.name),
-							Str(","),
-							Str(tbl2.name),
-							Str(") */"),
-						),
-						And(
-							Str("/*+ HASH_JOIN("),
-							Str(tbl1.name),
-							Str(","),
-							Str(tbl2.name),
-							Str(") */"),
-						),
-					),
+					joinHint,
 					Str(" */"),
 				),
 				Str(PrintFullQualifiedColName(tbl1, cols1)),
@@ -685,44 +688,7 @@ func NewGenerator(state *State) func() string {
 						Str(tbl2.name),
 						Str("])"),
 					)),
-				Or(
-					Empty(),
-					And(
-						Str("/*+ MERGE_JOIN("),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str(") */"),
-					),
-					And(
-						Str("/*+ INL_JOIN("),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str(") */"),
-					),
-					And(
-						Str("/*+ INL_HASH_JOIN("),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str(") */"),
-					),
-					And(
-						Str("/*+ INL_MERGE_JOIN("),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str(") */"),
-					),
-					And(
-						Str("/*+ HASH_JOIN("),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str(") */"),
-					),
-				),
+				joinHint,
 				Str(" */"),
 			),
 			Str(PrintFullQualifiedColName(tbl1, cols1)),

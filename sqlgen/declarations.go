@@ -38,6 +38,7 @@ var (
 	cmpSymbol          Fn
 	flashBackTable     Fn
 	dropTable          Fn
+	joinHint           Fn
 	createTableLike    Fn
 	multiTableQuery    Fn
 	joinPredicates     Fn
