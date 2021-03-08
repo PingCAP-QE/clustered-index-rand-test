@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/tangenta/tp-test/sqlgen"
+	"github.com/tangenta/clustered-index-rand-test/sqlgen"
 )
 
 type genTestOptions struct {

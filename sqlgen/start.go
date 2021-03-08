@@ -1,7 +1,10 @@
 package sqlgen
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"github.com/zyguan/sqlz/resultset"
 	"log"
 	"math/rand"
 	"path"
@@ -29,6 +32,11 @@ func NewGenerator(state *State) func() string {
 		}
 	}
 
+	w := state.weight
+	if w == nil {
+		w = &DefaultWeight
+	}
+
 	start = NewFn("start", func() Fn {
 		if sql, ok := state.PopOneTodoSQL(); ok {
 			return Str(sql)
@@ -41,17 +49,17 @@ func NewGenerator(state *State) func() string {
 			adminCheck,
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
-					createTable.SetW(4),
+					createTable.SetW(w.CreateTable_WithoutLike),
 					createTableLike,
 				),
-			).SetW(13),
+			).SetW(w.CreateTable),
 			If(len(state.tables) > 0,
 				Or(
-					dmlStmt.SetW(20),
-					ddlStmt.SetW(5),
-					//splitRegion.SetW(2),
-					//commonAnalyze.SetW(2),
-					prepareStmt.SetW(2),
+					dmlStmt.SetW(w.Query_DML),
+					ddlStmt.SetW(w.Query_DDL),
+					splitRegion.SetW(w.Query_Split),
+					commonAnalyze.SetW(w.Query_Analyze),
+					prepareStmt.SetW(w.Query_Prepare),
 					If(len(state.prepareStmts) > 0,
 						deallocPrepareStmt,
 					).SetW(1),
@@ -67,7 +75,7 @@ func NewGenerator(state *State) func() string {
 						),
 					).SetW(1),
 				),
-			).SetW(15),
+			).SetW(w.Query),
 		)
 	})
 
@@ -81,13 +89,13 @@ func NewGenerator(state *State) func() string {
 
 	dmlStmt = NewFn("dmlStmt", func() Fn {
 		return Or(
-			query,
+			query.SetW(w.Query_Select),
 			If(len(state.prepareStmts) > 0,
 				queryPrepare,
 			),
-			//commonDelete,
-			//commonInsert,
-			//commonUpdate,
+			commonDelete.SetW(w.Query_DML_DEL),
+			commonInsert.SetW(w.Query_DML_INSERT),
+			commonUpdate.SetW(w.Query_DML_UPDATE),
 		)
 	})
 
@@ -164,7 +172,7 @@ func NewGenerator(state *State) func() string {
 		})
 		colDefs = NewFn("colDefs", func() Fn {
 			colDef = NewFn("colDef", func() Fn {
-				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID))
+				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 				tbl.AppendColumn(col)
 				return And(Str(col.name), Str(PrintColumnType(col)))
 			})
@@ -173,12 +181,12 @@ func NewGenerator(state *State) func() string {
 			}
 			return Or(
 				colDef,
-				And(colDef, Str(","), colDefs).SetW(2),
+				And(colDef, Str(","), colDefs).SetW(w.CreateTable_MoreCol),
 			)
 		})
 		idxDefs = NewFn("idxDefs", func() Fn {
 			idxDef = NewFn("idxDef", func() Fn {
-				idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+				idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
 				if idx.IsUnique() {
 					partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn)
 					if !partitionedCol.IsNil() {
@@ -200,12 +208,12 @@ func NewGenerator(state *State) func() string {
 			})
 			return Or(
 				idxDef.SetW(1),
-				And(idxDef, Str(","), idxDefs).SetW(2),
+				And(idxDef, Str(","), idxDefs).SetW(w.CreateTable_IndexMoreCol),
 			)
 		})
 
 		partitionDef = NewFn("partitionDef", func() Fn {
-			if rand.Intn(5) != 0 {
+			if !w.CreateTable_ForceHashPartition && rand.Intn(5) != 0 {
 				return Empty()
 			}
 			partitionedCol := tbl.GetRandColumnForPartition()
@@ -371,7 +379,7 @@ func NewGenerator(state *State) func() string {
 			cols = tbl.GetRandColumns()
 		}
 		insertOrReplace := "insert"
-		if rand.Intn(3) == 0 {
+		if rand.Intn(3) == 0 && w.Query_DML_Can_Be_Replace {
 			insertOrReplace = "replace"
 		}
 
@@ -384,7 +392,7 @@ func NewGenerator(state *State) func() string {
 						onDupAssignment.SetW(4),
 						And(onDupAssignment, Str(","), onDupAssignment),
 					),
-				),
+				).SetW(w.Query_DML_INSERT_ON_DUP),
 			)
 		})
 
@@ -525,13 +533,13 @@ func NewGenerator(state *State) func() string {
 	maybeLimit = NewFn("maybeLimit", func() Fn {
 		return Or(
 			Empty().SetW(3),
-			Strs("limit", RandomNum(1, 10)),
+			Strs("limit", RandomNum(1, 10)).SetW(w.Query_HasLimit),
 		)
 	})
 
 	addIndex = NewFn("addIndex", func() Fn {
 		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-		idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+		idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
 		tbl.AppendIndex(idx)
 
 		return Strs(
@@ -553,7 +561,7 @@ func NewGenerator(state *State) func() string {
 
 	addColumn = NewFn("addColumn", func() Fn {
 		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-		col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID))
+		col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 		tbl.AppendColumn(col)
 		return Strs(
 			"alter table", tbl.name,
@@ -594,17 +602,62 @@ func NewGenerator(state *State) func() string {
 				Str(col2.name),
 			)
 		})
+		joinHint = NewFn("joinHint", func() Fn {
+			return Or(
+				Empty(),
+				And(
+					Str("MERGE_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_HASH_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("INL_MERGE_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+				And(
+					Str("HASH_JOIN("),
+					Str(tbl1.name),
+					Str(","),
+					Str(tbl2.name),
+					Str(")"),
+				),
+			)
+		})
 		if len(group) == 0 {
 			return And(
 				Str("select"),
-				OptIf(state.ctrl.EnableTestTiFlash,
-					And(
-						Str("/*+ read_from_storage(tiflash["),
-						Str(tbl1.name),
-						Str(","),
-						Str(tbl2.name),
-						Str("]) */"),
-					)),
+				And(
+					Str("/*+ "),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("read_from_storage(tiflash["),
+							Str(tbl1.name),
+							Str(","),
+							Str(tbl2.name),
+							Str("])"),
+						)),
+					joinHint,
+					Str(" */"),
+				),
 				Str(PrintFullQualifiedColName(tbl1, cols1)),
 				Str(","),
 				Str(PrintFullQualifiedColName(tbl2, cols2)),
@@ -625,6 +678,19 @@ func NewGenerator(state *State) func() string {
 					Str(tbl2.name),
 					Str("]) */"),
 				)),
+			And(
+				Str("/*+ "),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("read_from_storage(tiflash["),
+						Str(tbl1.name),
+						Str(","),
+						Str(tbl2.name),
+						Str("])"),
+					)),
+				joinHint,
+				Str(" */"),
+			),
 			Str(PrintFullQualifiedColName(tbl1, cols1)),
 			Str(","),
 			Str(PrintFullQualifiedColName(tbl2, cols2)),
@@ -710,4 +776,56 @@ func NewGenerator(state *State) func() string {
 		return Str(assignments[0])
 	})
 	return retFn
+}
+
+func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	log.Printf("%s", sql)
+	rs1, err1 := runQuery(ctx, db1, sql)
+	rs2, err2 := runQuery(ctx, db2, sql)
+	if !ValidateErrs(err1, err2) {
+		return fmt.Errorf("errors mismatch: %v <> %v %q", err1, err2, sql)
+	}
+	if rs1 == nil || rs2 == nil {
+		return nil
+	}
+	h1, h2 := rs1.UnorderedDigest(), rs2.UnorderedDigest()
+	if h1 != h2 {
+		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
+	}
+	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
+		return fmt.Errorf("rows affected mismatch: %d != %d %q",
+			rs1.ExecResult().RowsAffected, rs2.ExecResult().RowsAffected, sql)
+	}
+	return nil
+}
+
+func runQuery(ctx context.Context, db *sql.DB, sql string) (*resultset.ResultSet, error) {
+	rows, err := db.QueryContext(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return resultset.ReadFromRows(rows)
+}
+
+func ValidateErrs(err1 error, err2 error) bool {
+	ignoreErrMsgs := []string{
+		"with index covered now",                         // 4.0 cannot drop column with index
+		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
+		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
+		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
+	}
+	for _, msg := range ignoreErrMsgs {
+		match := OneOfContains(err1, err2, msg)
+		if match {
+			return true
+		}
+	}
+	return (err1 == nil && err2 == nil) || (err1 != nil && err2 != nil)
+}
+
+func OneOfContains(err1, err2 error, msg string) bool {
+	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
+	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
+	return c1 || c2
 }

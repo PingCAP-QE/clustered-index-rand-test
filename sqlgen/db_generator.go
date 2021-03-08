@@ -18,9 +18,15 @@ func GenNewTable(id int) *Table {
 	return newTbl
 }
 
-func GenNewColumn(id int) *Column {
+func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{id: id, name: fmt.Sprintf("col_%d", id)}
 	col.tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	if w.CreateTable_MustStrCol {
+		col.tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
+	}
+	if w.CreateTable_MustIntCol {
+		col.tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
+	}
 	switch col.tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
@@ -55,7 +61,7 @@ func GenNewColumn(id int) *Column {
 	return col
 }
 
-func GenNewIndex(id int, tbl *Table) *Index {
+func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 	idx := &Index{id: id, name: fmt.Sprintf("idx_%d", id)}
 	if tbl.containsPK {
 		// Exclude primary key type.
@@ -74,7 +80,7 @@ func GenNewIndex(id int, tbl *Table) *Index {
 		idx.columns = append(idx.columns, chosenCol)
 		prefixLen := 0
 		if chosenCol.tp.NeedKeyLength() ||
-			(chosenCol.tp.IsStringType() && rand.Intn(4) == 0) {
+			(chosenCol.tp.IsStringType() && (w.CreateTable_MustPrefixIndex || rand.Intn(4) == 0)) {
 			maxPrefix := mathutil.Min(chosenCol.arg1, 5)
 			prefixLen = 1 + rand.Intn(maxPrefix+1)
 		}
