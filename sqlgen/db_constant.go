@@ -8,7 +8,7 @@ import (
 
 func (c *Column) EstimateSizeInBytes() int {
 	const bytesPerChar = 4
-	switch c.tp {
+	switch c.Tp {
 	case ColumnTypeInt:
 		return 4
 	case ColumnTypeBoolean, ColumnTypeTinyInt:
@@ -40,7 +40,7 @@ func (c *Column) EstimateSizeInBytes() int {
 	case ColumnTypeTimestamp:
 		return 4
 	}
-	panic(fmt.Sprintf("unknown column type %d", c.tp))
+	panic(fmt.Sprintf("unknown column type %Id", c.Tp))
 	return 0
 }
 

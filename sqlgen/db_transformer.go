@@ -5,19 +5,19 @@ import (
 	"reflect"
 )
 
-// ColumnTypeGroup stores column types -> columns
+// ColumnTypeGroup stores column types -> Columns
 type ColumnTypeGroup = map[ColumnType][]*Column
 
-// GroupColumnsByColumnTypes groups all the columns in given tables by ColumnType.
+// GroupColumnsByColumnTypes groups all the Columns in given tables by ColumnType.
 // This can be used in ON clause in JOIN.
 func GroupColumnsByColumnTypes(tables ...*Table) ColumnTypeGroup {
 	group := make(ColumnTypeGroup)
 	for _, t := range tables {
-		for _, c := range t.columns {
-			if _, ok := group[c.tp]; ok {
-				group[c.tp] = append(group[c.tp], c)
+		for _, c := range t.Columns {
+			if _, ok := group[c.Tp]; ok {
+				group[c.Tp] = append(group[c.Tp], c)
 			} else {
-				group[c.tp] = []*Column{c}
+				group[c.Tp] = []*Column{c}
 			}
 		}
 	}
@@ -44,7 +44,7 @@ func FilterUniqueColumns(c ColumnTypeGroup) ColumnTypeGroup {
 	return c
 }
 
-// SwapOutParameterizedColumns substitute random columns with `?` for prepare statements.
+// SwapOutParameterizedColumns substitute random Columns with `?` for prepare statements.
 // It returns the substituted column in order.
 func SwapOutParameterizedColumns(cols []*Column) []*Column {
 	if len(cols) == 0 {
@@ -53,9 +53,9 @@ func SwapOutParameterizedColumns(cols []*Column) []*Column {
 	var result []*Column
 	for {
 		chosenIdx := rand.Intn(len(cols))
-		if cols[chosenIdx].name != "?" {
+		if cols[chosenIdx].Name != "?" {
 			result = append(result, cols[chosenIdx])
-			cols[chosenIdx] = &Column{name: "?"}
+			cols[chosenIdx] = &Column{Name: "?"}
 		}
 		if RandomBool() {
 			break

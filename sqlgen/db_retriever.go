@@ -42,12 +42,12 @@ func (s *State) GetRandPrepare() *Prepare {
 }
 
 func (t *Table) GetRandColumn() *Column {
-	return t.columns[rand.Intn(len(t.columns))]
+	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
 func (t *Table) GetRandColumnForPartition() *Column {
 	cols := t.FilterColumns(func(column *Column) bool {
-		return column.tp.IsPartitionType()
+		return column.Tp.IsPartitionType()
 	})
 	if len(cols) == 0 {
 		return nil
@@ -82,7 +82,7 @@ func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
 }
 
 func (t *Table) HasDroppableColumn() bool {
-	for _, c := range t.columns {
+	for _, c := range t.Columns {
 		if c.IsDroppable() {
 			return true
 		}
@@ -91,8 +91,8 @@ func (t *Table) HasDroppableColumn() bool {
 }
 
 func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
-	restCols := make([]*Column, 0, len(t.columns))
-	for _, c := range t.columns {
+	restCols := make([]*Column, 0, len(t.Columns))
+	for _, c := range t.Columns {
 		if pred(c) {
 			restCols = append(restCols, c)
 		}
@@ -101,12 +101,12 @@ func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
 }
 
 func (t *Table) GetRandomIndex() *Index {
-	return t.indices[rand.Intn(len(t.indices))]
+	return t.Indices[rand.Intn(len(t.Indices))]
 }
 
 func (t *Table) GetRandIntColumn() *Column {
-	for _, c := range t.columns {
-		if c.tp.IsIntegerType() {
+	for _, c := range t.Columns {
+		if c.Tp.IsIntegerType() {
 			return c
 		}
 	}
@@ -123,8 +123,8 @@ func (t *Table) GetRandRow(cols []*Column) []string {
 	vals := make([]string, 0, len(cols))
 	randRow := t.values[rand.Intn(len(t.values))]
 	for _, targetCol := range cols {
-		for i, tableCol := range t.columns {
-			if tableCol.id == targetCol.id {
+		for i, tableCol := range t.Columns {
+			if tableCol.Id == targetCol.Id {
 				vals = append(vals, randRow[i])
 				break
 			}
@@ -138,8 +138,8 @@ func (t *Table) GetRandRowVal(col *Column) string {
 		return ""
 	}
 	randRow := t.values[rand.Intn(len(t.values))]
-	for i, c := range t.columns {
-		if c.id == col.id {
+	for i, c := range t.Columns {
+		if c.Id == col.Id {
 			return randRow[i]
 		}
 	}
@@ -147,12 +147,12 @@ func (t *Table) GetRandRowVal(col *Column) string {
 }
 
 func (t *Table) GetHandleColumns() []*Column {
-	return t.handleCols
+	return t.HandleCols
 }
 
 func (t *Table) cloneColumns() []*Column {
-	cols := make([]*Column, len(t.columns))
-	for i, c := range t.columns {
+	cols := make([]*Column, len(t.Columns))
+	for i, c := range t.Columns {
 		cols[i] = c
 	}
 	return cols
@@ -160,17 +160,17 @@ func (t *Table) cloneColumns() []*Column {
 
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	tblID := tblIDFn()
-	name := fmt.Sprintf("tbl_%d", tblID)
+	name := fmt.Sprintf("tbl_%Id", tblID)
 
-	oldID2NewCol := make(map[int]*Column, len(t.columns))
-	newCols := make([]*Column, 0, len(t.columns))
-	for _, c := range t.columns {
+	oldID2NewCol := make(map[int]*Column, len(t.Columns))
+	newCols := make([]*Column, 0, len(t.Columns))
+	for _, c := range t.Columns {
 		colID := colIDFn()
-		colName := fmt.Sprintf("col_%d", colID)
+		colName := fmt.Sprintf("col_%Id", colID)
 		newCol := &Column{
-			id:             colID,
-			name:           colName,
-			tp:             c.tp,
+			Id:             colID,
+			Name:           colName,
+			Tp:             c.Tp,
 			isUnsigned:     c.isUnsigned,
 			arg1:           c.arg1,
 			arg2:           c.arg2,
@@ -179,44 +179,44 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 			isNotNull:      c.isNotNull,
 			relatedIndices: map[int]struct{}{},
 		}
-		oldID2NewCol[c.id] = newCol
+		oldID2NewCol[c.Id] = newCol
 		newCols = append(newCols, newCol)
 	}
-	newIdxs := make([]*Index, 0, len(t.indices))
-	for _, idx := range t.indices {
+	newIdxs := make([]*Index, 0, len(t.Indices))
+	for _, idx := range t.Indices {
 		idxID := idxIDFn()
-		idxName := fmt.Sprintf("idx_%d", idxID)
+		idxName := fmt.Sprintf("idx_%Id", idxID)
 		newIdx := &Index{
-			id:           idxID,
-			name:         idxName,
-			tp:           idx.tp,
-			columnPrefix: idx.columnPrefix,
+			Id:           idxID,
+			Name:         idxName,
+			Tp:           idx.Tp,
+			ColumnPrefix: idx.ColumnPrefix,
 		}
-		newIdx.columns = make([]*Column, 0, len(idx.columns))
-		for _, ic := range idx.columns {
-			newIdx.columns = append(newIdx.columns, oldID2NewCol[ic.id])
+		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
+		for _, ic := range idx.Columns {
+			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.Id])
 			ic.relatedIndices[idxID] = struct{}{}
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-	newHandleCols := make([]*Column, 0, len(t.handleCols))
-	for _, oldHdCol := range t.handleCols {
-		newHandleCols = append(newHandleCols, oldID2NewCol[oldHdCol.id])
+	newHandleCols := make([]*Column, 0, len(t.HandleCols))
+	for _, oldHdCol := range t.HandleCols {
+		newHandleCols = append(newHandleCols, oldID2NewCol[oldHdCol.Id])
 	}
 	Assert(len(newHandleCols) > 0, oldID2NewCol)
-	newPartitionCols := make([]*Column, 0, len(t.partitionColumns))
-	for _, oldPartCol := range t.partitionColumns {
-		newPartitionCols = append(newPartitionCols, oldID2NewCol[oldPartCol.id])
+	newPartitionCols := make([]*Column, 0, len(t.PartitionColumns))
+	for _, oldPartCol := range t.PartitionColumns {
+		newPartitionCols = append(newPartitionCols, oldID2NewCol[oldPartCol.Id])
 	}
 
 	newTable := &Table{
-		id:               tblID,
-		name:             name,
-		columns:          newCols,
-		indices:          newIdxs,
+		Id:               tblID,
+		Name:             name,
+		Columns:          newCols,
+		Indices:          newIdxs,
 		containsPK:       t.containsPK,
-		handleCols:       newHandleCols,
-		partitionColumns: newPartitionCols,
+		HandleCols:       newHandleCols,
+		PartitionColumns: newPartitionCols,
 		values:           nil,
 	}
 	newTable.childTables = []*Table{newTable}
@@ -248,7 +248,7 @@ func (t *Table) GetRandColumns() []*Column {
 }
 
 func (i *Index) IsUnique() bool {
-	return i.tp == IndexTypePrimary || i.tp == IndexTypeUnique
+	return i.Tp == IndexTypePrimary || i.Tp == IndexTypeUnique
 }
 
 func (c *Column) IsDroppable() bool {
@@ -256,9 +256,9 @@ func (c *Column) IsDroppable() bool {
 }
 
 func (p *Prepare) UserVars() []string {
-	userVars := make([]string, len(p.args))
-	for i := 0; i < len(p.args); i++ {
-		userVars[i] = fmt.Sprintf("@i%d", i)
+	userVars := make([]string, len(p.Args))
+	for i := 0; i < len(p.Args); i++ {
+		userVars[i] = fmt.Sprintf("@i%Id", i)
 	}
 	return userVars
 }

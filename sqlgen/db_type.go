@@ -67,14 +67,14 @@ type Weight struct {
 }
 
 type Table struct {
-	id      int
-	name    string
-	columns []*Column
-	indices []*Index
+	Id      int
+	Name    string
+	Columns []*Column
+	Indices []*Index
 
 	containsPK       bool // to ensure at most 1 pk in each table
-	handleCols       []*Column
-	partitionColumns []*Column
+	HandleCols       []*Column
+	PartitionColumns []*Column
 	values           [][]string
 
 	// childTables records tables that have the same structure.
@@ -84,9 +84,9 @@ type Table struct {
 }
 
 type Column struct {
-	id   int
-	name string
-	tp   ColumnType
+	Id   int
+	Name string
+	Tp   ColumnType
 
 	isUnsigned bool
 	arg1       int      // optional
@@ -99,17 +99,17 @@ type Column struct {
 }
 
 type Index struct {
-	id           int
-	name         string
-	tp           IndexType
-	columns      []*Column
-	columnPrefix []int
+	Id           int
+	Name         string
+	Tp           IndexType
+	Columns      []*Column
+	ColumnPrefix []int
 }
 
 type Prepare struct {
-	id   int
-	name string
-	args []func() string
+	Id   int
+	Name string
+	Args []func() string
 }
 
 func NewState() *State {
@@ -136,12 +136,12 @@ type ControlOption struct {
 	InitTableCount int
 	// the number of rows to initialize for each table.
 	InitRowCount int
-	// the number of columns for each tables.
+	// the number of Columns for each tables.
 	InitColCount int
 
 	// the max number of tables.
 	MaxTableNum int
-	// for the columns that have no default value,
+	// for the Columns that have no default value,
 	// whether allow to omit column names in 'INSERT' statement.
 	StrictTransTable bool
 	// indicate that the testing server has gc save point.

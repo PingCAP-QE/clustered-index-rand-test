@@ -20,7 +20,7 @@ func PrintColumnNamesWithoutPar(cols []*Column, emptyMarker string) string {
 	}
 	var sb strings.Builder
 	for i, c := range cols {
-		sb.WriteString(c.name)
+		sb.WriteString(c.Name)
 		if i != len(cols)-1 {
 			sb.WriteString(",")
 		}
@@ -34,7 +34,7 @@ func PrintRandValues(values []string) string {
 
 func PrintColumnType(c *Column) string {
 	var sb strings.Builder
-	sb.WriteString(c.tp.String())
+	sb.WriteString(c.Tp.String())
 	if c.arg1 != 0 {
 		sb.WriteString("(")
 		sb.WriteString(strconv.Itoa(c.arg1))
@@ -70,14 +70,14 @@ func PrintColumnType(c *Column) string {
 
 func PrintIndexColumnNames(idx *Index) string {
 	var sb strings.Builder
-	for i, col := range idx.columns {
-		sb.WriteString(col.name)
-		if idx.columnPrefix[i] != 0 {
+	for i, col := range idx.Columns {
+		sb.WriteString(col.Name)
+		if idx.ColumnPrefix[i] != 0 {
 			sb.WriteString("(")
-			sb.WriteString(strconv.Itoa(idx.columnPrefix[i]))
+			sb.WriteString(strconv.Itoa(idx.ColumnPrefix[i]))
 			sb.WriteString(")")
 		}
-		if i != len(idx.columns)-1 {
+		if i != len(idx.Columns)-1 {
 			sb.WriteString(",")
 		}
 	}
@@ -85,7 +85,7 @@ func PrintIndexColumnNames(idx *Index) string {
 }
 
 func PrintIndexType(idx *Index) string {
-	switch idx.tp {
+	switch idx.Tp {
 	case IndexTypeNonUnique:
 		return ""
 	case IndexTypeUnique:
@@ -99,13 +99,13 @@ func PrintIndexType(idx *Index) string {
 
 func PrintFullQualifiedColName(tbl *Table, cols []*Column) string {
 	if len(cols) == 0 {
-		return fmt.Sprintf("%s.*", tbl.name)
+		return fmt.Sprintf("%s.*", tbl.Name)
 	}
 	var sb strings.Builder
 	for i, col := range cols {
-		sb.WriteString(tbl.name)
+		sb.WriteString(tbl.Name)
 		sb.WriteString(".")
-		sb.WriteString(col.name)
+		sb.WriteString(col.Name)
 		if i != len(cols)-1 {
 			sb.WriteString(", ")
 		}
