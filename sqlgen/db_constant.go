@@ -40,7 +40,7 @@ func (c *Column) EstimateSizeInBytes() int {
 	case ColumnTypeTimestamp:
 		return 4
 	}
-	panic(fmt.Sprintf("unknown column type %Id", c.Tp))
+	panic(fmt.Sprintf("unknown column type %d", c.Tp))
 	return 0
 }
 

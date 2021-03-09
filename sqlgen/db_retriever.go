@@ -160,13 +160,13 @@ func (t *Table) cloneColumns() []*Column {
 
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	tblID := tblIDFn()
-	name := fmt.Sprintf("tbl_%Id", tblID)
+	name := fmt.Sprintf("tbl_%d", tblID)
 
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		colID := colIDFn()
-		colName := fmt.Sprintf("col_%Id", colID)
+		colName := fmt.Sprintf("col_%d", colID)
 		newCol := &Column{
 			Id:             colID,
 			Name:           colName,
@@ -185,7 +185,7 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
 		idxID := idxIDFn()
-		idxName := fmt.Sprintf("idx_%Id", idxID)
+		idxName := fmt.Sprintf("idx_%d", idxID)
 		newIdx := &Index{
 			Id:           idxID,
 			Name:         idxName,
@@ -258,7 +258,7 @@ func (c *Column) IsDroppable() bool {
 func (p *Prepare) UserVars() []string {
 	userVars := make([]string, len(p.Args))
 	for i := 0; i < len(p.Args); i++ {
-		userVars[i] = fmt.Sprintf("@i%Id", i)
+		userVars[i] = fmt.Sprintf("@i%d", i)
 	}
 	return userVars
 }

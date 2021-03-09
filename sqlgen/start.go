@@ -718,14 +718,14 @@ func NewGenerator(state *State) func() string {
 	selectIntoOutFile = NewFn("selectIntoOutFile", func() Fn {
 		tbl := state.GetRandTable()
 		state.StoreInRoot(ScopeKeyLastOutFileTable, NewScopeObj(tbl))
-		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%Id.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
+		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
 		return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 	})
 
 	loadTable = NewFn("loadTable", func() Fn {
 		tbl := state.Search(ScopeKeyLastOutFileTable).ToTable()
 		id := state.Search(ScopeKeyTmpFileID).ToInt()
-		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%Id.txt", tbl.Name, id))
+		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, id))
 		randChildTable := tbl.childTables[rand.Intn(len(tbl.childTables))]
 		return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.Name)
 	})
@@ -793,7 +793,7 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
 	}
 	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
-		return fmt.Errorf("rows affected mismatch: %Id != %Id %q",
+		return fmt.Errorf("rows affected mismatch: %d != %d %q",
 			rs1.ExecResult().RowsAffected, rs2.ExecResult().RowsAffected, sql)
 	}
 	return nil

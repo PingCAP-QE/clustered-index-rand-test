@@ -12,14 +12,14 @@ import (
 )
 
 func GenNewTable(id int) *Table {
-	tblName := fmt.Sprintf("tbl_%Id", id)
+	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{Id: id, Name: tblName}
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
 
 func GenNewColumn(id int, w *Weight) *Column {
-	col := &Column{Id: id, Name: fmt.Sprintf("col_%Id", id)}
+	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	if w.CreateTable_MustStrCol {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
@@ -62,7 +62,7 @@ func GenNewColumn(id int, w *Weight) *Column {
 }
 
 func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
-	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%Id", id)}
+	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
 	if tbl.containsPK {
 		// Exclude primary key type.
 		idx.Tp = IndexType(rand.Intn(int(IndexTypePrimary)))
@@ -105,7 +105,7 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 func GenNewPrepare(id int) *Prepare {
 	return &Prepare{
 		Id:   id,
-		Name: fmt.Sprintf("prepare_%Id", id),
+		Name: fmt.Sprintf("prepare_%d", id),
 		Args: nil,
 	}
 }
@@ -140,7 +140,7 @@ func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 func (p *Prepare) GenAssignments() []string {
 	todoSQLs := make([]string, len(p.Args))
 	for i := 0; i < len(todoSQLs); i++ {
-		todoSQLs[i] = fmt.Sprintf("set @i%Id = %s", i, p.Args[i]())
+		todoSQLs[i] = fmt.Sprintf("set @i%d = %s", i, p.Args[i]())
 	}
 	return todoSQLs
 }
