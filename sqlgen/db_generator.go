@@ -13,21 +13,21 @@ import (
 
 func GenNewTable(id int) *Table {
 	tblName := fmt.Sprintf("tbl_%d", id)
-	newTbl := &Table{id: id, name: tblName}
+	newTbl := &Table{Id: id, Name: tblName}
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
 
 func GenNewColumn(id int, w *Weight) *Column {
-	col := &Column{id: id, name: fmt.Sprintf("col_%d", id)}
-	col.tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
+	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	if w.CreateTable_MustStrCol {
-		col.tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
+		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
 	if w.CreateTable_MustIntCol {
-		col.tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
+		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
 	}
-	switch col.tp {
+	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
 		// Float/Double precision is deprecated.
@@ -47,14 +47,14 @@ func GenNewColumn(id int, w *Weight) *Column {
 	case ColumnTypeEnum, ColumnTypeSet:
 		col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	}
-	if col.tp != ColumnTypeVarchar && rand.Intn(5) == 0 {
+	if col.Tp != ColumnTypeVarchar && rand.Intn(5) == 0 {
 		col.arg1, col.arg2 = 0, 0
 	}
-	if col.tp.IsIntegerType() {
+	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()
 	}
 	col.isNotNull = RandomBool()
-	if !col.tp.DisallowDefaultValue() && RandomBool() {
+	if !col.Tp.DisallowDefaultValue() && RandomBool() {
 		col.defaultVal = col.RandomValue()
 	}
 	col.relatedIndices = map[int]struct{}{}
@@ -62,13 +62,13 @@ func GenNewColumn(id int, w *Weight) *Column {
 }
 
 func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
-	idx := &Index{id: id, name: fmt.Sprintf("idx_%d", id)}
+	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
 	if tbl.containsPK {
 		// Exclude primary key type.
-		idx.tp = IndexType(rand.Intn(int(IndexTypePrimary)))
+		idx.Tp = IndexType(rand.Intn(int(IndexTypePrimary)))
 	} else {
 		tbl.containsPK = true
-		idx.tp = IndexTypePrimary
+		idx.Tp = IndexTypePrimary
 	}
 	totalCols := tbl.cloneColumns()
 	for {
@@ -77,22 +77,22 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 		totalCols[0], totalCols[chosenIdx] = totalCols[chosenIdx], totalCols[0]
 		totalCols = totalCols[1:]
 
-		idx.columns = append(idx.columns, chosenCol)
+		idx.Columns = append(idx.Columns, chosenCol)
 		prefixLen := 0
-		if chosenCol.tp.NeedKeyLength() ||
-			(chosenCol.tp.IsStringType() && (w.CreateTable_MustPrefixIndex || rand.Intn(4) == 0)) {
+		if chosenCol.Tp.NeedKeyLength() ||
+			(chosenCol.Tp.IsStringType() && (w.CreateTable_MustPrefixIndex || rand.Intn(4) == 0)) {
 			maxPrefix := mathutil.Min(chosenCol.arg1, 5)
 			prefixLen = 1 + rand.Intn(maxPrefix+1)
 		}
-		idx.columnPrefix = append(idx.columnPrefix, prefixLen)
+		idx.ColumnPrefix = append(idx.ColumnPrefix, prefixLen)
 		keySizeInBytes := 0
-		for _, c := range idx.columns {
+		for _, c := range idx.Columns {
 			keySizeInBytes += c.EstimateSizeInBytes()
 		}
 		if keySizeInBytes > DefaultKeySize {
-			Assert(len(idx.columns) > 1, keySizeInBytes, idx.columns, "one column key size should not > 3072")
-			idx.columns = idx.columns[:len(idx.columns)-1]
-			idx.columnPrefix = idx.columnPrefix[:len(idx.columnPrefix)-1]
+			Assert(len(idx.Columns) > 1, keySizeInBytes, idx.Columns, "one column key size should not > 3072")
+			idx.Columns = idx.Columns[:len(idx.Columns)-1]
+			idx.ColumnPrefix = idx.ColumnPrefix[:len(idx.ColumnPrefix)-1]
 			break
 		}
 		if len(totalCols) == 0 || RandomBool() {
@@ -104,15 +104,15 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 
 func GenNewPrepare(id int) *Prepare {
 	return &Prepare{
-		id:   id,
-		name: fmt.Sprintf("prepare_%d", id),
-		args: nil,
+		Id:   id,
+		Name: fmt.Sprintf("prepare_%d", id),
+		Args: nil,
 	}
 }
 
 func (t *Table) GenRandValues(cols []*Column) []string {
 	if len(cols) == 0 {
-		cols = t.columns
+		cols = t.Columns
 	}
 	row := make([]string, len(cols))
 	for i, c := range cols {
@@ -123,14 +123,14 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 
 func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 	rows := make([][]string, count)
-	firstColumn := t.handleCols[0].RandomValuesAsc(count)
+	firstColumn := t.HandleCols[0].RandomValuesAsc(count)
 	for i := 0; i < count; i++ {
-		rows[i] = make([]string, len(t.handleCols))
-		for j := 0; j < len(t.handleCols); j++ {
+		rows[i] = make([]string, len(t.HandleCols))
+		for j := 0; j < len(t.HandleCols); j++ {
 			if j == 0 {
 				rows[i][j] = firstColumn[i]
 			} else {
-				rows[i][j] = t.handleCols[j].RandomValue()
+				rows[i][j] = t.HandleCols[j].RandomValue()
 			}
 		}
 	}
@@ -138,15 +138,15 @@ func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 }
 
 func (p *Prepare) GenAssignments() []string {
-	todoSQLs := make([]string, len(p.args))
+	todoSQLs := make([]string, len(p.Args))
 	for i := 0; i < len(todoSQLs); i++ {
-		todoSQLs[i] = fmt.Sprintf("set @i%d = %s", i, p.args[i]())
+		todoSQLs[i] = fmt.Sprintf("set @i%d = %s", i, p.Args[i]())
 	}
 	return todoSQLs
 }
 
 func (c *Column) ZeroValue() string {
-	switch c.tp {
+	switch c.Tp {
 	case ColumnTypeTinyInt, ColumnTypeSmallInt, ColumnTypeMediumInt, ColumnTypeInt, ColumnTypeBigInt, ColumnTypeBoolean:
 		return "0"
 	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal, ColumnTypeBit:
@@ -181,7 +181,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return nil
 	}
 	if c.isUnsigned {
-		switch c.tp {
+		switch c.Tp {
 		case ColumnTypeTinyInt:
 			return RandomNums(0, 255, count)
 		case ColumnTypeSmallInt:
@@ -194,7 +194,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 			return RandomNums(0, 9223372036854775806, count)
 		}
 	}
-	switch c.tp {
+	switch c.Tp {
 	case ColumnTypeTinyInt:
 		return RandomNums(-128, 127, count)
 	case ColumnTypeSmallInt:
@@ -240,7 +240,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 	case ColumnTypeTime:
 		return RandTimes(count)
 	default:
-		log.Fatalf("invalid column type %v", c.tp)
+		log.Fatalf("invalid column type %v", c.Tp)
 		return nil
 	}
 }

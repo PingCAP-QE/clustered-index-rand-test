@@ -105,10 +105,10 @@ func NewGenerator(state *State) func() string {
 		return Or(
 			addColumn,
 			addIndex,
-			If(len(tbl.columns) > 1 && tbl.HasDroppableColumn(),
+			If(len(tbl.Columns) > 1 && tbl.HasDroppableColumn(),
 				dropColumn,
 			),
-			If(len(tbl.indices) > 0,
+			If(len(tbl.Indices) > 0,
 				dropIndex,
 			),
 		)
@@ -133,15 +133,15 @@ func NewGenerator(state *State) func() string {
 	dropTable = NewFn("dropTable", func() Fn {
 		tbl := state.GetRandTable()
 		state.Store(ScopeKeyLastDropTable, NewScopeObj(tbl))
-		return Strs("drop table", tbl.name)
+		return Strs("drop table", tbl.Name)
 	})
 
 	flashBackTable = NewFn("flashBackTable", func() Fn {
 		tbl := state.GetRandTable()
-		state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.name))
+		state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.Name))
 		return Or(
-			Strs("drop table", tbl.name),
-			Strs("truncate table", tbl.name),
+			Strs("drop table", tbl.Name),
+			Strs("truncate table", tbl.Name),
 		)
 	})
 
@@ -152,13 +152,13 @@ func NewGenerator(state *State) func() string {
 			// https://github.com/pingcap/tidb/issues/22947
 			return Str("")
 		} else {
-			if len(tbl.indices) == 0 {
-				return Strs("admin check table", tbl.name)
+			if len(tbl.Indices) == 0 {
+				return Strs("admin check table", tbl.Name)
 			}
 			idx := tbl.GetRandomIndex()
 			return Or(
-				Strs("admin check table", tbl.name),
-				Strs("admin check index", tbl.name, idx.name),
+				Strs("admin check table", tbl.Name),
+				Strs("admin check index", tbl.Name, idx.Name),
 			)
 		}
 	})
@@ -174,7 +174,7 @@ func NewGenerator(state *State) func() string {
 			colDef = NewFn("colDef", func() Fn {
 				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 				tbl.AppendColumn(col)
-				return And(Str(col.name), Str(PrintColumnType(col)))
+				return And(Str(col.Name), Str(PrintColumnType(col)))
 			})
 			if state.IsInitializing() {
 				return Repeat(colDef, state.ctrl.InitColCount, Str(","))
@@ -190,7 +190,7 @@ func NewGenerator(state *State) func() string {
 				if idx.IsUnique() {
 					partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn)
 					if !partitionedCol.IsNil() {
-						// all partitioned columns should be contained in every unique/primary index.
+						// all partitioned Columns should be contained in every unique/primary index.
 						c := partitionedCol.ToColumn()
 						Assert(c != nil)
 						idx.AppendColumnIfNotExists(c)
@@ -200,7 +200,7 @@ func NewGenerator(state *State) func() string {
 				return And(
 					Str(PrintIndexType(idx)),
 					Str("key"),
-					Str(idx.name),
+					Str(idx.Name),
 					Str("("),
 					Str(PrintIndexColumnNames(idx)),
 					Str(")"),
@@ -226,7 +226,7 @@ func NewGenerator(state *State) func() string {
 			return And(
 				Str("partition by"),
 				Str("hash("),
-				Str(partitionedCol.name),
+				Str(partitionedCol.Name),
 				Str(")"),
 				Str("partitions"),
 				Str(partitionNum),
@@ -234,12 +234,12 @@ func NewGenerator(state *State) func() string {
 		})
 		PreEvalWithOrder(&colDefs, &partitionDef, &idxDefs)
 		if state.ctrl.EnableTestTiFlash {
-			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.name))
+			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 			state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 		}
 		return And(
 			Str("create table"),
-			Str(tbl.name),
+			Str(tbl.Name),
 			Str("("),
 			colDefs,
 			OptIf(rand.Intn(10) != 0,
@@ -255,11 +255,11 @@ func NewGenerator(state *State) func() string {
 
 	insertInto = NewFn("insertInto", func() Fn {
 		tbl := state.GetFirstNonFullTable()
-		vals := tbl.GenRandValues(tbl.columns)
+		vals := tbl.GenRandValues(tbl.Columns)
 		tbl.AppendRow(vals)
 		return And(
 			Str("insert into"),
-			Str(tbl.name),
+			Str(tbl.Name),
 			Str("values"),
 			Str("("),
 			Str(PrintRandValues(vals)),
@@ -282,12 +282,12 @@ func NewGenerator(state *State) func() string {
 				OptIf(state.ctrl.EnableTestTiFlash,
 					And(
 						Str("/*+ read_from_storage(tiflash["),
-						Str(tbl.name),
+						Str(tbl.Name),
 						Str("]) */"),
 					)),
 				Str(PrintColumnNamesWithoutPar(cols, "*")),
 				Str("from"),
-				Str(tbl.name),
+				Str(tbl.Name),
 				Str("where"),
 				predicate,
 			)
@@ -309,11 +309,11 @@ func NewGenerator(state *State) func() string {
 					OptIf(state.ctrl.EnableTestTiFlash,
 						And(
 							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.name),
+							Str(tbl.Name),
 							Str("]) */"),
 						)),
 					Str("count(*) from"),
-					Str(tbl.name),
+					Str(tbl.Name),
 					Str("where"),
 					predicate,
 				)
@@ -324,11 +324,11 @@ func NewGenerator(state *State) func() string {
 					OptIf(state.ctrl.EnableTestTiFlash,
 						And(
 							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.name),
+							Str(tbl.Name),
 							Str("]) */"),
 						)),
 					Str("count(*) from"),
-					Str(tbl.name),
+					Str(tbl.Name),
 					Str("where"),
 					predicate,
 				),
@@ -337,14 +337,14 @@ func NewGenerator(state *State) func() string {
 					OptIf(state.ctrl.EnableTestTiFlash,
 						And(
 							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.name),
+							Str(tbl.Name),
 							Str("]) */"),
 						)),
 					Str("sum("),
-					Str(intCol.name),
+					Str(intCol.Name),
 					Str(")"),
 					Str("from"),
-					Str(tbl.name),
+					Str(tbl.Name),
 					Str("where"),
 					predicate,
 				),
@@ -399,8 +399,8 @@ func NewGenerator(state *State) func() string {
 		onDupAssignment = NewFn("onDupAssignment", func() Fn {
 			randCol := tbl.GetRandColumn()
 			return Or(
-				Strs(randCol.name, "=", randCol.RandomValue()),
-				Strs(randCol.name, "=", "values(", randCol.name, ")"),
+				Strs(randCol.Name, "=", randCol.RandomValue()),
+				Strs(randCol.Name, "=", "values(", randCol.Name, ")"),
 			)
 		})
 
@@ -416,7 +416,7 @@ func NewGenerator(state *State) func() string {
 			And(
 				Str(insertOrReplace),
 				Str("into"),
-				Str(tbl.name),
+				Str(tbl.Name),
 				Str(PrintColumnNamesWithPar(cols, "")),
 				Str("values"),
 				multipleRowVals,
@@ -433,13 +433,13 @@ func NewGenerator(state *State) func() string {
 		updateAssignment = NewFn("updateAssignment", func() Fn {
 			randCol := tbl.GetRandColumn()
 			return Or(
-				Strs(randCol.name, "=", randCol.RandomValue()),
+				Strs(randCol.Name, "=", randCol.RandomValue()),
 			)
 		})
 
 		return And(
 			Str("update"),
-			Str(tbl.name),
+			Str(tbl.Name),
 			Str("set"),
 			updateAssignment,
 			Str("where"),
@@ -456,7 +456,7 @@ func NewGenerator(state *State) func() string {
 
 	commonAnalyze = NewFn("commonAnalyze", func() Fn {
 		tbl := state.GetRandTable()
-		return And(Str("analyze table"), Str(tbl.name))
+		return And(Str("analyze table"), Str(tbl.Name))
 	})
 
 	commonDelete = NewFn("commonDelete", func() Fn {
@@ -473,12 +473,12 @@ func NewGenerator(state *State) func() string {
 
 		return And(
 			Str("delete from"),
-			Str(tbl.name),
+			Str(tbl.Name),
 			Str("where"),
 			Or(
 				And(predicates, maybeLimit),
-				And(Str(col.name), Str("in"), Str("("), multipleRowVal, Str(")"), maybeLimit),
-				And(Str(col.name), Str("is null"), maybeLimit),
+				And(Str(col.Name), Str("in"), Str("("), multipleRowVal, Str(")"), maybeLimit),
+				And(Str(col.Name), Str("is null"), maybeLimit),
 			),
 		)
 	})
@@ -513,8 +513,8 @@ func NewGenerator(state *State) func() string {
 			)
 		})
 		return Or(
-			And(Str(randCol.name), cmpSymbol, randVal),
-			And(Str(randCol.name), Str("in"), Str("("), randColVals, Str(")")),
+			And(Str(randCol.Name), cmpSymbol, randVal),
+			And(Str(randCol.Name), Str("in"), Str("("), randColVals, Str(")")),
 		)
 	})
 
@@ -543,8 +543,8 @@ func NewGenerator(state *State) func() string {
 		tbl.AppendIndex(idx)
 
 		return Strs(
-			"alter table", tbl.name,
-			"add index", idx.name,
+			"alter table", tbl.Name,
+			"add index", idx.Name,
 			"(", PrintIndexColumnNames(idx), ")",
 		)
 	})
@@ -554,8 +554,8 @@ func NewGenerator(state *State) func() string {
 		idx := tbl.GetRandomIndex()
 		tbl.RemoveIndex(idx)
 		return Strs(
-			"alter table", tbl.name,
-			"drop index", idx.name,
+			"alter table", tbl.Name,
+			"drop index", idx.Name,
 		)
 	})
 
@@ -564,8 +564,8 @@ func NewGenerator(state *State) func() string {
 		col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
 		tbl.AppendColumn(col)
 		return Strs(
-			"alter table", tbl.name,
-			"add column", col.name, PrintColumnType(col),
+			"alter table", tbl.Name,
+			"add column", col.Name, PrintColumnType(col),
 		)
 	})
 
@@ -574,8 +574,8 @@ func NewGenerator(state *State) func() string {
 		col := tbl.GetRandDroppableColumn()
 		tbl.RemoveColumn(col)
 		return Strs(
-			"alter table", tbl.name,
-			"drop column", col.name,
+			"alter table", tbl.Name,
+			"drop column", col.Name,
 		)
 	})
 
@@ -597,9 +597,9 @@ func NewGenerator(state *State) func() string {
 		joinPredicate = NewFn("joinPredicate", func() Fn {
 			col1, col2 := RandColumnPairWithSameType(group)
 			return And(
-				Str(col1.name),
+				Str(col1.Name),
 				cmpSymbol,
-				Str(col2.name),
+				Str(col2.Name),
 			)
 		})
 		joinHint = NewFn("joinHint", func() Fn {
@@ -607,37 +607,37 @@ func NewGenerator(state *State) func() string {
 				Empty(),
 				And(
 					Str("MERGE_JOIN("),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str(")"),
 				),
 				And(
 					Str("INL_JOIN("),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str(")"),
 				),
 				And(
 					Str("INL_HASH_JOIN("),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str(")"),
 				),
 				And(
 					Str("INL_MERGE_JOIN("),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str(")"),
 				),
 				And(
 					Str("HASH_JOIN("),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str(")"),
 				),
 			)
@@ -650,9 +650,9 @@ func NewGenerator(state *State) func() string {
 					OptIf(state.ctrl.EnableTestTiFlash,
 						And(
 							Str("read_from_storage(tiflash["),
-							Str(tbl1.name),
+							Str(tbl1.Name),
 							Str(","),
-							Str(tbl2.name),
+							Str(tbl2.Name),
 							Str("])"),
 						)),
 					joinHint,
@@ -662,9 +662,9 @@ func NewGenerator(state *State) func() string {
 				Str(","),
 				Str(PrintFullQualifiedColName(tbl2, cols2)),
 				Str("from"),
-				Str(tbl1.name),
+				Str(tbl1.Name),
 				Str("join"),
-				Str(tbl2.name),
+				Str(tbl2.Name),
 			)
 		}
 
@@ -673,9 +673,9 @@ func NewGenerator(state *State) func() string {
 			OptIf(state.ctrl.EnableTestTiFlash,
 				And(
 					Str("/*+ read_from_storage(tiflash["),
-					Str(tbl1.name),
+					Str(tbl1.Name),
 					Str(","),
-					Str(tbl2.name),
+					Str(tbl2.Name),
 					Str("]) */"),
 				)),
 			And(
@@ -683,9 +683,9 @@ func NewGenerator(state *State) func() string {
 				OptIf(state.ctrl.EnableTestTiFlash,
 					And(
 						Str("read_from_storage(tiflash["),
-						Str(tbl1.name),
+						Str(tbl1.Name),
 						Str(","),
-						Str(tbl2.name),
+						Str(tbl2.Name),
 						Str("])"),
 					)),
 				joinHint,
@@ -695,9 +695,9 @@ func NewGenerator(state *State) func() string {
 			Str(","),
 			Str(PrintFullQualifiedColName(tbl2, cols2)),
 			Str("from"),
-			Str(tbl1.name),
+			Str(tbl1.Name),
 			Or(Str("left join"), Str("join"), Str("right join")),
-			Str(tbl2.name),
+			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
 		)
 	})
@@ -712,22 +712,22 @@ func NewGenerator(state *State) func() string {
 			return state.AllocGlobalID(ScopeKeyIndexUniqID)
 		})
 		state.AppendTable(newTbl)
-		return Strs("create table", newTbl.name, "like", tbl.name)
+		return Strs("create table", newTbl.Name, "like", tbl.Name)
 	})
 
 	selectIntoOutFile = NewFn("selectIntoOutFile", func() Fn {
 		tbl := state.GetRandTable()
 		state.StoreInRoot(ScopeKeyLastOutFileTable, NewScopeObj(tbl))
-		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.name, state.AllocGlobalID(ScopeKeyTmpFileID)))
-		return Strs("select * from", tbl.name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
+		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
+		return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 	})
 
 	loadTable = NewFn("loadTable", func() Fn {
 		tbl := state.Search(ScopeKeyLastOutFileTable).ToTable()
 		id := state.Search(ScopeKeyTmpFileID).ToInt()
-		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.name, id))
+		tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, id))
 		randChildTable := tbl.childTables[rand.Intn(len(tbl.childTables))]
-		return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.name)
+		return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.Name)
 	})
 
 	splitRegion = NewFn("splitRegion", func() Fn {
@@ -736,7 +736,7 @@ func NewGenerator(state *State) func() string {
 		row1, row2 := rows[0], rows[1]
 
 		return Strs(
-			"split table", tbl.name, "between",
+			"split table", tbl.Name, "between",
 			"(", PrintRandValues(row1), ")", "and",
 			"(", PrintRandValues(row2), ")", "regions", RandomNum(2, 10))
 	})
@@ -747,7 +747,7 @@ func NewGenerator(state *State) func() string {
 		state.Store(ScopeKeyCurrentPrepare, NewScopeObj(prepare))
 		return And(
 			Str("prepare"),
-			Str(prepare.name),
+			Str(prepare.Name),
 			Str("from"),
 			Str(`"`),
 			query,
@@ -758,7 +758,7 @@ func NewGenerator(state *State) func() string {
 		Assert(len(state.prepareStmts) > 0, state)
 		prepare := state.GetRandPrepare()
 		state.RemovePrepare(prepare)
-		return Strs("deallocate prepare", prepare.name)
+		return Strs("deallocate prepare", prepare.Name)
 	})
 
 	queryPrepare = NewFn("queryPrepare", func() Fn {
@@ -766,13 +766,13 @@ func NewGenerator(state *State) func() string {
 		prepare := state.GetRandPrepare()
 		assignments := prepare.GenAssignments()
 		if len(assignments) == 0 {
-			return Str(fmt.Sprintf("execute %s", prepare.name))
+			return Str(fmt.Sprintf("execute %s", prepare.Name))
 		}
 		for i := 1; i < len(assignments); i++ {
 			state.InjectTodoSQL(assignments[i])
 		}
 		userVarsStr := strings.Join(prepare.UserVars(), ",")
-		state.InjectTodoSQL(fmt.Sprintf("execute %s using %s", prepare.name, userVarsStr))
+		state.InjectTodoSQL(fmt.Sprintf("execute %s using %s", prepare.Name, userVarsStr))
 		return Str(assignments[0])
 	})
 	return retFn
