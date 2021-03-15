@@ -74,6 +74,12 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 	for {
 		chosenIdx := rand.Intn(len(totalCols))
 		chosenCol := totalCols[chosenIdx]
+		if w.Query_INDEX_MERGE {
+			// Make sure the first column is index-able.
+			if (chosenCol.Tp == ColumnTypeBit || chosenCol.Tp == ColumnTypeSet || chosenCol.Tp == ColumnTypeEnum) && len(idx.Columns) == 0 {
+				continue
+			}
+		}
 		totalCols[0], totalCols[chosenIdx] = totalCols[chosenIdx], totalCols[0]
 		totalCols = totalCols[1:]
 

@@ -64,6 +64,7 @@ type Weight struct {
 	Query_Analyze                  int
 	Query_Prepare                  int
 	Query_HasLimit                 int
+	Query_INDEX_MERGE              bool
 }
 
 type Table struct {

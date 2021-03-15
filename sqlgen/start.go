@@ -289,7 +289,7 @@ func NewGenerator(state *State) func() string {
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
-				predicate,
+				predicates,
 			)
 		})
 		forUpdateOpt = NewFn("forUpdateOpt", func() Fn {
@@ -315,7 +315,7 @@ func NewGenerator(state *State) func() string {
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				)
 			}
 			return Or(
@@ -330,7 +330,7 @@ func NewGenerator(state *State) func() string {
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 				And(
 					Str("select"),
@@ -346,7 +346,7 @@ func NewGenerator(state *State) func() string {
 					Str("from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 			)
 		})
@@ -484,6 +484,12 @@ func NewGenerator(state *State) func() string {
 	})
 
 	predicates = NewFn("predicates", func() Fn {
+		if w.Query_INDEX_MERGE {
+			return Or(
+				predicate.SetW(1),
+				And(predicate, Str("or"), predicates).SetW(2),
+			)
+		}
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
@@ -492,6 +498,41 @@ func NewGenerator(state *State) func() string {
 
 	predicate = NewFn("predicate", func() Fn {
 		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+		if w.Query_INDEX_MERGE {
+			randCols := tbl.GetRandIndexPrefixColumn()
+			resultFns := make([]Fn, 0)
+			for _, col := range randCols {
+				randCol := col
+				randVal = NewFn("randVal", func() Fn {
+					var v string
+					prepare := state.Search(ScopeKeyCurrentPrepare)
+					if !prepare.IsNil() && rand.Intn(5) == 0 {
+						prepare.ToPrepare().AppendColumns(randCol)
+						v = "?"
+					} else if rand.Intn(3) == 0 || len(tbl.values) == 0 {
+						v = randCol.RandomValue()
+					} else {
+						v = tbl.GetRandRowVal(randCol)
+					}
+					return Str(v)
+				})
+				randColVals = NewFn("randColVals", func() Fn {
+					return Or(
+						randVal,
+						And(randVal, Str(","), randColVals).SetW(3),
+					)
+				})
+				fn := Or(
+					And(Str(randCol.Name), cmpSymbol, randVal),
+					And(Str(randCol.Name), Str("in"), Str("("), randColVals, Str(")")),
+				)
+				resultFns = append(resultFns, fn)
+				resultFns = append(resultFns, Str("and"))
+			}
+			return NewFn("index merge predicate", func() Fn {
+				return And(resultFns[0:len(resultFns)-1]...)
+			})
+		}
 		randCol := tbl.GetRandColumn()
 		randVal = NewFn("randVal", func() Fn {
 			var v string
