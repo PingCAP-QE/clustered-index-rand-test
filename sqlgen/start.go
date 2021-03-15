@@ -235,7 +235,7 @@ func NewGenerator(state *State) func() string {
 				return And(
 					Str("partition by"),
 					Str("hash("),
-					Str(partitionedCol.name),
+					Str(partitionedCol.Name),
 					Str(")"),
 					Str("partitions"),
 					Str(partitionNum),
@@ -249,7 +249,7 @@ func NewGenerator(state *State) func() string {
 				}
 				return Strs(
 					"partition by range (",
-					partitionedCol.name, ") (",
+					partitionedCol.Name, ") (",
 					PrintRangePartitionDefs(vals),
 					")",
 				)
@@ -259,7 +259,7 @@ func NewGenerator(state *State) func() string {
 				return Strs(
 					"partition by",
 					"list(",
-					partitionedCol.name,
+					partitionedCol.Name,
 					") (",
 					PrintListPartitionDefs(listGroups),
 					")",
