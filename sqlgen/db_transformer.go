@@ -63,3 +63,18 @@ func SwapOutParameterizedColumns(cols []*Column) []*Column {
 	}
 	return result
 }
+
+func RandomGroups(ss []string, groupCount int) [][]string {
+	groups := make([][]string, groupCount)
+	for _, s := range ss {
+		targetGroup := groups[rand.Intn(groupCount)]
+		targetGroup = append(targetGroup, s)
+	}
+	for i := 0; i < len(groups); i++ {
+		if len(groups[i]) == 0 {
+			groups[i], groups[len(groups)-1] = groups[len(groups)-1], groups[i]
+			groups = groups[:len(groups)-1]
+		}
+	}
+	return groups
+}
