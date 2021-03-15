@@ -8,4 +8,4 @@
 *.out
 *.sql
 *.log
-tp-test
+clustered-index-rand-test
