@@ -84,6 +84,38 @@ func PrintIndexColumnNames(idx *Index) string {
 	return sb.String()
 }
 
+// partition p0 values less than (v0), partition p1...
+func PrintRangePartitionDefs(rangeValues []string) string {
+	var sb strings.Builder
+	for i, v := range rangeValues {
+		sb.WriteString("partition ")
+		sb.WriteString(fmt.Sprintf("p%d ", i))
+		sb.WriteString("values less than (")
+		sb.WriteString(v)
+		sb.WriteString(")")
+		if i != len(rangeValues) - 1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
+
+// partition p0 values in (v0, v1, v2), partition p1...
+func PrintListPartitionDefs(listGroups [][]string) string {
+	var sb strings.Builder
+	for i, group := range listGroups {
+		sb.WriteString("partition ")
+		sb.WriteString(fmt.Sprintf("p%d ", i))
+		sb.WriteString("values in (")
+		sb.WriteString(PrintRandValues(group))
+		sb.WriteString(")")
+		if i != len(listGroups) - 1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
+
 func PrintIndexType(idx *Index) string {
 	switch idx.Tp {
 	case IndexTypeNonUnique:

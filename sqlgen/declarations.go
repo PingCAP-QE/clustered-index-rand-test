@@ -51,4 +51,5 @@ var (
 	prepareStmt        Fn
 	queryPrepare       Fn
 	deallocPrepareStmt Fn
+	updateAssignments Fn
 )
