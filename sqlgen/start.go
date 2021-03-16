@@ -358,6 +358,12 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
@@ -373,6 +379,12 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
@@ -385,6 +397,12 @@ func NewGenerator(state *State) func() string {
 							Str("/*+ read_from_storage(tiflash["),
 							Str(tbl.Name),
 							Str("]) */"),
+						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
 						)),
 					Str("sum("),
 					Str(intCol.Name),
@@ -538,10 +556,7 @@ func NewGenerator(state *State) func() string {
 
 	predicates = NewFn("predicates", func() Fn {
 		if w.Query_INDEX_MERGE {
-			return Or(
-				predicate.SetW(1),
-				And(predicate, Str("or"), predicates).SetW(2),
-			)
+			return RepeatRange(2, 5, predicate, Str("or"))
 		}
 		return Or(
 			predicate.SetW(3),
