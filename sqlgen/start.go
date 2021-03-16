@@ -225,7 +225,7 @@ func NewGenerator(state *State) func() string {
 			state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
-			randN := rand.Intn(3)
+			randN := rand.Intn(6)
 			if w.CreateTable_ForceHashPartition {
 				randN = hashPart
 			}
@@ -253,17 +253,17 @@ func NewGenerator(state *State) func() string {
 					PrintRangePartitionDefs(vals),
 					")",
 				)
-			case listPart:
-				listVals := partitionedCol.RandomValuesAsc(20)
-				listGroups := RandomGroups(listVals, rand.Intn(3)+1)
-				return Strs(
-					"partition by",
-					"list(",
-					partitionedCol.Name,
-					") (",
-					PrintListPartitionDefs(listGroups),
-					")",
-				)
+			//case listPart:
+			//	listVals := partitionedCol.RandomValuesAsc(20)
+			//	listGroups := RandomGroups(listVals, rand.Intn(3)+1)
+			//	return Strs(
+			//		"partition by",
+			//		"list(",
+			//		partitionedCol.Name,
+			//		") (",
+			//		PrintListPartitionDefs(listGroups),
+			//		")",
+			//	)
 			default:
 				return Empty()
 			}
