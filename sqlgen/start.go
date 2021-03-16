@@ -197,6 +197,10 @@ func NewGenerator(state *State) func() string {
 					}
 				}
 				tbl.AppendIndex(idx)
+				var clusteredKeyword string
+				if idx.Tp == IndexTypePrimary {
+					clusteredKeyword = "clustered"
+				}
 				return And(
 					Str(PrintIndexType(idx)),
 					Str("key"),
@@ -204,6 +208,7 @@ func NewGenerator(state *State) func() string {
 					Str("("),
 					Str(PrintIndexColumnNames(idx)),
 					Str(")"),
+					Str(clusteredKeyword),
 				)
 			})
 			return Or(
@@ -213,24 +218,55 @@ func NewGenerator(state *State) func() string {
 		})
 
 		partitionDef = NewFn("partitionDef", func() Fn {
-			if !w.CreateTable_ForceHashPartition && rand.Intn(5) != 0 {
-				return Empty()
-			}
 			partitionedCol := tbl.GetRandColumnForPartition()
 			if partitionedCol == nil {
 				return Empty()
 			}
 			state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
 			tbl.AppendPartitionColumn(partitionedCol)
-			partitionNum := RandomNum(1, 6)
-			return And(
-				Str("partition by"),
-				Str("hash("),
-				Str(partitionedCol.Name),
-				Str(")"),
-				Str("partitions"),
-				Str(partitionNum),
-			)
+			const hashPart, rangePart, listPart = 0, 1, 2
+			randN := rand.Intn(4)
+			if w.CreateTable_ForceHashPartition {
+				randN = hashPart
+			}
+			switch randN {
+			case hashPart:
+				partitionNum := RandomNum(1, 6)
+				return And(
+					Str("partition by"),
+					Str("hash("),
+					Str(partitionedCol.Name),
+					Str(")"),
+					Str("partitions"),
+					Str(partitionNum),
+				)
+			case rangePart:
+				partitionCount := rand.Intn(5) + 1
+				vals := partitionedCol.RandomValuesAsc(partitionCount)
+				if rand.Intn(2) == 0 {
+					partitionCount++
+					vals = append(vals, "maxvalue")
+				}
+				return Strs(
+					"partition by range (",
+					partitionedCol.Name, ") (",
+					PrintRangePartitionDefs(vals),
+					")",
+				)
+			case listPart:
+				listVals := partitionedCol.RandomValuesAsc(20)
+				listGroups := RandomGroups(listVals, rand.Intn(3) + 1)
+				return Strs(
+					"partition by",
+					"list(",
+					partitionedCol.Name,
+					") (",
+					PrintListPartitionDefs(listGroups),
+					")",
+				)
+			default:
+				return Empty()
+			}
 		})
 		PreEvalWithOrder(&colDefs, &partitionDef, &idxDefs)
 		if state.ctrl.EnableTestTiFlash {
@@ -430,6 +466,13 @@ func NewGenerator(state *State) func() string {
 		state.Store(ScopeKeyCurrentTable, NewScopeObj(tbl))
 		orderByCols := tbl.GetRandColumns()
 
+		updateAssignments = NewFn("updateAssignments", func() Fn {
+			return Or(
+				updateAssignment,
+				And(updateAssignment, Str(","), updateAssignments),
+			)
+		})
+
 		updateAssignment = NewFn("updateAssignment", func() Fn {
 			randCol := tbl.GetRandColumn()
 			return Or(
@@ -441,7 +484,7 @@ func NewGenerator(state *State) func() string {
 			Str("update"),
 			Str(tbl.Name),
 			Str("set"),
-			updateAssignment,
+			updateAssignments,
 			Str("where"),
 			predicates,
 			OptIf(len(orderByCols) > 0,

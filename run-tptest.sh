@@ -2,8 +2,10 @@
 
 set -euo
 
-export TPBIN='/home/tangenta/gopath/src/github.com/tangenta/clustered-index-rand-test/tp-test'
+export TPBIN='./clustered-index-rand-test'
 export DSN='root:@tcp(127.0.0.1:4000)/test'
+
+go build -o clustered-index-rand-test
 
 $TPBIN --store $DSN clear
 $TPBIN --store $DSN init
