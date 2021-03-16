@@ -225,7 +225,7 @@ func NewGenerator(state *State) func() string {
 			state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
-			randN := rand.Intn(4)
+			randN := rand.Intn(3)
 			if w.CreateTable_ForceHashPartition {
 				randN = hashPart
 			}
@@ -255,7 +255,7 @@ func NewGenerator(state *State) func() string {
 				)
 			case listPart:
 				listVals := partitionedCol.RandomValuesAsc(20)
-				listGroups := RandomGroups(listVals, rand.Intn(3) + 1)
+				listGroups := RandomGroups(listVals, rand.Intn(3)+1)
 				return Strs(
 					"partition by",
 					"list(",
@@ -273,12 +273,16 @@ func NewGenerator(state *State) func() string {
 			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 			state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 		}
+		indexOpt := 10
+		if w.Query_INDEX_MERGE {
+			indexOpt = 1000000
+		}
 		return And(
 			Str("create table"),
 			Str(tbl.Name),
 			Str("("),
 			colDefs,
-			OptIf(rand.Intn(10) != 0,
+			OptIf(rand.Intn(indexOpt) != 0,
 				And(
 					Str(","),
 					idxDefs,
@@ -320,6 +324,12 @@ func NewGenerator(state *State) func() string {
 						Str("/*+ read_from_storage(tiflash["),
 						Str(tbl.Name),
 						Str("]) */"),
+					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
 					)),
 				Str(PrintColumnNamesWithoutPar(cols, "*")),
 				Str("from"),
@@ -400,9 +410,9 @@ func NewGenerator(state *State) func() string {
 				union,
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 			),
-			If(len(state.tables) > 1,
-				multiTableQuery,
-			),
+			//If(len(state.tables) > 1,
+			//	multiTableQuery,
+			//),
 		)
 	})
 
@@ -573,7 +583,7 @@ func NewGenerator(state *State) func() string {
 				resultFns = append(resultFns, Str("and"))
 			}
 			return NewFn("index merge predicate", func() Fn {
-				return And(resultFns[0:len(resultFns)-1]...)
+				return And(resultFns[0 : len(resultFns)-1]...)
 			})
 		}
 		randCol := tbl.GetRandColumn()

@@ -48,8 +48,15 @@ func (t *Table) GetRandColumn() *Column {
 // GetRandIndexPrefixColumn returns a random index's random prefix columns.
 func (t *Table) GetRandIndexPrefixColumn() []*Column {
 	idx := t.Indices[rand.Intn(len(t.Indices))]
-	i := rand.Intn(len(idx.Columns))
-	return idx.Columns[0:i+1]
+	randIdx := rand.Intn(len(idx.Columns))
+	for i, idxCol := range idx.Columns {
+		if idxCol.Tp == ColumnTypeBit || idxCol.Tp == ColumnTypeSet || idxCol.Tp == ColumnTypeEnum {
+			randIdx = i-1
+			break
+		}
+	}
+
+	return idx.Columns[0:randIdx+1]
 }
 
 func (t *Table) GetRandColumnForPartition() *Column {
