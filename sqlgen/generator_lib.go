@@ -91,7 +91,9 @@ func Or(fns ...Fn) Fn {
 	fns = filterNoneFns(fns)
 	return Fn{Name: "_$or_fn", Weight: 1, F: func() Result {
 		for len(fns) > 0 {
-			randNum := randomSelectByFactor(fns)
+			randNum := randomSelectByFactor(fns, func(f Fn) int {
+				return f.Weight
+			})
 			chosenFn := fns[randNum]
 			rs := evaluateFn(chosenFn)
 			if rs.Tp == PlainString {
@@ -188,11 +190,11 @@ func evaluateFn(fn Fn) Result {
 	return res
 }
 
-func randomSelectByFactor(fns []Fn) int {
-	num := rand.Intn(sumRandFactor(fns))
+func randomSelectByFactor(fns []Fn, weightFn func(f Fn) int) int {
+	num := rand.Intn(sumRandFactor(fns, weightFn))
 	acc := 0
 	for i, f := range fns {
-		acc += f.Weight
+		acc += weightFn(f)
 		if acc > num {
 			return i
 		}
@@ -208,10 +210,10 @@ func forEachProdListener(fn func(ProductionListener)) {
 	}
 }
 
-func sumRandFactor(fs []Fn) int {
+func sumRandFactor(fs []Fn, weightFn func(f Fn) int) int {
 	total := 0
 	for _, f := range fs {
-		total += f.Weight
+		total += weightFn(f)
 	}
 	return total
 }

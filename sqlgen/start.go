@@ -13,11 +13,18 @@ import (
 )
 
 func NewGenerator(state *State) func() string {
+	w := state.weight
+	if w == nil {
+		w = &DefaultWeight
+	}
 	rand.Seed(time.Now().UnixNano())
 	GenPlugins = append(GenPlugins, &ScopeListener{state: state})
 	postListener := &PostListener{callbacks: map[string]func(){}}
 	GenPlugins = append(GenPlugins, postListener)
 	GenPlugins = append(GenPlugins, &DebugListener{})
+	if w.AttachToTxn {
+		GenPlugins = append(GenPlugins, &TxnListener{w: w})
+	}
 	retFn := func() string {
 		res := evaluateFn(start)
 		switch res.Tp {
@@ -30,11 +37,6 @@ func NewGenerator(state *State) func() string {
 			log.Fatalf("Unsupported result type '%v'", res.Tp)
 			return ""
 		}
-	}
-
-	w := state.weight
-	if w == nil {
-		w = &DefaultWeight
 	}
 
 	start = NewFn("start", func() Fn {

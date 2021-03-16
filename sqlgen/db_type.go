@@ -40,6 +40,8 @@ var DefaultWeight = Weight{
 	Query_Analyze:               0,
 	Query_Prepare:               2,
 	Query_HasLimit:              1,
+	AttachToTxn:                    false,
+	MaxTxnStmtCount:                20,
 }
 
 type Weight struct {
@@ -65,6 +67,9 @@ type Weight struct {
 	Query_Prepare               int
 	Query_HasLimit              int
 	Query_INDEX_MERGE           bool
+
+	AttachToTxn     bool
+	MaxTxnStmtCount int
 }
 
 type Table struct {
@@ -312,4 +317,126 @@ func (d *DebugListener) AfterProductionGen(fn *Fn, result *Result) {
 }
 
 func (d *DebugListener) ProductionCancel(fn *Fn) {
+}
+
+type TxnListener struct {
+	inTxn         bool
+	inflightStmts int
+	w             *Weight
+}
+
+const txnStartWrapName = "txnWrappedStart"
+
+func (s *TxnListener) BeforeProductionGen(fn *Fn) {
+	if fn.Name != "start" {
+		return
+	}
+	actualFn := *fn
+	*fn = Fn{
+		Name: txnStartWrapName,
+		F: func() Result {
+			startTxnRs := s.startTxn()
+			if startTxnRs.Tp != PlainString {
+				return InvalidResult()
+			}
+			currRs := actualFn.F()
+			if currRs.Tp != PlainString {
+				return InvalidResult()
+			}
+			if len(startTxnRs.Value) == 0 {
+				return currRs
+			}
+			return Result{
+				Tp:    PlainString,
+				Value: startTxnRs.Value + " ; " + currRs.Value,
+			}
+		},
+	}
+	return
+}
+
+func (s *TxnListener) startTxn() Result {
+	fns := []Fn{
+		Empty().SetW(1),
+		And(
+			Str("begin"),
+			Or(
+				Str("pessimistic"),
+				Str("optimistic"),
+			),
+		).SetW(1),
+	}
+	var chosenFn Fn
+	if s.inTxn {
+		// inside txn, never begin again.
+		chosenFn = fns[0]
+	} else {
+		chosenFn = fns[randomSelectByFactor(fns, func(f Fn) int {
+			return f.Weight
+		})]
+		if chosenFn.Name != Empty().Name {
+			s.inTxn = true
+			s.inflightStmts = 0
+		}
+	}
+	return evaluateFn(chosenFn)
+}
+
+func (s *TxnListener) AfterProductionGen(fn *Fn, result *Result) {
+	if fn.Name != txnStartWrapName {
+		return
+	}
+	if result.Tp != PlainString {
+		return
+	}
+	endTxnRs := s.endTxn()
+	if endTxnRs.Tp != PlainString || len(endTxnRs.Value) == 0 {
+		return
+	}
+	*result = Result{
+		Tp:    result.Tp,
+		Value: result.Value + " ; " + endTxnRs.Value,
+	}
+	return
+}
+
+func (s *TxnListener) endTxn() Result {
+	fns := []Fn{
+		Empty(),
+		Or(
+			Str("commit"),
+			Str("rollback"),
+		),
+	}
+	var fnIdx int
+	if !s.inTxn {
+		fnIdx = 0
+	} else {
+		inTxnW := s.w.MaxTxnStmtCount - s.inflightStmts
+		if inTxnW < 0 {
+			inTxnW = 0
+		}
+		outTxnW := s.inflightStmts
+		fnIdx = randomSelectByFactor(fns, func(f Fn) int {
+			if f.Name == Empty().Name {
+				return inTxnW
+			}
+			return outTxnW
+		})
+	}
+	chosenFn := fns[fnIdx]
+	if chosenFn.Name != Empty().Name {
+		s.inTxn = false
+	} else if s.inTxn {
+		s.inflightStmts++
+	}
+	rs := evaluateFn(chosenFn)
+	if rs.Tp == PlainString {
+		return rs
+	}
+	return InvalidResult()
+}
+
+func (s TxnListener) ProductionCancel(fn *Fn) {
+	return
 }
