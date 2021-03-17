@@ -181,6 +181,10 @@ func (s ScopeObj) ToTable() *Table {
 	return s.obj.(*Table)
 }
 
+func (s ScopeObj) ToTables() []*Table {
+	return s.obj.([]*Table)
+}
+
 func (s ScopeObj) ToColumn() *Column {
 	return s.obj.(*Column)
 }
