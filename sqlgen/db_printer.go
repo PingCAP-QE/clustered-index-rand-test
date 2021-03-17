@@ -93,7 +93,7 @@ func PrintRangePartitionDefs(rangeValues []string) string {
 		sb.WriteString("values less than (")
 		sb.WriteString(v)
 		sb.WriteString(")")
-		if i != len(rangeValues) - 1 {
+		if i != len(rangeValues)-1 {
 			sb.WriteString(", ")
 		}
 	}
@@ -109,7 +109,7 @@ func PrintListPartitionDefs(listGroups [][]string) string {
 		sb.WriteString("values in (")
 		sb.WriteString(PrintRandValues(group))
 		sb.WriteString(")")
-		if i != len(listGroups) - 1 {
+		if i != len(listGroups)-1 {
 			sb.WriteString(", ")
 		}
 	}

@@ -168,6 +168,7 @@ type ScopeKeyType int8
 
 const (
 	ScopeKeyCurrentTable ScopeKeyType = iota
+	ScopeKeyCurrentMultiTable
 	ScopeKeyCurrentColumn
 	ScopeKeyCurrentIndex
 	ScopeKeyCurrentPrepare

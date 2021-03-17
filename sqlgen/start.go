@@ -255,7 +255,7 @@ func NewGenerator(state *State) func() string {
 				)
 			case listPart:
 				listVals := partitionedCol.RandomValuesAsc(20)
-				listGroups := RandomGroups(listVals, rand.Intn(3) + 1)
+				listGroups := RandomGroups(listVals, rand.Intn(3)+1)
 				return Strs(
 					"partition by",
 					"list(",
@@ -534,8 +534,20 @@ func NewGenerator(state *State) func() string {
 	})
 
 	predicate = NewFn("predicate", func() Fn {
-		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+		var tbl *Table
+		inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+		if inMultiTableQuery {
+			tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+			if RandomBool() {
+				tbl = tables[0]
+			} else {
+				tbl = tables[0]
+			}
+		} else {
+			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
+		}
 		randCol := tbl.GetRandColumn()
+
 		randVal = NewFn("randVal", func() Fn {
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
@@ -555,9 +567,13 @@ func NewGenerator(state *State) func() string {
 				And(randVal, Str(","), randColVals).SetW(3),
 			)
 		})
+		columnName := randCol.Name
+		if inMultiTableQuery {
+			columnName = fmt.Sprintf("%s.%s", tbl.Name, columnName)
+		}
 		return Or(
-			And(Str(randCol.Name), cmpSymbol, randVal),
-			And(Str(randCol.Name), Str("in"), Str("("), randColVals, Str(")")),
+			And(Str(columnName), cmpSymbol, randVal),
+			And(Str(columnName), Str("in"), Str("("), randColVals, Str(")")),
 		)
 	})
 
@@ -627,6 +643,7 @@ func NewGenerator(state *State) func() string {
 		tbl2 := state.GetRandTable()
 		cols1 := tbl1.GetRandColumns()
 		cols2 := tbl2.GetRandColumns()
+		state.Store(ScopeKeyCurrentMultiTable, NewScopeObj([]*Table{tbl1, tbl2}))
 
 		group := GroupColumnsByColumnTypes(tbl1, tbl2)
 		group = FilterUniqueColumns(group)
@@ -742,6 +759,7 @@ func NewGenerator(state *State) func() string {
 			Or(Str("left join"), Str("join"), Str("right join")),
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
+			predicates,
 		)
 	})
 
