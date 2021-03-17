@@ -428,9 +428,9 @@ func NewGenerator(state *State) func() string {
 				union,
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 			),
-			//If(len(state.tables) > 1,
-			//	multiTableQuery,
-			//),
+			If(len(state.tables) > 1,
+				multiTableQuery,
+			),
 		)
 	})
 
@@ -764,6 +764,14 @@ func NewGenerator(state *State) func() string {
 							Str(tbl2.Name),
 							Str("])"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl1.Name),
+							Str(","),
+							Str(tbl2.Name),
+							Str(") */"),
+						)),
 					joinHint,
 					Str(" */"),
 				),
@@ -808,6 +816,8 @@ func NewGenerator(state *State) func() string {
 			Or(Str("left join"), Str("join"), Str("right join")),
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
+			And(Str("where")),
+			And(predicates),
 		)
 	})
 
