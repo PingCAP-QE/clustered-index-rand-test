@@ -71,12 +71,14 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 		idx.Tp = IndexTypePrimary
 	}
 	totalCols := tbl.cloneColumns()
+	try := 10
 	for {
 		chosenIdx := rand.Intn(len(totalCols))
 		chosenCol := totalCols[chosenIdx]
 		if w.Query_INDEX_MERGE {
 			// Make sure the first column is index-able.
-			if (chosenCol.Tp == ColumnTypeBit || chosenCol.Tp == ColumnTypeSet || chosenCol.Tp == ColumnTypeEnum) && len(idx.Columns) == 0 {
+			if (chosenCol.Tp == ColumnTypeBit || chosenCol.Tp == ColumnTypeSet || chosenCol.Tp == ColumnTypeEnum) && len(idx.Columns) == 0 && try != 0 {
+				try--
 				continue
 			}
 		}
