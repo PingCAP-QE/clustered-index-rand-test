@@ -781,11 +781,11 @@ func NewGenerator(state *State) func() string {
 						)),
 					OptIf(w.Query_INDEX_MERGE,
 						And(
-							Str("/*+ use_index_merge("),
+							Str("use_index_merge("),
 							Str(tbl1.Name),
 							Str(","),
 							Str(tbl2.Name),
-							Str(") */"),
+							Str(")"),
 						)),
 					joinHint,
 					Str(" */"),
