@@ -574,9 +574,16 @@ func NewGenerator(state *State) func() string {
 				if repeatCnt == 0 {
 					repeatCnt = 1
 				}
+				if rand.Intn(5) == 0 {
+					repeatCnt += rand.Intn(2) + 1
+				}
 				return Repeat(predicate, repeatCnt,  Str("and"))
 			})
-			return RepeatRange(2, 5, andPredicates, Str("or"))
+
+			// Give some chances to common predicate.
+			if rand.Intn(5) != 0 {
+				return RepeatRange(2, 5, andPredicates, Str("or"))
+			}
 		}
 		return Or(
 			predicate.SetW(3),
