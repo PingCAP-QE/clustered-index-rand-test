@@ -253,17 +253,17 @@ func NewGenerator(state *State) func() string {
 					PrintRangePartitionDefs(vals),
 					")",
 				)
-			//case listPart:
-			//	listVals := partitionedCol.RandomValuesAsc(20)
-			//	listGroups := RandomGroups(listVals, rand.Intn(3)+1)
-			//	return Strs(
-			//		"partition by",
-			//		"list(",
-			//		partitionedCol.Name,
-			//		") (",
-			//		PrintListPartitionDefs(listGroups),
-			//		")",
-			//	)
+			case listPart:
+				listVals := partitionedCol.RandomValuesAsc(20)
+				listGroups := RandomGroups(listVals, rand.Intn(3)+1)
+				return Strs(
+					"partition by",
+					"list(",
+					partitionedCol.Name,
+					") (",
+					PrintListPartitionDefs(listGroups),
+					")",
+				)
 			default:
 				return Empty()
 			}
@@ -556,7 +556,27 @@ func NewGenerator(state *State) func() string {
 
 	predicates = NewFn("predicates", func() Fn {
 		if w.Query_INDEX_MERGE {
-			return RepeatRange(2, 5, predicate, Str("or"))
+			andPredicates := NewFn("and predicate", func() Fn {
+				var tbl *Table
+				inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+				if inMultiTableQuery {
+					tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+					if RandomBool() {
+						tbl = tables[0]
+					} else {
+						tbl = tables[0]
+					}
+				} else {
+					tbl = state.Search(ScopeKeyCurrentTable).ToTable()
+				}
+				tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
+				repeatCnt := len(tbl.colForPrefixIndex)
+				if repeatCnt == 0 {
+					repeatCnt = 1
+				}
+				return Repeat(predicate, repeatCnt,  Str("and"))
+			})
+			return RepeatRange(2, 5, andPredicates, Str("or"))
 		}
 		return Or(
 			predicate.SetW(3),
@@ -565,43 +585,26 @@ func NewGenerator(state *State) func() string {
 	})
 
 	predicate = NewFn("predicate", func() Fn {
-		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-		if w.Query_INDEX_MERGE {
-			randCols := tbl.GetRandIndexPrefixColumn()
-			resultFns := make([]Fn, 0)
-			for _, col := range randCols {
-				randCol := col
-				randVal = NewFn("randVal", func() Fn {
-					var v string
-					prepare := state.Search(ScopeKeyCurrentPrepare)
-					if !prepare.IsNil() && rand.Intn(5) == 0 {
-						prepare.ToPrepare().AppendColumns(randCol)
-						v = "?"
-					} else if rand.Intn(3) == 0 || len(tbl.values) == 0 {
-						v = randCol.RandomValue()
-					} else {
-						v = tbl.GetRandRowVal(randCol)
-					}
-					return Str(v)
-				})
-				randColVals = NewFn("randColVals", func() Fn {
-					return Or(
-						randVal,
-						And(randVal, Str(","), randColVals).SetW(3),
-					)
-				})
-				fn := Or(
-					And(Str(randCol.Name), cmpSymbol, randVal),
-					And(Str(randCol.Name), Str("in"), Str("("), randColVals, Str(")")),
-				)
-				resultFns = append(resultFns, fn)
-				resultFns = append(resultFns, Str("and"))
+		var tbl *Table
+		inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+		if inMultiTableQuery {
+			tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+			if RandomBool() {
+				tbl = tables[0]
+			} else {
+				tbl = tables[0]
 			}
-			return NewFn("index merge predicate", func() Fn {
-				return And(resultFns[0 : len(resultFns)-1]...)
-			})
+		} else {
+			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
 		}
+
 		randCol := tbl.GetRandColumn()
+		if w.Query_INDEX_MERGE {
+			if len(tbl.colForPrefixIndex) > 0 {
+				randCol = tbl.colForPrefixIndex[0]
+				tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
+			}
+		}
 		randVal = NewFn("randVal", func() Fn {
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
@@ -621,9 +624,13 @@ func NewGenerator(state *State) func() string {
 				And(randVal, Str(","), randColVals).SetW(3),
 			)
 		})
+		columnName := randCol.Name
+		if inMultiTableQuery {
+			columnName = fmt.Sprintf("%s.%s", tbl.Name, columnName)
+		}
 		return Or(
-			And(Str(randCol.Name), cmpSymbol, randVal),
-			And(Str(randCol.Name), Str("in"), Str("("), randColVals, Str(")")),
+			And(Str(columnName), cmpSymbol, randVal),
+			And(Str(columnName), Str("in"), Str("("), randColVals, Str(")")),
 		)
 	})
 
@@ -693,6 +700,7 @@ func NewGenerator(state *State) func() string {
 		tbl2 := state.GetRandTable()
 		cols1 := tbl1.GetRandColumns()
 		cols2 := tbl2.GetRandColumns()
+		state.Store(ScopeKeyCurrentMultiTable, NewScopeObj([]*Table{tbl1, tbl2}))
 
 		group := GroupColumnsByColumnTypes(tbl1, tbl2)
 		group = FilterUniqueColumns(group)
@@ -817,7 +825,7 @@ func NewGenerator(state *State) func() string {
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
 			And(Str("where")),
-			And(predicates),
+			predicates,
 		)
 	})
 

@@ -73,10 +73,11 @@ type Table struct {
 	Columns []*Column
 	Indices []*Index
 
-	containsPK       bool // to ensure at most 1 pk in each table
-	HandleCols       []*Column
-	PartitionColumns []*Column
-	values           [][]string
+	containsPK        bool // to ensure at most 1 pk in each table
+	HandleCols        []*Column
+	PartitionColumns  []*Column
+	values            [][]string
+	colForPrefixIndex []*Column
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.
@@ -180,6 +181,10 @@ func (s ScopeObj) IsNil() bool {
 
 func (s ScopeObj) ToTable() *Table {
 	return s.obj.(*Table)
+}
+
+func (s ScopeObj) ToTables() []*Table {
+	return s.obj.([]*Table)
 }
 
 func (s ScopeObj) ToColumn() *Column {
