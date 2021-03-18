@@ -200,6 +200,9 @@ func NewGenerator(state *State) func() string {
 				var clusteredKeyword string
 				if idx.Tp == IndexTypePrimary {
 					clusteredKeyword = "clustered"
+					idx.RemoveColIf(func(c *Column) bool {
+						return !c.isNotNull
+					})
 				}
 				return And(
 					Str(PrintIndexType(idx)),
