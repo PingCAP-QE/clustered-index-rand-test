@@ -225,7 +225,7 @@ func NewGenerator(state *State) func() string {
 			state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
-			randN := rand.Intn(6)
+			randN := rand.Intn(4)
 			if w.CreateTable_ForceHashPartition {
 				randN = hashPart
 			}
