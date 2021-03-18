@@ -193,17 +193,18 @@ func NewGenerator(state *State) func() string {
 						// all partitioned Columns should be contained in every unique/primary index.
 						c := partitionedCol.ToColumn()
 						Assert(c != nil)
+						if idx.Tp == IndexTypePrimary {
+							if c.defaultVal == "null" {
+								return Empty()
+							}
+							idx.RemoveColIf(func(col *Column) bool {
+								return col.defaultVal == "null"
+							})
+						}
 						idx.AppendColumnIfNotExists(c)
 					}
 				}
 				tbl.AppendIndex(idx)
-				var clusteredKeyword string
-				if idx.Tp == IndexTypePrimary {
-					clusteredKeyword = "clustered"
-					idx.RemoveColIf(func(c *Column) bool {
-						return !c.isNotNull
-					})
-				}
 				return And(
 					Str(PrintIndexType(idx)),
 					Str("key"),
@@ -211,7 +212,7 @@ func NewGenerator(state *State) func() string {
 					Str("("),
 					Str(PrintIndexColumnNames(idx)),
 					Str(")"),
-					Str(clusteredKeyword),
+					If(idx.Tp == IndexTypePrimary, Str("clustered")),
 				)
 			})
 			return Or(
