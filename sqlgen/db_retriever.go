@@ -51,12 +51,12 @@ func (t *Table) GetRandIndexPrefixColumn() []*Column {
 	randIdx := rand.Intn(len(idx.Columns))
 	for i, idxCol := range idx.Columns {
 		if idxCol.Tp == ColumnTypeBit || idxCol.Tp == ColumnTypeSet || idxCol.Tp == ColumnTypeEnum {
-			randIdx = i-1
+			randIdx = i - 1
 			break
 		}
 	}
 
-	return idx.Columns[0:randIdx+1]
+	return idx.Columns[0 : randIdx+1]
 }
 
 func (t *Table) GetRandColumnForPartition() *Column {

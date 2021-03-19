@@ -2,7 +2,8 @@ package sqlgen
 
 var (
 	start                Fn
-	switchSysVars        Fn
+	switchRowFormatVer   Fn
+	switchClustered      Fn
 	createTable          Fn
 	colDefs              Fn
 	colDef               Fn
