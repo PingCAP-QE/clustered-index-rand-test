@@ -119,7 +119,7 @@ func Repeat(fn Fn, cnt int, sep Fn) Fn {
 }
 
 func RepeatRange(low, high int, fn Fn, sep Fn) Fn {
-	return Repeat(fn, low+rand.Intn(high-low), sep)
+	return Repeat(fn, low+rand.Intn(high+1-low), sep)
 }
 
 func Join(sep Fn, fns ...Fn) Fn {
