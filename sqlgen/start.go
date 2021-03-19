@@ -13,17 +13,14 @@ import (
 )
 
 func NewGenerator(state *State) func() string {
-	w := state.weight
-	if w == nil {
-		w = &DefaultWeight
-	}
+	w := state.ctrl.Weight
 	rand.Seed(time.Now().UnixNano())
 	GenPlugins = append(GenPlugins, &ScopeListener{state: state})
 	postListener := &PostListener{callbacks: map[string]func(){}}
 	GenPlugins = append(GenPlugins, postListener)
 	GenPlugins = append(GenPlugins, &DebugListener{})
-	if w.AttachToTxn {
-		GenPlugins = append(GenPlugins, &TxnListener{w: w})
+	if state.ctrl.AttachToTxn {
+		GenPlugins = append(GenPlugins, &TxnListener{ctl: state.ctrl})
 	}
 	retFn := func() string {
 		res := evaluateFn(start)
@@ -47,8 +44,9 @@ func NewGenerator(state *State) func() string {
 			return initStart
 		}
 		return Or(
-			switchSysVars,
-			adminCheck,
+			switchRowFormatVer.SetW(w.SetRowFormat),
+			switchClustered.SetW(w.SetClustered),
+			adminCheck.SetW(w.AdminCheck),
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
 					createTable.SetW(w.CreateTable_WithoutLike),
@@ -116,20 +114,20 @@ func NewGenerator(state *State) func() string {
 		)
 	})
 
-	switchSysVars = NewFn("switchSysVars", func() Fn {
+	switchRowFormatVer = NewFn("switchRowFormat", func() Fn {
 		if RandomBool() {
-			if RandomBool() {
-				return Str("set @@global.tidb_row_format_version = 2")
-			}
-			return Str("set @@global.tidb_row_format_version = 1")
-		} else {
-			if RandomBool() {
-				state.enabledClustered = false
-				return Str("set @@tidb_enable_clustered_index = 0")
-			}
-			state.enabledClustered = true
-			return Str("set @@tidb_enable_clustered_index = 1")
+			return Str("set @@global.tidb_row_format_version = 2")
 		}
+		return Str("set @@global.tidb_row_format_version = 1")
+	})
+
+	switchClustered = NewFn("switchClustered", func() Fn {
+		if RandomBool() {
+			state.enabledClustered = false
+			return Str("set @@global.tidb_enable_clustered_index = 0")
+		}
+		state.enabledClustered = true
+		return Str("set @@global.tidb_enable_clustered_index = 1")
 	})
 
 	dropTable = NewFn("dropTable", func() Fn {
@@ -584,7 +582,7 @@ func NewGenerator(state *State) func() string {
 				if rand.Intn(5) == 0 {
 					repeatCnt += rand.Intn(2) + 1
 				}
-				return Repeat(predicate, repeatCnt,  Str("and"))
+				return Repeat(predicate, repeatCnt, Str("and"))
 			})
 
 			// Give some chances to common predicate.

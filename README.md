@@ -12,11 +12,11 @@ Start 2 MySQL/TiDB servers serving the port `4000` and `4001` respectively, run 
 Print 200 SQL statements randomly after setting `@@tidb_enable_clustered_index` to true:
 ```go
 func main() {
-    state := NewState()
-    state.InjectTodoSQL("set @@tidb_enable_clustered_index=true")
-    gen := NewGenerator(state)
-    for i := 0; i < 200; i++ {
-        fmt.Printf("%s;\n", gen())
+state := NewState()
+state.InjectTodoSQL("set @@global.tidb_enable_clustered_index=true")
+gen := NewGenerator(state)
+for i := 0; i < 200; i++ {
+fmt.Printf("%s;\n", gen())
 }
 ```
 

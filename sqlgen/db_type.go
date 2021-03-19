@@ -11,11 +11,6 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
-	weight     *Weight
-}
-
-func (s *State) WithWeight(w *Weight) {
-	s.weight = w
 }
 
 var DefaultWeight = Weight{
@@ -40,8 +35,9 @@ var DefaultWeight = Weight{
 	Query_Analyze:               0,
 	Query_Prepare:               2,
 	Query_HasLimit:              1,
-	AttachToTxn:                    false,
-	MaxTxnStmtCount:                20,
+	SetClustered:                1,
+	SetRowFormat:                1,
+	AdminCheck:                  1,
 }
 
 type Weight struct {
@@ -67,9 +63,9 @@ type Weight struct {
 	Query_Prepare               int
 	Query_HasLimit              int
 	Query_INDEX_MERGE           bool
-
-	AttachToTxn     bool
-	MaxTxnStmtCount int
+	SetRowFormat                int
+	SetClustered                int
+	AdminCheck                  int
 }
 
 type Table struct {
@@ -119,23 +115,22 @@ type Prepare struct {
 	Args []func() string
 }
 
-func NewState() *State {
+func NewState(opts ...func(ctl *ControlOption)) *State {
 	s := &State{
 		ctrl:             DefaultControlOption(),
 		enabledClustered: true,
+	}
+	for _, opt := range opts {
+		opt(s.ctrl)
 	}
 	s.CreateScope()
 	return s
 }
 
 func NewState2(EnableTestTiFlash bool) *State {
-	s := &State{
-		ctrl:             DefaultControlOption(),
-		enabledClustered: true,
-	}
-	s.ctrl.EnableTestTiFlash = EnableTestTiFlash
-	s.CreateScope()
-	return s
+	return NewState(func(ctl *ControlOption) {
+		ctl.EnableTestTiFlash = EnableTestTiFlash
+	})
 }
 
 type ControlOption struct {
@@ -157,9 +152,16 @@ type ControlOption struct {
 	EnableSelectOutFileAndLoadData bool
 	// Test TiFlash
 	EnableTestTiFlash bool
+	// indicate whether attach stmt inside txn
+	AttachToTxn bool
+	// max stmt count in a txn
+	MaxTxnStmtCount int
+	// generate SQL weight
+	Weight *Weight
 }
 
 func DefaultControlOption() *ControlOption {
+	cloneWeight := DefaultWeight
 	return &ControlOption{
 		InitTableCount:                 5,
 		InitRowCount:                   10,
@@ -169,6 +171,9 @@ func DefaultControlOption() *ControlOption {
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
+		AttachToTxn:                    false,
+		MaxTxnStmtCount:                20,
+		Weight:                         &cloneWeight,
 	}
 }
 
@@ -322,7 +327,7 @@ func (d *DebugListener) ProductionCancel(fn *Fn) {
 type TxnListener struct {
 	inTxn         bool
 	inflightStmts int
-	w             *Weight
+	ctl           *ControlOption
 }
 
 const txnStartWrapName = "txnWrappedStart"
@@ -412,7 +417,7 @@ func (s *TxnListener) endTxn() Result {
 	if !s.inTxn {
 		fnIdx = 0
 	} else {
-		inTxnW := s.w.MaxTxnStmtCount - s.inflightStmts
+		inTxnW := s.ctl.MaxTxnStmtCount - s.inflightStmts
 		if inTxnW < 0 {
 			inTxnW = 0
 		}
