@@ -116,13 +116,11 @@ type Prepare struct {
 }
 
 func NewState(opts ...func(ctl *ControlOption)) *State {
-	s := &State{
-		ctrl:             DefaultControlOption(),
-		enabledClustered: true,
-	}
+	s := &State{ctrl: DefaultControlOption()}
 	for _, opt := range opts {
 		opt(s.ctrl)
 	}
+	s.enabledClustered = s.ctrl.EnableTestTiFlash
 	s.CreateScope()
 	return s
 }
@@ -134,6 +132,8 @@ func NewState2(EnableTestTiFlash bool) *State {
 }
 
 type ControlOption struct {
+	// initial value for state.enableClustered
+	InitEnableClustered bool
 	// the initial number of tables.
 	InitTableCount int
 	// the number of rows to initialize for each table.
@@ -163,6 +163,7 @@ type ControlOption struct {
 func DefaultControlOption() *ControlOption {
 	cloneWeight := DefaultWeight
 	return &ControlOption{
+		InitEnableClustered:            true,
 		InitTableCount:                 5,
 		InitRowCount:                   10,
 		InitColCount:                   5,
