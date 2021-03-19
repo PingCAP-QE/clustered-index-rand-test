@@ -1,4 +1,4 @@
-module github.com/tangenta/clustered-index-rand-test
+module github.com/PingCAP-QE/clustered-index-rand-test
 
 go 1.15
 
