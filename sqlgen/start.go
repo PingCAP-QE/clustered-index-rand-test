@@ -226,8 +226,13 @@ func NewGenerator(state *State) func() string {
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
 			randN := rand.Intn(4)
-			if w.CreateTable_ForceHashPartition {
+			switch w.CreateTable_Partition_Type {
+			case "hash":
 				randN = hashPart
+			case "list":
+				randN = listPart
+			case "range":
+				randN = rangePart
 			}
 			switch randN {
 			case hashPart:
