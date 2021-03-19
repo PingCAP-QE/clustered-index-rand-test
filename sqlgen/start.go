@@ -927,7 +927,7 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	if rs1 == nil || rs2 == nil {
 		return nil
 	}
-	h1, h2 := rs1.UnorderedDigest(), rs2.UnorderedDigest()
+	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
 	if h1 != h2 {
 		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
 	}

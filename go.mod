@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/spf13/cobra v1.1.3
-	github.com/zyguan/just v0.0.0-20201210033110-9d2eb461c5a4
-	github.com/zyguan/sqlz v0.0.0-20210221093119-a5dd4230856a
+	github.com/zyguan/just v0.0.0-20201209133552-9791f5cd031c
+	github.com/zyguan/sqlz v0.0.0-20210309141421-491a44ab6d63
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
