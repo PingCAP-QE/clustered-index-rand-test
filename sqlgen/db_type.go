@@ -64,6 +64,7 @@ type Weight struct {
 	Query_Analyze               int
 	Query_Prepare               int
 	Query_HasLimit              int
+	Query_INDEX_MERGE           bool
 }
 
 type Table struct {
@@ -72,10 +73,11 @@ type Table struct {
 	Columns []*Column
 	Indices []*Index
 
-	containsPK       bool // to ensure at most 1 pk in each table
-	HandleCols       []*Column
-	PartitionColumns []*Column
-	values           [][]string
+	containsPK        bool // to ensure at most 1 pk in each table
+	HandleCols        []*Column
+	PartitionColumns  []*Column
+	values            [][]string
+	colForPrefixIndex []*Column
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.

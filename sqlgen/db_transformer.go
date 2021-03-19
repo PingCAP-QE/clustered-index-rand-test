@@ -70,8 +70,8 @@ func SwapOutParameterizedColumns(cols []*Column) []*Column {
 func RandomGroups(ss []string, groupCount int) [][]string {
 	groups := make([][]string, groupCount)
 	for _, s := range ss {
-		targetGroup := groups[rand.Intn(groupCount)]
-		targetGroup = append(targetGroup, s)
+		idx := rand.Intn(groupCount)
+		groups[idx] = append(groups[idx], s)
 	}
 	for i := 0; i < len(groups); i++ {
 		if len(groups[i]) == 0 {

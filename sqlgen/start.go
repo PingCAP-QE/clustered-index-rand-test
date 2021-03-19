@@ -278,12 +278,16 @@ func NewGenerator(state *State) func() string {
 			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 			state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 		}
+		indexOpt := 10
+		if w.Query_INDEX_MERGE {
+			indexOpt = 1000000
+		}
 		return And(
 			Str("create table"),
 			Str(tbl.Name),
 			Str("("),
 			colDefs,
-			OptIf(rand.Intn(10) != 0,
+			OptIf(rand.Intn(indexOpt) != 0,
 				And(
 					Str(","),
 					idxDefs,
@@ -326,11 +330,17 @@ func NewGenerator(state *State) func() string {
 						Str(tbl.Name),
 						Str("]) */"),
 					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
+					)),
 				Str(PrintColumnNamesWithoutPar(cols, "*")),
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
-				predicate,
+				predicates,
 			)
 		})
 		forUpdateOpt = NewFn("forUpdateOpt", func() Fn {
@@ -353,10 +363,16 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				)
 			}
 			return Or(
@@ -368,10 +384,16 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 				And(
 					Str("select"),
@@ -381,13 +403,19 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("sum("),
 					Str(intCol.Name),
 					Str(")"),
 					Str("from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 			)
 		})
@@ -532,6 +560,36 @@ func NewGenerator(state *State) func() string {
 	})
 
 	predicates = NewFn("predicates", func() Fn {
+		if w.Query_INDEX_MERGE {
+			andPredicates := NewFn("and predicate", func() Fn {
+				var tbl *Table
+				inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+				if inMultiTableQuery {
+					tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+					if RandomBool() {
+						tbl = tables[0]
+					} else {
+						tbl = tables[0]
+					}
+				} else {
+					tbl = state.Search(ScopeKeyCurrentTable).ToTable()
+				}
+				tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
+				repeatCnt := len(tbl.colForPrefixIndex)
+				if repeatCnt == 0 {
+					repeatCnt = 1
+				}
+				if rand.Intn(5) == 0 {
+					repeatCnt += rand.Intn(2) + 1
+				}
+				return Repeat(predicate, repeatCnt,  Str("and"))
+			})
+
+			// Give some chances to common predicate.
+			if rand.Intn(5) != 0 {
+				return RepeatRange(2, 5, andPredicates, Str("or"))
+			}
+		}
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
@@ -551,8 +609,14 @@ func NewGenerator(state *State) func() string {
 		} else {
 			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
 		}
-		randCol := tbl.GetRandColumn()
 
+		randCol := tbl.GetRandColumn()
+		if w.Query_INDEX_MERGE {
+			if len(tbl.colForPrefixIndex) > 0 {
+				randCol = tbl.colForPrefixIndex[0]
+				tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
+			}
+		}
 		randVal = NewFn("randVal", func() Fn {
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
@@ -720,6 +784,14 @@ func NewGenerator(state *State) func() string {
 							Str(tbl2.Name),
 							Str("])"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("use_index_merge("),
+							Str(tbl1.Name),
+							Str(","),
+							Str(tbl2.Name),
+							Str(")"),
+						)),
 					joinHint,
 					Str(" */"),
 				),
@@ -764,6 +836,7 @@ func NewGenerator(state *State) func() string {
 			Or(Str("left join"), Str("join"), Str("right join")),
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
+			And(Str("where")),
 			predicates,
 		)
 	})
