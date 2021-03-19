@@ -267,7 +267,7 @@ func doTxn(ctx context.Context, opts runABTestOptions, t *Test, i int, tx1 *sql.
 			(!strings.Contains(q, "order by") || strings.Contains(q, "force-unordered")) {
 			h1, h2 = unorderedDigest(rs1, nil), unorderedDigest(rs2, nil)
 		} else {
-			h1, h2 = rs1.DataDigest(), rs2.DataDigest()
+			h1, h2 = rs1.DataDigest(resultset.DigestOptions{}), rs2.DataDigest(resultset.DigestOptions{})
 		}
 		if h1 != h2 {
 			return fmt.Errorf("result digests mismatch: %s != %s @(%s,%d) %q", h1, h2, t.ID, stmt.Seq, stmt.Stmt)
