@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-	"github.com/tangenta/clustered-index-rand-test/sqlgen"
 	"github.com/zyguan/sqlz"
 	"github.com/zyguan/sqlz/resultset"
 	"golang.org/x/sync/errgroup"
