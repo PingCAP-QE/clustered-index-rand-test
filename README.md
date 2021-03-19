@@ -12,11 +12,12 @@ Start 2 MySQL/TiDB servers serving the port `4000` and `4001` respectively, run 
 Print 200 SQL statements randomly after setting `@@tidb_enable_clustered_index` to true:
 ```go
 func main() {
-state := NewState()
-state.InjectTodoSQL("set @@global.tidb_enable_clustered_index=true")
-gen := NewGenerator(state)
-for i := 0; i < 200; i++ {
-fmt.Printf("%s;\n", gen())
+    state := NewState()
+    state.InjectTodoSQL("set @@global.tidb_enable_clustered_index=true")
+    gen := NewGenerator(state)
+    for i := 0; i < 200; i++ {
+        fmt.Printf("%s;\n", gen())
+    }
 }
 ```
 
@@ -231,4 +232,3 @@ For the productions with a lot of constraints or complex conditions, answering t
 1. Why use struct instead of function to represent production?
     
     The functions are evaluated immediately when they are called. So it is not possible to reference each other in the block. However, this pattern is not uncommon in Yacc grammar. What's more, it is also inconvenient to intercept the function call.
-
