@@ -958,6 +958,13 @@ func newCommonInsert(state *State, w *Weight) Fn {
 			)
 		})
 
+		insertSetStmt = NewFn("insertAssignment", func() Fn {
+			randCol := tbl.GetRandColumn()
+			return Or(
+				Strs(randCol.Name, "=", randCol.RandomValue()),
+			)
+		})
+
 		// TODO: insert into t partition(p1) values(xxx)
 		// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
 		return Or(
@@ -977,7 +984,7 @@ func newCommonInsert(state *State, w *Weight) Fn {
 				Str("into"),
 				Str(tbl.Name),
 				Str("set"),
-				RepeatRange(1, 3, updateAssignment, Str(",")),
+				RepeatRange(1, 3, insertSetStmt, Str(",")),
 				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
 			),
 			//And(
