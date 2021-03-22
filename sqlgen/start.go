@@ -439,60 +439,7 @@ func NewGenerator(state *State) func() string {
 		)
 	})
 
-	commonInsert = NewFn("commonInsert", func() Fn {
-		tbl := state.GetRandTable()
-		var cols []*Column
-		if state.ctrl.StrictTransTable {
-			cols = tbl.GetRandColumnsIncludedDefaultValue()
-		} else {
-			cols = tbl.GetRandColumns()
-		}
-		insertOrReplace := "insert"
-		if rand.Intn(3) == 0 && w.Query_DML_Can_Be_Replace {
-			insertOrReplace = "replace"
-		}
-
-		onDuplicateUpdate = NewFn("onDuplicateUpdate", func() Fn {
-			return Or(
-				Empty().SetW(3),
-				And(
-					Str("on duplicate key update"),
-					Or(
-						onDupAssignment.SetW(4),
-						And(onDupAssignment, Str(","), onDupAssignment),
-					),
-				).SetW(w.Query_DML_INSERT_ON_DUP),
-			)
-		})
-
-		onDupAssignment = NewFn("onDupAssignment", func() Fn {
-			randCol := tbl.GetRandColumn()
-			return Or(
-				Strs(randCol.Name, "=", randCol.RandomValue()),
-				Strs(randCol.Name, "=", "values(", randCol.Name, ")"),
-			)
-		})
-
-		multipleRowVals = NewFn("multipleRowVals", func() Fn {
-			vals := tbl.GenRandValues(cols)
-			return Or(
-				Strs("(", PrintRandValues(vals), ")").SetW(3),
-				And(Strs("(", PrintRandValues(vals), ")"), Str(","), multipleRowVals),
-			)
-		})
-
-		return Or(
-			And(
-				Str(insertOrReplace),
-				Str("into"),
-				Str(tbl.Name),
-				Str(PrintColumnNamesWithPar(cols, "")),
-				Str("values"),
-				multipleRowVals,
-				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
-			),
-		)
-	})
+	commonInsert = newCommonInsert(state, w)
 
 	commonUpdate = NewFn("commonUpdate", func() Fn {
 		tbl := state.GetRandTable()
@@ -967,4 +914,88 @@ func OneOfContains(err1, err2 error, msg string) bool {
 	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
 	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
 	return c1 || c2
+}
+
+func newCommonInsert(state *State, w *Weight) Fn {
+	return NewFn("commonInsert", func() Fn {
+		tbl := state.GetRandTable()
+		var cols []*Column
+		if state.ctrl.StrictTransTable {
+			cols = tbl.GetRandColumnsIncludedDefaultValue()
+		} else {
+			cols = tbl.GetRandColumns()
+		}
+		insertOrReplace := "insert"
+		if rand.Intn(3) == 0 && w.Query_DML_Can_Be_Replace {
+			insertOrReplace = "replace"
+		}
+
+		onDuplicateUpdate = NewFn("onDuplicateUpdate", func() Fn {
+			repeatLimit := len(tbl.Columns)
+
+			return Or(
+				Empty().SetW(3),
+				And(
+					Str("on duplicate key update"),
+					RepeatRange(1, repeatLimit, onDupAssignment, Str(",")),
+				).SetW(w.Query_DML_INSERT_ON_DUP),
+			)
+		})
+
+		onDupAssignment = NewFn("onDupAssignment", func() Fn {
+			randCol := tbl.GetRandColumn()
+			return Or(
+				Strs(randCol.Name, "=", randCol.RandomValue()),
+				Strs(randCol.Name, "=", randCol.Name),
+			)
+		})
+
+		multipleRowVals = NewFn("multipleRowVals", func() Fn {
+			vals := tbl.GenRandValues(cols)
+			return Or(
+				Strs("(", PrintRandValues(vals), ")").SetW(3),
+				And(Strs("(", PrintRandValues(vals), ")"), Str(","), multipleRowVals),
+			)
+		})
+
+		insertSetStmt = NewFn("insertAssignment", func() Fn {
+			randCol := tbl.GetRandColumn()
+			return Or(
+				Strs(randCol.Name, "=", randCol.RandomValue()),
+			)
+		})
+
+		// TODO: insert into t partition(p1) values(xxx)
+		// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
+		return Or(
+			And(
+				Str(insertOrReplace),
+				Opt(Str("ignore")),
+				Str("into"),
+				Str(tbl.Name),
+				Str(PrintColumnNamesWithPar(cols, "")),
+				Str("values"),
+				multipleRowVals,
+				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
+			),
+			And(
+				Str(insertOrReplace),
+				Opt(Str("ignore")),
+				Str("into"),
+				Str(tbl.Name),
+				Str("set"),
+				RepeatRange(1, 3, insertSetStmt, Str(",")),
+				OptIf(insertOrReplace == "insert", onDuplicateUpdate),
+			),
+			//And(
+			//	Str(insertOrReplace),
+			//	Opt(Str("ignore")),
+			//	Str("into"),
+			//	Str(tbl.Name),
+			//	Str(PrintColumnNamesWithPar(cols, "")),
+			//	commonSelect,
+			//	OptIf(insertOrReplace == "insert", onDuplicateUpdate),
+			//),
+		)
+	})
 }

@@ -54,4 +54,5 @@ var (
 	deallocPrepareStmt   Fn
 	updateAssignments    Fn
 	multiTablePredicates Fn
+	insertSetStmt        Fn
 )
