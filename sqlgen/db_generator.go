@@ -145,6 +145,23 @@ func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 	return rows
 }
 
+func (t *Table) GenMultipleRowsAscForRandomIndexCols(count int, idxOffset int) [][]string {
+	rows := make([][]string, count)
+	randIdx := t.Indices[idxOffset]
+	firstColumn := randIdx.Columns[0].RandomValuesAsc(count)
+	for i := 0; i < count; i++ {
+		rows[i] = make([]string, len(randIdx.Columns))
+		for j := 0; j < len(randIdx.Columns); j++ {
+			if j == 0 {
+				rows[i][j] = firstColumn[i]
+			} else {
+				rows[i][j] = randIdx.Columns[j].RandomValue()
+			}
+		}
+	}
+	return rows
+}
+
 func (p *Prepare) GenAssignments() []string {
 	todoSQLs := make([]string, len(p.Args))
 	for i := 0; i < len(todoSQLs); i++ {

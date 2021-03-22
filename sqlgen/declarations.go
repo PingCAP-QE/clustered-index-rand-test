@@ -45,6 +45,10 @@ var (
 	joinPredicates       Fn
 	joinPredicate        Fn
 	splitRegion          Fn
+	splitRegionTable     Fn
+	splitRegionIndex     Fn
+	splitRegionBetween   Fn
+	splitRegionBy        Fn
 	partitionDef         Fn
 	selectIntoOutFile    Fn
 	loadTable            Fn

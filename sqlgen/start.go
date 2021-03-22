@@ -818,13 +818,73 @@ func NewGenerator(state *State) func() string {
 
 	splitRegion = NewFn("splitRegion", func() Fn {
 		tbl := state.GetRandTable()
-		rows := tbl.GenMultipleRowsAscForHandleCols(2)
-		row1, row2 := rows[0], rows[1]
 
-		return Strs(
-			"split table", tbl.Name, "between",
-			"(", PrintRandValues(row1), ")", "and",
-			"(", PrintRandValues(row2), ")", "regions", RandomNum(2, 10))
+		splitRegionBetween = NewFn("splitRegionBetween", func() Fn {
+			isSplitTable := state.Search(ScopeKeySplitTableRegion).ToInt() == 1
+			var rows [][]string
+			var idxOffset int
+			if isSplitTable {
+				rows = tbl.GenMultipleRowsAscForHandleCols(2)
+			} else {
+				idxOffset = rand.Intn(len(tbl.Indices))
+				rows = tbl.GenMultipleRowsAscForRandomIndexCols(2, idxOffset)
+			}
+			row1, row2 := rows[0], rows[1]
+
+			return And(
+				OptIf(!isSplitTable, Strs("index", tbl.Indices[idxOffset].Name)),
+				Strs(
+					"between",
+					"(", PrintRandValues(row1), ")", "and",
+					"(", PrintRandValues(row2), ")", "regions", RandomNum(2, 10)),
+			)
+		})
+
+		splitRegionBy = NewFn("splitRegionBy", func() Fn {
+			isSplitTable := state.Search(ScopeKeySplitTableRegion).ToInt() == 1
+			var rows [][]string
+			var idxOffset int
+			if isSplitTable {
+				rows = tbl.GenMultipleRowsAscForHandleCols(rand.Intn(10) + 2)
+			} else {
+				idxOffset = rand.Intn(len(tbl.Indices))
+				rows = tbl.GenMultipleRowsAscForRandomIndexCols(rand.Intn(10)+2, idxOffset)
+			}
+
+			byItem := ""
+			for _, item := range rows {
+				byItem += "("
+				byItem += PrintRandValues(item)
+				byItem += ")"
+				byItem += ","
+			}
+			byItem = byItem[0 : len(byItem)-1]
+			return And(
+				OptIf(!isSplitTable, Strs("index", tbl.Indices[idxOffset].Name)),
+				Strs(
+					"by",
+					byItem,
+				),
+			)
+		})
+
+		prefix := Strs("split table", tbl.Name)
+		splitRegionTable = NewFn("splitRegionTable", func() Fn {
+			state.Store(ScopeKeySplitTableRegion, NewScopeObj(1))
+			return Or(And(prefix, splitRegionBetween),
+				And(prefix, splitRegionBy))
+		})
+
+		splitRegionIndex = NewFn("splitRegionIndex", func() Fn {
+			state.Store(ScopeKeySplitTableRegion, NewScopeObj(0))
+			return Or(And(prefix, splitRegionBetween),
+				And(prefix, splitRegionBy))
+		})
+
+		return Or(
+			splitRegionTable,
+			If(len(tbl.Indices) > 0, splitRegionIndex),
+		)
 	})
 
 	prepareStmt = NewFn("prepareStmt", func() Fn {
