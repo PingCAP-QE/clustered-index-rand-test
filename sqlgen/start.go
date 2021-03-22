@@ -193,14 +193,6 @@ func NewGenerator(state *State) func() string {
 						// all partitioned Columns should be contained in every unique/primary index.
 						c := partitionedCol.ToColumn()
 						Assert(c != nil)
-						if idx.Tp == IndexTypePrimary {
-							if c.defaultVal == "null" {
-								return Empty()
-							}
-							idx.RemoveColIf(func(col *Column) bool {
-								return col.defaultVal == "null"
-							})
-						}
 						idx.AppendColumnIfNotExists(c)
 					}
 				}
@@ -222,7 +214,7 @@ func NewGenerator(state *State) func() string {
 		})
 
 		partitionDef = NewFn("partitionDef", func() Fn {
-			partitionedCol := tbl.GetRandColumnForPartition()
+			partitionedCol := tbl.GetRandColumnForPartition(tbl.containsPK)
 			if partitionedCol == nil {
 				return Empty()
 			}

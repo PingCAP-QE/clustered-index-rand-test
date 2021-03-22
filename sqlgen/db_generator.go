@@ -76,6 +76,9 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 		chosenCol := totalCols[chosenIdx]
 		totalCols[0], totalCols[chosenIdx] = totalCols[chosenIdx], totalCols[0]
 		totalCols = totalCols[1:]
+		if idx.Tp == IndexTypePrimary && chosenCol.defaultVal == "null" {
+			continue
+		}
 
 		idx.Columns = append(idx.Columns, chosenCol)
 		prefixLen := 0

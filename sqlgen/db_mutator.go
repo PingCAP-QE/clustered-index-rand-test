@@ -140,17 +140,6 @@ func (i *Index) AppendColumnIfNotExists(cols ...*Column) {
 	}
 }
 
-func (i *Index) RemoveColIf(filter func(c *Column) bool) {
-	newCols := make([]*Column, 0, len(i.Columns))
-	for _, c := range i.Columns {
-		if !filter(c) {
-			newCols = append(newCols, c)
-		}
-	}
-
-	i.Columns = newCols
-}
-
 func (p *Prepare) AppendColumns(cols ...*Column) {
 	for _, c := range cols {
 		p.Args = append(p.Args, func() string {

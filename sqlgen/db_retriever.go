@@ -45,9 +45,9 @@ func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
-func (t *Table) GetRandColumnForPartition() *Column {
+func (t *Table) GetRandColumnForPartition(allowDefaultNull bool) *Column {
 	cols := t.FilterColumns(func(column *Column) bool {
-		return column.Tp.IsPartitionType()
+		return column.Tp.IsPartitionType() && (allowDefaultNull || column.defaultVal != "null")
 	})
 	if len(cols) == 0 {
 		return nil
