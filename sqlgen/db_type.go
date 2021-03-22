@@ -11,59 +11,61 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
-	weight     *Weight
-}
-
-func (s *State) WithWeight(w *Weight) {
-	s.weight = w
 }
 
 var DefaultWeight = Weight{
-	CreateTable:                    13,
-	CreateTable_MoreCol:            2,
-	CreateTable_IndexMoreCol:       2,
-	CreateTable_MustPrefixIndex:    false,
-	CreateTable_WithoutLike:        4,
-	CreateTable_ForceHashPartition: false,
-	CreateTable_MustStrCol:         false,
-	CreateTable_MustIntCol:         false,
-	Query:                          15,
-	Query_DML:                      20,
-	Query_Select:                   1,
-	Query_DML_DEL:                  1,
-	Query_DML_UPDATE:               1,
-	Query_DML_INSERT:               1,
-	Query_DML_INSERT_ON_DUP:        4,
-	Query_DML_Can_Be_Replace:       true,
-	Query_DDL:                      5,
-	Query_Split:                    0,
-	Query_Analyze:                  0,
-	Query_Prepare:                  2,
-	Query_HasLimit:                 1,
+	CreateTable:                 13,
+	CreateTable_MoreCol:         2,
+	CreateTable_IndexMoreCol:    2,
+	CreateTable_MustPrefixIndex: false,
+	CreateTable_WithoutLike:     4,
+	CreateTable_Partition_Type:  "",
+	CreateTable_MustStrCol:      false,
+	CreateTable_MustIntCol:      false,
+	Query:                       15,
+	Query_DML:                   20,
+	Query_Select:                1,
+	Query_DML_DEL:               1,
+	Query_DML_UPDATE:            1,
+	Query_DML_INSERT:            1,
+	Query_DML_INSERT_ON_DUP:     4,
+	Query_DML_Can_Be_Replace:    true,
+	Query_DDL:                   5,
+	Query_Split:                 0,
+	Query_Analyze:               0,
+	Query_Prepare:               2,
+	Query_HasLimit:              1,
+	SetClustered:                1,
+	SetRowFormat:                1,
+	AdminCheck:                  1,
 }
 
 type Weight struct {
-	CreateTable                    int
-	CreateTable_MoreCol            int
-	CreateTable_WithoutLike        int
-	CreateTable_ForceHashPartition bool
-	CreateTable_IndexMoreCol       int
-	CreateTable_MustPrefixIndex    bool
-	CreateTable_MustStrCol         bool
-	CreateTable_MustIntCol         bool
-	Query                          int
-	Query_DML                      int
-	Query_Select                   int
-	Query_DML_DEL                  int
-	Query_DML_INSERT               int
-	Query_DML_INSERT_ON_DUP        int
-	Query_DML_Can_Be_Replace       bool
-	Query_DML_UPDATE               int
-	Query_DDL                      int
-	Query_Split                    int
-	Query_Analyze                  int
-	Query_Prepare                  int
-	Query_HasLimit                 int
+	CreateTable                 int
+	CreateTable_MoreCol         int
+	CreateTable_WithoutLike     int
+	CreateTable_Partition_Type  string
+	CreateTable_IndexMoreCol    int
+	CreateTable_MustPrefixIndex bool
+	CreateTable_MustStrCol      bool
+	CreateTable_MustIntCol      bool
+	Query                       int
+	Query_DML                   int
+	Query_Select                int
+	Query_DML_DEL               int
+	Query_DML_INSERT            int
+	Query_DML_INSERT_ON_DUP     int
+	Query_DML_Can_Be_Replace    bool
+	Query_DML_UPDATE            int
+	Query_DDL                   int
+	Query_Split                 int
+	Query_Analyze               int
+	Query_Prepare               int
+	Query_HasLimit              int
+	Query_INDEX_MERGE           bool
+	SetRowFormat                int
+	SetClustered                int
+	AdminCheck                  int
 }
 
 type Table struct {
@@ -72,10 +74,11 @@ type Table struct {
 	Columns []*Column
 	Indices []*Index
 
-	containsPK       bool // to ensure at most 1 pk in each table
-	HandleCols       []*Column
-	PartitionColumns []*Column
-	values           [][]string
+	containsPK        bool // to ensure at most 1 pk in each table
+	HandleCols        []*Column
+	PartitionColumns  []*Column
+	values            [][]string
+	colForPrefixIndex []*Column
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.
@@ -112,26 +115,25 @@ type Prepare struct {
 	Args []func() string
 }
 
-func NewState() *State {
-	s := &State{
-		ctrl:             DefaultControlOption(),
-		enabledClustered: true,
+func NewState(opts ...func(ctl *ControlOption)) *State {
+	s := &State{ctrl: DefaultControlOption()}
+	for _, opt := range opts {
+		opt(s.ctrl)
 	}
+	s.enabledClustered = s.ctrl.EnableTestTiFlash
 	s.CreateScope()
 	return s
 }
 
 func NewState2(EnableTestTiFlash bool) *State {
-	s := &State{
-		ctrl:             DefaultControlOption(),
-		enabledClustered: true,
-	}
-	s.ctrl.EnableTestTiFlash = EnableTestTiFlash
-	s.CreateScope()
-	return s
+	return NewState(func(ctl *ControlOption) {
+		ctl.EnableTestTiFlash = EnableTestTiFlash
+	})
 }
 
 type ControlOption struct {
+	// initial value for state.enableClustered
+	InitEnableClustered bool
 	// the initial number of tables.
 	InitTableCount int
 	// the number of rows to initialize for each table.
@@ -150,10 +152,18 @@ type ControlOption struct {
 	EnableSelectOutFileAndLoadData bool
 	// Test TiFlash
 	EnableTestTiFlash bool
+	// indicate whether attach stmt inside txn
+	AttachToTxn bool
+	// max stmt count in a txn
+	MaxTxnStmtCount int
+	// generate SQL weight
+	Weight *Weight
 }
 
 func DefaultControlOption() *ControlOption {
+	cloneWeight := DefaultWeight
 	return &ControlOption{
+		InitEnableClustered:            true,
 		InitTableCount:                 5,
 		InitRowCount:                   10,
 		InitColCount:                   5,
@@ -162,6 +172,9 @@ func DefaultControlOption() *ControlOption {
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
+		AttachToTxn:                    false,
+		MaxTxnStmtCount:                20,
+		Weight:                         &cloneWeight,
 	}
 }
 
@@ -310,4 +323,126 @@ func (d *DebugListener) AfterProductionGen(fn *Fn, result *Result) {
 }
 
 func (d *DebugListener) ProductionCancel(fn *Fn) {
+}
+
+type TxnListener struct {
+	inTxn         bool
+	inflightStmts int
+	ctl           *ControlOption
+}
+
+const txnStartWrapName = "txnWrappedStart"
+
+func (s *TxnListener) BeforeProductionGen(fn *Fn) {
+	if fn.Name != "start" {
+		return
+	}
+	actualFn := *fn
+	*fn = Fn{
+		Name: txnStartWrapName,
+		F: func() Result {
+			startTxnRs := s.startTxn()
+			if startTxnRs.Tp != PlainString {
+				return InvalidResult()
+			}
+			currRs := actualFn.F()
+			if currRs.Tp != PlainString {
+				return InvalidResult()
+			}
+			if len(startTxnRs.Value) == 0 {
+				return currRs
+			}
+			return Result{
+				Tp:    PlainString,
+				Value: startTxnRs.Value + " ; " + currRs.Value,
+			}
+		},
+	}
+	return
+}
+
+func (s *TxnListener) startTxn() Result {
+	fns := []Fn{
+		Empty().SetW(1),
+		And(
+			Str("begin"),
+			Or(
+				Str("pessimistic"),
+				Str("optimistic"),
+			),
+		).SetW(1),
+	}
+	var chosenFn Fn
+	if s.inTxn {
+		// inside txn, never begin again.
+		chosenFn = fns[0]
+	} else {
+		chosenFn = fns[randomSelectByFactor(fns, func(f Fn) int {
+			return f.Weight
+		})]
+		if chosenFn.Name != Empty().Name {
+			s.inTxn = true
+			s.inflightStmts = 0
+		}
+	}
+	return evaluateFn(chosenFn)
+}
+
+func (s *TxnListener) AfterProductionGen(fn *Fn, result *Result) {
+	if fn.Name != txnStartWrapName {
+		return
+	}
+	if result.Tp != PlainString {
+		return
+	}
+	endTxnRs := s.endTxn()
+	if endTxnRs.Tp != PlainString || len(endTxnRs.Value) == 0 {
+		return
+	}
+	*result = Result{
+		Tp:    result.Tp,
+		Value: result.Value + " ; " + endTxnRs.Value,
+	}
+	return
+}
+
+func (s *TxnListener) endTxn() Result {
+	fns := []Fn{
+		Empty(),
+		Or(
+			Str("commit"),
+			Str("rollback"),
+		),
+	}
+	var fnIdx int
+	if !s.inTxn {
+		fnIdx = 0
+	} else {
+		inTxnW := s.ctl.MaxTxnStmtCount - s.inflightStmts
+		if inTxnW < 0 {
+			inTxnW = 0
+		}
+		outTxnW := s.inflightStmts
+		fnIdx = randomSelectByFactor(fns, func(f Fn) int {
+			if f.Name == Empty().Name {
+				return inTxnW
+			}
+			return outTxnW
+		})
+	}
+	chosenFn := fns[fnIdx]
+	if chosenFn.Name != Empty().Name {
+		s.inTxn = false
+	} else if s.inTxn {
+		s.inflightStmts++
+	}
+	rs := evaluateFn(chosenFn)
+	if rs.Tp == PlainString {
+		return rs
+	}
+	return InvalidResult()
+}
+
+func (s TxnListener) ProductionCancel(fn *Fn) {
+	return
 }

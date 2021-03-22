@@ -13,11 +13,15 @@ import (
 )
 
 func NewGenerator(state *State) func() string {
+	w := state.ctrl.Weight
 	rand.Seed(time.Now().UnixNano())
 	GenPlugins = append(GenPlugins, &ScopeListener{state: state})
 	postListener := &PostListener{callbacks: map[string]func(){}}
 	GenPlugins = append(GenPlugins, postListener)
 	GenPlugins = append(GenPlugins, &DebugListener{})
+	if state.ctrl.AttachToTxn {
+		GenPlugins = append(GenPlugins, &TxnListener{ctl: state.ctrl})
+	}
 	retFn := func() string {
 		res := evaluateFn(start)
 		switch res.Tp {
@@ -32,11 +36,6 @@ func NewGenerator(state *State) func() string {
 		}
 	}
 
-	w := state.weight
-	if w == nil {
-		w = &DefaultWeight
-	}
-
 	start = NewFn("start", func() Fn {
 		if sql, ok := state.PopOneTodoSQL(); ok {
 			return Str(sql)
@@ -45,8 +44,9 @@ func NewGenerator(state *State) func() string {
 			return initStart
 		}
 		return Or(
-			switchSysVars,
-			adminCheck,
+			switchRowFormatVer.SetW(w.SetRowFormat),
+			switchClustered.SetW(w.SetClustered),
+			adminCheck.SetW(w.AdminCheck),
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
 					createTable.SetW(w.CreateTable_WithoutLike),
@@ -114,20 +114,20 @@ func NewGenerator(state *State) func() string {
 		)
 	})
 
-	switchSysVars = NewFn("switchSysVars", func() Fn {
+	switchRowFormatVer = NewFn("switchRowFormat", func() Fn {
 		if RandomBool() {
-			if RandomBool() {
-				return Str("set @@global.tidb_row_format_version = 2")
-			}
-			return Str("set @@global.tidb_row_format_version = 1")
-		} else {
-			if RandomBool() {
-				state.enabledClustered = false
-				return Str("set @@tidb_enable_clustered_index = 0")
-			}
-			state.enabledClustered = true
-			return Str("set @@tidb_enable_clustered_index = 1")
+			return Str("set @@global.tidb_row_format_version = 2")
 		}
+		return Str("set @@global.tidb_row_format_version = 1")
+	})
+
+	switchClustered = NewFn("switchClustered", func() Fn {
+		if RandomBool() {
+			state.enabledClustered = false
+			return Str("set @@global.tidb_enable_clustered_index = 0")
+		}
+		state.enabledClustered = true
+		return Str("set @@global.tidb_enable_clustered_index = 1")
 	})
 
 	dropTable = NewFn("dropTable", func() Fn {
@@ -222,8 +222,13 @@ func NewGenerator(state *State) func() string {
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
 			randN := rand.Intn(4)
-			if w.CreateTable_ForceHashPartition {
+			switch w.CreateTable_Partition_Type {
+			case "hash":
 				randN = hashPart
+			case "list":
+				randN = listPart
+			case "range":
+				randN = rangePart
 			}
 			switch randN {
 			case hashPart:
@@ -269,12 +274,16 @@ func NewGenerator(state *State) func() string {
 			state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 			state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 		}
+		indexOpt := 10
+		if w.Query_INDEX_MERGE {
+			indexOpt = 1000000
+		}
 		return And(
 			Str("create table"),
 			Str(tbl.Name),
 			Str("("),
 			colDefs,
-			OptIf(rand.Intn(10) != 0,
+			OptIf(rand.Intn(indexOpt) != 0,
 				And(
 					Str(","),
 					idxDefs,
@@ -317,11 +326,17 @@ func NewGenerator(state *State) func() string {
 						Str(tbl.Name),
 						Str("]) */"),
 					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
+					)),
 				Str(PrintColumnNamesWithoutPar(cols, "*")),
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
-				predicate,
+				predicates,
 			)
 		})
 		forUpdateOpt = NewFn("forUpdateOpt", func() Fn {
@@ -344,10 +359,16 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				)
 			}
 			return Or(
@@ -359,10 +380,16 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("count(*) from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 				And(
 					Str("select"),
@@ -372,13 +399,19 @@ func NewGenerator(state *State) func() string {
 							Str(tbl.Name),
 							Str("]) */"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
 					Str("sum("),
 					Str(intCol.Name),
 					Str(")"),
 					Str("from"),
 					Str(tbl.Name),
 					Str("where"),
-					predicate,
+					predicates,
 				),
 			)
 		})
@@ -523,6 +556,36 @@ func NewGenerator(state *State) func() string {
 	})
 
 	predicates = NewFn("predicates", func() Fn {
+		if w.Query_INDEX_MERGE {
+			andPredicates := NewFn("and predicate", func() Fn {
+				var tbl *Table
+				inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+				if inMultiTableQuery {
+					tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+					if RandomBool() {
+						tbl = tables[0]
+					} else {
+						tbl = tables[0]
+					}
+				} else {
+					tbl = state.Search(ScopeKeyCurrentTable).ToTable()
+				}
+				tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
+				repeatCnt := len(tbl.colForPrefixIndex)
+				if repeatCnt == 0 {
+					repeatCnt = 1
+				}
+				if rand.Intn(5) == 0 {
+					repeatCnt += rand.Intn(2) + 1
+				}
+				return Repeat(predicate, repeatCnt, Str("and"))
+			})
+
+			// Give some chances to common predicate.
+			if rand.Intn(5) != 0 {
+				return RepeatRange(2, 5, andPredicates, Str("or"))
+			}
+		}
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
@@ -542,8 +605,14 @@ func NewGenerator(state *State) func() string {
 		} else {
 			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
 		}
-		randCol := tbl.GetRandColumn()
 
+		randCol := tbl.GetRandColumn()
+		if w.Query_INDEX_MERGE {
+			if len(tbl.colForPrefixIndex) > 0 {
+				randCol = tbl.colForPrefixIndex[0]
+				tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
+			}
+		}
 		randVal = NewFn("randVal", func() Fn {
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
@@ -711,6 +780,14 @@ func NewGenerator(state *State) func() string {
 							Str(tbl2.Name),
 							Str("])"),
 						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("use_index_merge("),
+							Str(tbl1.Name),
+							Str(","),
+							Str(tbl2.Name),
+							Str(")"),
+						)),
 					joinHint,
 					Str(" */"),
 				),
@@ -755,6 +832,7 @@ func NewGenerator(state *State) func() string {
 			Or(Str("left join"), Str("join"), Str("right join")),
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
+			And(Str("where")),
 			predicates,
 		)
 	})
@@ -845,7 +923,7 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	if rs1 == nil || rs2 == nil {
 		return nil
 	}
-	h1, h2 := rs1.UnorderedDigest(), rs2.UnorderedDigest()
+	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
 	if h1 != h2 {
 		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
 	}
