@@ -183,6 +183,7 @@ const (
 	ScopeKeyIndexUniqID
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
+	ScopeKeySplitTableRegion
 )
 
 const DefaultKeySize = 3072
