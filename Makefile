@@ -1,6 +1,6 @@
 all: build
 
-build:
+build: fmt
 	@echo "Building binary..."
 	@go build -o bin/clustered-index-rand-test
 
@@ -9,16 +9,19 @@ fmt:
 	@go fmt ./...
 
 abtest: bins build
-	@./run-test.sh
+	@./tests/run-test.sh
 
 bins:
 	@which bin/tidb-master || (echo "bin/tidb-master not found" && exit 1)
 	@which bin/tidb-4.0 || (echo "bin/tidb-4.0 not found" && exit 1)
+
+test-syntax: bins build
+	@python3 tests/run-syntax-check.py
 
 #clean:
 #	@rm bin/tidb-master 2> /dev/null || echo "bin/tidb-master not found"
 #	@rm bin/tidb-4.0 2> /dev/null || echo "bin/tidb-4.0 not found"
 #	@rm bin/clustered-index-rand-test 2> /dev/null || echo "bin/tidb-4.0 not found"
 
-kill:
+stop-services:
 	@./tests/_utils/stop_services

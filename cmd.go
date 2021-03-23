@@ -41,6 +41,7 @@ func rootCmd() *cobra.Command {
 	cmd.AddCommand(runTestCmd(&g))
 	cmd.AddCommand(whyTestCmd(&g))
 	cmd.AddCommand(interactCmd())
+	cmd.AddCommand(printCmd())
 	return cmd
 }
 
@@ -67,6 +68,26 @@ func clearCmd(g *global) *cobra.Command {
 			return g.store.Clear()
 		},
 	}
+	return cmd
+}
+
+func printCmd() *cobra.Command {
+	var count int
+	cmd := &cobra.Command{
+		Use:           "print",
+		Short:         "Print SQL statements",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			state := sqlgen.NewState()
+			gen := sqlgen.NewGenerator(state)
+			for i := 0; i < count; i++ {
+				fmt.Printf("%s\n", gen())
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&count, "count", 1, "number of SQLs")
 	return cmd
 }
 
