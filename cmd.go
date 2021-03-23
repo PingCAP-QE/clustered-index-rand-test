@@ -28,7 +28,7 @@ func rootCmd() *cobra.Command {
 	var g global
 
 	cmd := &cobra.Command{
-		Use: "clustered-index-rand-test",
+		Use: "clustered index random abtest",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 			g.store, err = NewStore(g.storeDSN)
 			return
