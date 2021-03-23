@@ -173,6 +173,9 @@ func NewGenerator(state *State) func() string {
 		colDefs = NewFn("colDefs", func() Fn {
 			colDef = NewFn("colDef", func() Fn {
 				col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
+				if len(tbl.Columns) == 0 && col.defaultVal == "null" {
+					col.defaultVal = ""
+				}
 				tbl.AppendColumn(col)
 				return And(Str(col.Name), Str(PrintColumnType(col)))
 			})
