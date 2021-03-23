@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -eu
+
+export PATH="bin:$PATH"
+
+echo "Starting tidb-master..."
+tidb-master \
+    -P 4001 \
+    --status 10081 > /dev/null &
+
+echo "Verifying tidb-master is started..."
+i=0
+while ! wget -q -O - "http://127.0.0.1:10081/status"; do
+    i=$((i+1))
+    if [ "$i" -gt 50 ]; then
+        echo 'Failed to start tidb-master'
+        exit 1
+    fi
+    sleep 3
+done
+
+echo "Starting tidb-4.0..."
+tidb-4.0 \
+    -P 4002 \
+    --status 10082 > /dev/null &
+
+echo "Verifying tidb-4.0 is started..."
+i=0
+while ! wget -q -O - "http://127.0.0.1:10082/status"; do
+    i=$((i+1))
+    if [ "$i" -gt 50 ]; then
+        echo 'Failed to start tidb-4.0'
+        exit 1
+    fi
+    sleep 3
+done

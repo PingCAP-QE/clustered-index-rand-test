@@ -1,13 +1,14 @@
-SQL Generator Documentation
+clustered-index-rand-test
 ===
 
 ## Quick start
 
-#### AB Test
+#### Run AB Test
 
-Start 2 MySQL/TiDB servers serving the port `4000` and `4001` respectively, run `./run-tptest.sh` in the project root dir.
+1. Prepare two binaries `tidb-master` and `tidb-4.0` in the `bin` directory.
+1. Run `make abtest`.
 
-#### Generate SQLs
+#### Generate SQLs as a library
 
 Print 200 SQL statements randomly after setting `@@tidb_enable_clustered_index` to true:
 ```go
