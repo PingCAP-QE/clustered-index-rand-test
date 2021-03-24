@@ -570,7 +570,7 @@ func newGenerator(state *State) func() string {
 	commonDelete = NewFn("commonDelete", func() Fn {
 		tbl := state.GetRandTable()
 		var col *Column
-		if rand.Intn(w.Query_DML_DEL_COMMON + w.Query_DML_DEL_INDEX) < w.Query_DML_DEL_COMMON {
+		if rand.Intn(w.Query_DML_DEL_COMMON+w.Query_DML_DEL_INDEX) < w.Query_DML_DEL_COMMON {
 			col = tbl.GetRandColumn()
 		} else {
 			col = tbl.GetRandIndexFirstColumnWithWeight(w.Query_DML_DEL_INDEX_COMMON, w.Query_DML_DEL_INDEX_COMMON)

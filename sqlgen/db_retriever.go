@@ -62,7 +62,7 @@ func (t *Table) GetRandIndexFirstColumnWithWeight(pkW, npkW int) *Column {
 		}
 	}
 
-	if rand.Intn(pkW + npkW) < pkW {
+	if rand.Intn(pkW+npkW) < pkW {
 		if pk == nil {
 			return t.GetRandColumn()
 		}

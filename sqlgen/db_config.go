@@ -42,7 +42,7 @@ type Weight struct {
 	Query_DML                   int
 	Query_Select                int
 	Query_DML_DEL               int
-	Query_DML_DEL_INDEX			int
+	Query_DML_DEL_INDEX         int
 	Query_DML_DEL_COMMON        int
 	Query_DML_DEL_INDEX_PK      int
 	Query_DML_DEL_INDEX_COMMON  int
@@ -93,7 +93,7 @@ var DefaultWeight = Weight{
 	Query_Select:                1,
 	Query_DML_DEL:               1,
 	Query_DML_DEL_INDEX:         0,
-	Query_DML_DEL_COMMON:		 1,
+	Query_DML_DEL_COMMON:        1,
 	Query_DML_DEL_INDEX_PK:      1,
 	Query_DML_DEL_INDEX_COMMON:  1,
 	Query_DML_UPDATE:            1,
