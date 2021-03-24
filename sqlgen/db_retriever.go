@@ -261,6 +261,23 @@ func (t *Table) GetRandColumns() []*Column {
 	return selectedCols
 }
 
+// GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.
+func (t *Table) GetRandColumnsPreferIndex() *Column {
+	var col *Column
+	for i := 0; i <= 5; i++ {
+		col = t.Columns[rand.Intn(len(t.Columns))]
+		if len(col.relatedIndices) > 0 {
+			return col
+		}
+	}
+	return col
+}
+
+// GetRandColumnsSimple gets a random column.
+func (t *Table) GetRandColumnsSimple() *Column {
+	return t.Columns[rand.Intn(len(t.Columns))]
+}
+
 func (i *Index) IsUnique() bool {
 	return i.Tp == IndexTypePrimary || i.Tp == IndexTypeUnique
 }

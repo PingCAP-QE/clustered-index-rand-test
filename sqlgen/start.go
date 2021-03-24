@@ -756,7 +756,14 @@ func newGenerator(state *State) func() string {
 		})
 
 		joinPredicate = NewFn("joinPredicate", func() Fn {
-			col1, col2 := RandColumnPairWithSameType(group)
+			var col1, col2 *Column
+			if a := state.Search(ScopePreferIndexColumn); !a.IsNil() && a.ToInt() == 1 {
+				col1 = tbl1.GetRandColumnsPreferIndex()
+				col2 = tbl2.GetRandColumnsPreferIndex()
+			} else {
+				col1 = tbl1.GetRandColumnsSimple()
+				col2 = tbl2.GetRandColumnsSimple()
+			}
 			return And(
 				Str(col1.Name),
 				cmpSymbol,
@@ -779,6 +786,10 @@ func newGenerator(state *State) func() string {
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
+					NewFn("", func() Fn {
+						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
+						return Empty()
+					}),
 				),
 				And(
 					Str("INL_HASH_JOIN("),
@@ -786,6 +797,10 @@ func newGenerator(state *State) func() string {
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
+					NewFn("", func() Fn {
+						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
+						return Empty()
+					}),
 				),
 				And(
 					Str("INL_MERGE_JOIN("),
@@ -793,6 +808,10 @@ func newGenerator(state *State) func() string {
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
+					NewFn("", func() Fn {
+						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
+						return Empty()
+					}),
 				),
 				And(
 					Str("HASH_JOIN("),
