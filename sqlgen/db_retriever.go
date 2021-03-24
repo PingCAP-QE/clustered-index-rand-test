@@ -45,6 +45,36 @@ func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
+// GetRandIndexFirstColumnWithWeight returns a random index's first columns.
+// It will choose PK according to the probability of pkW / (pkW + npkW).
+// If there is no index, return GetRandColumn().
+func (t *Table) GetRandIndexFirstColumnWithWeight(pkW, npkW int) *Column {
+	if len(t.Indices) == 0 {
+		return t.GetRandColumn()
+	}
+	var pk *Index
+	npks := make([]*Index, 0, len(t.Indices))
+	for _, idx := range t.Indices {
+		if idx.Tp == IndexTypePrimary {
+			pk = idx
+		} else {
+			npks = append(npks, idx)
+		}
+	}
+
+	if rand.Intn(pkW + npkW) < pkW {
+		if pk == nil {
+			return t.GetRandColumn()
+		}
+		return pk.Columns[0]
+	} else {
+		if len(npks) == 0 {
+			return t.GetRandColumn()
+		}
+		return npks[rand.Intn(len(npks))].Columns[0]
+	}
+}
+
 // GetRandIndexPrefixColumn returns a random index's random prefix columns.
 func (t *Table) GetRandIndexPrefixColumn() []*Column {
 	idx := t.Indices[rand.Intn(len(t.Indices))]

@@ -569,7 +569,12 @@ func newGenerator(state *State) func() string {
 
 	commonDelete = NewFn("commonDelete", func() Fn {
 		tbl := state.GetRandTable()
-		col := tbl.GetRandColumn()
+		var col *Column
+		if rand.Intn(w.Query_DML_DEL_COMMON + w.Query_DML_DEL_INDEX) < w.Query_DML_DEL_COMMON {
+			col = tbl.GetRandColumn()
+		} else {
+			col = tbl.GetRandIndexFirstColumnWithWeight(w.Query_DML_DEL_INDEX_COMMON, w.Query_DML_DEL_INDEX_COMMON)
+		}
 		state.Store(ScopeKeyCurrentTable, NewScopeObj(tbl))
 
 		multipleRowVal = NewFn("multipleRowVal", func() Fn {
