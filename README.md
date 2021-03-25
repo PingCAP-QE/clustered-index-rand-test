@@ -10,7 +10,7 @@ clustered-index-rand-test
 
 #### Generate SQLs as a library
 
-Print 200 SQL statements randomly after setting `@@tidb_enable_clustered_index` to true:
+Print 200 SQL statements randomly after setting `@@global.tidb_enable_clustered_index` to true:
 ```go
 func main() {
     state := NewState()

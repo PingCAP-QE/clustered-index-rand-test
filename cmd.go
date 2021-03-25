@@ -276,125 +276,119 @@ func whyTestCmd(g *global) *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := args[0]
 			db, err := sql.Open("mysql", g.storeDSN)
 			if err != nil {
 				return err
 			}
-			var (
-				t       Test
-				initRaw []byte
-			)
-			row := db.QueryRow("select status, started_at, finished_at, message, init_sql from test where id = ?", id)
-			if err := row.Scan(&t.Status, &t.StartedAt, &t.FinishedAt, &t.Message, &initRaw); err != nil {
-				return err
-			}
-			if err := json.Unmarshal(initRaw, &t.InitSQL); err != nil {
-				return err
-			}
-			t1 := time.Unix(t.StartedAt, 0)
-			t2 := t1
-			if t.FinishedAt > t.StartedAt {
-				t2 = time.Unix(t.FinishedAt, 0)
-			}
-			fmt.Printf("# [%s] %s (%s,%s)\n", t.Status, id, t1.Format(time.RFC3339), t2.Sub(t1))
-			if len(t.Message) > 0 {
-				fmt.Println("\n> " + t.Message)
-			}
-			if t.Status != TestFailed {
-				return nil
-			}
-
-			dumpRes := func(tag string, raw []byte, err string) {
-				fmt.Println("\n**" + tag + "**")
-				if len(err) > 0 {
-					fmt.Println("Error: " + err)
-					return
-				}
-				var rs resultset.ResultSet
-				if e := rs.Decode(raw); e != nil {
-					fmt.Println("oops: " + e.Error())
-					return
-				}
-				rs.PrettyPrint(os.Stdout)
-			}
-
-			dumpStmts := func(seq int) {
-				var (
-					stmt    Stmt
-					lastTxn = -1
-				)
-				fmt.Println("-- init")
-				for _, stmt := range t.InitSQL {
-					fmt.Println(stmt + ";")
-				}
-
-				rows, err := db.Query("select stmt, txn from stmt where test_id = ? and seq <= ? order by seq", id, seq)
-				if err != nil {
-					fmt.Println("oops: " + err.Error())
-					return
-				}
-				defer rows.Close()
-				for rows.Next() {
-					if err := rows.Scan(&stmt.Stmt, &stmt.Txn); err != nil {
-						fmt.Println("oops: " + err.Error())
-						return
-					}
-					if lastTxn != stmt.Txn {
-						if lastTxn != -1 {
-							fmt.Println("commit;")
-						}
-						fmt.Printf("-- txn:%d\n", stmt.Txn)
-						fmt.Println("begin;")
-					}
-					fmt.Println(stmt.Stmt + ";")
-					lastTxn = stmt.Txn
-				}
-				if err := rows.Err(); err != nil {
-					fmt.Println("oops: " + err.Error())
-				}
-			}
-
-			var (
-				seq  int
-				stmt string
-			)
-			if err := db.QueryRow("select seq from stmt_result where test_id = ? order by seq desc", id).Scan(&seq); err != nil {
-				return err
-			}
-			if err := db.QueryRow("select stmt from stmt where test_id = ? and seq = ?", id, seq).Scan(&stmt); err != nil {
-				return err
-			}
-			fmt.Println("\n## last query")
-			fmt.Printf("\n%d: %s\n", seq, stmt)
-
-			fmt.Println("\n```")
-			rows, err := db.Query("select tag, result, errmsg from stmt_result where test_id = ? and seq = ? order by tag", id, seq)
-			if err != nil {
-				fmt.Println("oops: " + err.Error())
-			} else {
-				defer rows.Close()
-				for rows.Next() {
-					var (
-						tag string
-						err string
-						raw []byte
-					)
-					if rows.Scan(&tag, &raw, &err) == nil {
-						dumpRes(tag, raw, err)
-					}
-				}
-			}
-			fmt.Println("\n```")
-
-			fmt.Println("\n## history")
-
-			fmt.Println("\n```sql")
-			dumpStmts(seq)
-			fmt.Println("```")
-
-			return nil
+			return PrintWhy(args[0], db)
 		},
 	}
 	return cmd
+}
+
+func PrintWhy(id string, db *sql.DB) error {
+	var (
+		t       Test
+		initRaw []byte
+	)
+	row := db.QueryRow("select status, started_at, finished_at, message, init_sql from test where id = ?", id)
+	if err := row.Scan(&t.Status, &t.StartedAt, &t.FinishedAt, &t.Message, &initRaw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(initRaw, &t.InitSQL); err != nil {
+		return err
+	}
+	t1 := time.Unix(t.StartedAt, 0)
+	t2 := t1
+	if t.FinishedAt > t.StartedAt {
+		t2 = time.Unix(t.FinishedAt, 0)
+	}
+	fmt.Printf("# [%s] %s (%s,%s)\n", t.Status, id, t1.Format(time.RFC3339), t2.Sub(t1))
+	if len(t.Message) > 0 {
+		fmt.Println("\n> " + t.Message)
+	}
+	if t.Status != TestFailed {
+		return nil
+	}
+
+	dumpRes := func(tag string, raw []byte, err string) {
+		fmt.Println("\n**" + tag + "**")
+		if len(err) > 0 {
+			fmt.Println("Error: " + err)
+			return
+		}
+		var rs resultset.ResultSet
+		if e := rs.Decode(raw); e != nil {
+			fmt.Println("oops: " + e.Error())
+			return
+		}
+		rs.PrettyPrint(os.Stdout)
+	}
+
+	dumpStmts := func(seq int) {
+		var (
+			stmt Stmt
+		)
+		fmt.Println("-- init")
+		for _, stmt := range t.InitSQL {
+			fmt.Println(stmt + ";")
+		}
+
+		rows, err := db.Query("select stmt, txn from stmt where test_id = ? and seq <= ? order by seq", id, seq)
+		if err != nil {
+			fmt.Println("oops: " + err.Error())
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			if err := rows.Scan(&stmt.Stmt, &stmt.Txn); err != nil {
+				fmt.Println("oops: " + err.Error())
+				return
+			}
+			fmt.Println(stmt.Stmt + ";")
+		}
+		if err := rows.Err(); err != nil {
+			fmt.Println("oops: " + err.Error())
+		}
+	}
+
+	var (
+		seq  int
+		stmt string
+	)
+	if err := db.QueryRow("select seq from stmt_result where test_id = ? order by seq desc", id).Scan(&seq); err != nil {
+		return err
+	}
+	if err := db.QueryRow("select stmt from stmt where test_id = ? and seq = ?", id, seq).Scan(&stmt); err != nil {
+		return err
+	}
+	fmt.Println("\n## last query")
+	fmt.Printf("\n%d: %s\n", seq, stmt)
+
+	fmt.Println("\n```")
+	rows, err := db.Query("select tag, result, errmsg from stmt_result where test_id = ? and seq = ? order by tag", id, seq)
+	if err != nil {
+		fmt.Println("oops: " + err.Error())
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				tag string
+				err string
+				raw []byte
+			)
+			if rows.Scan(&tag, &raw, &err) == nil {
+				dumpRes(tag, raw, err)
+			}
+		}
+	}
+	fmt.Println("\n```")
+
+	fmt.Println("\n## history")
+
+	fmt.Println("\n```sql")
+	dumpStmts(seq)
+	fmt.Println("```")
+
+	return nil
 }

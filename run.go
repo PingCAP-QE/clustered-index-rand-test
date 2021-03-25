@@ -127,6 +127,16 @@ func runABTest(ctx context.Context, failed chan struct{}, opts runABTestOptions)
 				store.SetTest(t.ID, TestFailed, err.Error())
 				log.Printf("test(%s) failed at txn #%d: %v", t.ID, i, err)
 				close(failed)
+				time.Sleep(2 * time.Second)
+				// Fixme: this assumes data is stored in DB2.
+				_, err1 := opts.DB2.Exec("use test")
+				if err1 != nil {
+					return err1
+				}
+				err1 = PrintWhy(t.ID, opts.DB2)
+				if err1 != nil {
+					log.Printf("%s\n", err.Error())
+				}
 				return err
 			}
 
