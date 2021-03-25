@@ -24,7 +24,7 @@ func genTest(opts genTestOptions) (test Test, err error) {
 
 func genTestWithoutGrammarFile(opts genTestOptions) (test Test, err error) {
 	state := sqlgen.NewState2(opts.TiFlash)
-	state.InjectTodoSQL("set @@tidb_enable_clustered_index=true")
+	state.InjectTodoSQL("set @@global.tidb_enable_clustered_index=true")
 	gen := sqlgen.NewGenerator(state)
 	for i := 0; i < opts.NumTxn; i++ {
 		txnStmtCount := 1 + rand.Intn(200)

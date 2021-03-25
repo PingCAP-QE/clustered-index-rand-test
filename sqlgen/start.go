@@ -42,8 +42,8 @@ func newGenerator(state *State) func() string {
 	}
 
 	start = NewFn("start", func() Fn {
-		if sql, ok := state.PopOneTodoSQL(); ok {
-			return Str(sql)
+		if s, ok := state.PopOneTodoSQL(); ok {
+			return Str(s)
 		}
 		if state.IsInitializing() {
 			return initStart
@@ -204,7 +204,7 @@ func newGenerator(state *State) func() string {
 				tbl.AppendIndex(idx)
 				var clusteredKeyword string
 				if idx.Tp == IndexTypePrimary {
-					clusteredKeyword = "clustered"
+					clusteredKeyword = "/*T![clustered_index] clustered */"
 				}
 				return And(
 					Str(PrintIndexType(idx)),
@@ -497,7 +497,7 @@ func newGenerator(state *State) func() string {
 		return Or(
 			And(
 				Str(insertOrReplace),
-				Opt(Str("ignore")),
+				OptIf(insertOrReplace == "insert", Str("ignore")),
 				Str("into"),
 				Str(tbl.Name),
 				Str(PrintColumnNamesWithPar(cols, "")),
@@ -507,7 +507,7 @@ func newGenerator(state *State) func() string {
 			),
 			And(
 				Str(insertOrReplace),
-				Opt(Str("ignore")),
+				OptIf(insertOrReplace == "insert", Str("ignore")),
 				Str("into"),
 				Str(tbl.Name),
 				Str("set"),
