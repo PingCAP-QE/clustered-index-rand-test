@@ -312,6 +312,15 @@ func (i *Index) IsUnique() bool {
 	return i.Tp == IndexTypePrimary || i.Tp == IndexTypeUnique
 }
 
+func (i *Index) HasDefaultNullColumn() bool {
+	for _, c := range i.Columns {
+		if c.defaultVal == "null" {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Column) IsDroppable() bool {
 	return len(c.relatedIndices) == 0
 }

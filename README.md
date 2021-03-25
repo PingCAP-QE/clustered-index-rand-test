@@ -11,6 +11,7 @@ clustered-index-rand-test
 #### Generate SQLs as a library
 
 Print 200 SQL statements randomly after setting `@@global.tidb_enable_clustered_index` to true:
+
 ```go
 func main() {
     state := NewState()
@@ -22,11 +23,20 @@ func main() {
 }
 ```
 
+#### Generate SQLs as a binary
+
+Print 200 SQL statements randomly:
+
+```
+make gen count=200
+```
+
 To check/modify the generation rules, see the file `sqlgen/start.go`.
 
 ## Introduction
 
 This project provides a flexible way to generate SQL strings. Comparing with randgen/go-randgen, it has the following advantages:
+
 - Good readability. It uses Yacc-style code to describe the grammar. Here is the comparison for a simple 'or' branch: 
   ```yacc
   dmlStmt:

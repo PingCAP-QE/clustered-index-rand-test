@@ -696,10 +696,8 @@ func newGenerator(state *State) func() string {
 	})
 
 	maybeLimit = NewFn("maybeLimit", func() Fn {
-		return Or(
-			Empty().SetW(3),
-			Strs("limit", RandomNum(1, 10)).SetW(w.Query_HasLimit),
-		)
+		// Return empty because the limit is not friendly to clustered index AB test.
+		return Empty()
 	})
 
 	addIndex = NewFn("addIndex", func() Fn {

@@ -329,7 +329,6 @@ func PrintWhy(id string, db *sql.DB) error {
 		var (
 			stmt Stmt
 		)
-		fmt.Println("-- init")
 		for _, stmt := range t.InitSQL {
 			fmt.Println(stmt + ";")
 		}

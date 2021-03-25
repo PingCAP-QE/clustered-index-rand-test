@@ -63,13 +63,6 @@ func GenNewColumn(id int, w *Weight) *Column {
 
 func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	if tbl.containsPK {
-		// Exclude primary key type.
-		idx.Tp = IndexType(rand.Intn(int(IndexTypePrimary)))
-	} else {
-		tbl.containsPK = true
-		idx.Tp = IndexTypePrimary
-	}
 	totalCols := tbl.cloneColumns()
 	try := 10
 	for {
@@ -106,6 +99,13 @@ func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
 		if len(totalCols) == 0 || RandomBool() {
 			break
 		}
+	}
+	if !tbl.containsPK && !idx.HasDefaultNullColumn() {
+		tbl.containsPK = true
+		idx.Tp = IndexTypePrimary
+	} else {
+		// Exclude primary key type.
+		idx.Tp = IndexType(rand.Intn(int(IndexTypePrimary)))
 	}
 	return idx
 }
