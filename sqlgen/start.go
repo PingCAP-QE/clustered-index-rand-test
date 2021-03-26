@@ -206,15 +206,18 @@ func newGenerator(state *State) func() string {
 				if idx.Tp == IndexTypePrimary {
 					clusteredKeyword = "/*T![clustered_index] clustered */"
 				}
-				return And(
+				fns := []Fn{
 					Str(PrintIndexType(idx)),
 					Str("key"),
 					Str(idx.Name),
 					Str("("),
 					Str(PrintIndexColumnNames(idx)),
 					Str(")"),
-					Str(clusteredKeyword),
-				)
+				}
+				if w.CreateTable_WithClusterHint {
+					fns = append(fns, Str(clusteredKeyword))
+				}
+				return And(fns...)
 			})
 			return Or(
 				idxDef.SetW(1),
