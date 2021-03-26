@@ -31,6 +31,7 @@ type ControlOption struct {
 
 type Weight struct {
 	CreateTable                 int
+	CreateTable_WithClusterHint bool
 	CreateTable_MoreCol         int
 	CreateTable_WithoutLike     int
 	CreateTable_Partition_Type  string
@@ -81,6 +82,7 @@ func DefaultControlOption() *ControlOption {
 
 var DefaultWeight = Weight{
 	CreateTable:                 13,
+	CreateTable_WithClusterHint: true,
 	CreateTable_MoreCol:         2,
 	CreateTable_IndexMoreCol:    2,
 	CreateTable_MustPrefixIndex: false,
