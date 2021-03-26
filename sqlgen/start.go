@@ -439,7 +439,7 @@ func newGenerator(state *State) func() string {
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 			),
 			If(len(state.tables) > 1,
-				multiTableQuery.SetW(1000),
+				multiTableQuery,
 			),
 		)
 	})
@@ -949,7 +949,7 @@ func newGenerator(state *State) func() string {
 				Str("join"),
 				Str(tbl2.Name),
 			),
-			semiJoinStmt.SetW(10000),
+			semiJoinStmt,
 		)
 	})
 
