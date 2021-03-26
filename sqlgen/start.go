@@ -203,22 +203,16 @@ func newGenerator(state *State) func() string {
 					}
 				}
 				tbl.AppendIndex(idx)
-				var clusteredKeyword string
-				if idx.Tp == IndexTypePrimary {
-					clusteredKeyword = "/*T![clustered_index] clustered */"
-				}
-				fns := []Fn{
+				clusteredKeyword := "/*T![clustered_index] clustered */"
+				return And(
 					Str(PrintIndexType(idx)),
 					Str("key"),
 					Str(idx.Name),
 					Str("("),
 					Str(PrintIndexColumnNames(idx)),
 					Str(")"),
-				}
-				if w.CreateTable_WithClusterHint {
-					fns = append(fns, Str(clusteredKeyword))
-				}
-				return And(fns...)
+					OptIf(idx.Tp == IndexTypePrimary && w.CreateTable_WithClusterHint, Str(clusteredKeyword)),
+				)
 			})
 			return Or(
 				idxDef.SetW(1),
