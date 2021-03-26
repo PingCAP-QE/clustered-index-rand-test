@@ -180,10 +180,9 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		colID := colIDFn()
-		colName := fmt.Sprintf("col_%d", colID)
 		newCol := &Column{
 			Id:             colID,
-			Name:           colName,
+			Name:           c.Name,
 			Tp:             c.Tp,
 			isUnsigned:     c.isUnsigned,
 			arg1:           c.arg1,
@@ -199,10 +198,9 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
 		idxID := idxIDFn()
-		idxName := fmt.Sprintf("idx_%d", idxID)
 		newIdx := &Index{
 			Id:           idxID,
-			Name:         idxName,
+			Name:         idx.Name,
 			Tp:           idx.Tp,
 			ColumnPrefix: idx.ColumnPrefix,
 		}

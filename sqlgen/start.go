@@ -439,7 +439,7 @@ func newGenerator(state *State) func() string {
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 			),
 			If(len(state.tables) > 1,
-				multiTableQuery,
+				multiTableQuery.SetW(1000),
 			),
 		)
 	})
@@ -636,7 +636,7 @@ func newGenerator(state *State) func() string {
 			if RandomBool() {
 				tbl = tables[0]
 			} else {
-				tbl = tables[0]
+				tbl = tables[1]
 			}
 		} else {
 			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
@@ -746,8 +746,6 @@ func newGenerator(state *State) func() string {
 		cols2 := tbl2.GetRandColumns()
 		state.Store(ScopeKeyCurrentMultiTable, NewScopeObj([]*Table{tbl1, tbl2}))
 
-		group := GroupColumnsByColumnTypes(tbl1, tbl2)
-		group = FilterUniqueColumns(group)
 		joinPredicates = NewFn("joinPredicates", func() Fn {
 			return Or(
 				joinPredicate,
@@ -822,8 +820,98 @@ func newGenerator(state *State) func() string {
 				),
 			)
 		})
-		if len(group) == 0 {
+
+		semiJoinStmt = NewFn("seme join", func() Fn {
+			var col1, col2 *Column
+			preferIndex := !state.Search(ScopePreferIndexColumn).IsNil() && state.Search(ScopePreferIndexColumn).ToInt() == 1
+			if preferIndex {
+				col1 = tbl1.GetRandColumnsPreferIndex()
+				col2 = tbl2.GetRandColumnsPreferIndex()
+			} else {
+				col1 = tbl1.GetRandColumnsSimple()
+				col2 = tbl2.GetRandColumnsSimple()
+			}
+
+			// We prefer that the types to be compatible.
+			// This method may be extracted to a function later.
+			for i := 0; i <= 5; i++ {
+				if col1.Tp.IsStringType() && col2.Tp.IsStringType() {
+					break
+				}
+				if col1.Tp.IsIntegerType() && col2.Tp.IsIntegerType() {
+					break
+				}
+				if col1.Tp == col2.Tp {
+					break
+				}
+				if preferIndex {
+					col2 = tbl2.GetRandColumnsPreferIndex()
+				} else {
+					col2 = tbl2.GetRandColumnsSimple()
+				}
+			}
+
+			// TODO: Support exists subquery.
 			return And(
+				Str("select"),
+				And(
+					Str("/*+ "),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("read_from_storage(tiflash["),
+							Str(tbl1.Name),
+							Str(","),
+							Str(tbl2.Name),
+							Str("])"),
+						)),
+					joinHint,
+					Str(" */"),
+				),
+				Str(PrintFullQualifiedColName(tbl1, cols1)),
+				Str("from"),
+				Str(tbl1.Name),
+				Str("where"),
+				Str(col1.Name),
+				Str("in"),
+				Str("("),
+				Str("select"),
+				Str(col2.Name),
+				Str("from"),
+				Str(tbl2.Name),
+				Str("where"),
+				predicates,
+				Str(")"),
+			)
+		})
+
+		return Or(
+			And(
+				Str("select"),
+				And(
+					Str("/*+ "),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("read_from_storage(tiflash["),
+							Str(tbl1.Name),
+							Str(","),
+							Str(tbl2.Name),
+							Str("])"),
+						)),
+					joinHint,
+					Str(" */"),
+				),
+				Str(PrintFullQualifiedColName(tbl1, cols1)),
+				Str(","),
+				Str(PrintFullQualifiedColName(tbl2, cols2)),
+				Str("from"),
+				Str(tbl1.Name),
+				Or(Str("left join"), Str("join"), Str("right join")),
+				Str(tbl2.Name),
+				And(Str("on"), joinPredicates),
+				And(Str("where")),
+				predicates,
+			),
+			And(
 				Str("select"),
 				And(
 					Str("/*+ "),
@@ -853,42 +941,8 @@ func newGenerator(state *State) func() string {
 				Str(tbl1.Name),
 				Str("join"),
 				Str(tbl2.Name),
-			)
-		}
-
-		return And(
-			Str("select"),
-			OptIf(state.ctrl.EnableTestTiFlash,
-				And(
-					Str("/*+ read_from_storage(tiflash["),
-					Str(tbl1.Name),
-					Str(","),
-					Str(tbl2.Name),
-					Str("]) */"),
-				)),
-			And(
-				Str("/*+ "),
-				OptIf(state.ctrl.EnableTestTiFlash,
-					And(
-						Str("read_from_storage(tiflash["),
-						Str(tbl1.Name),
-						Str(","),
-						Str(tbl2.Name),
-						Str("])"),
-					)),
-				joinHint,
-				Str(" */"),
 			),
-			Str(PrintFullQualifiedColName(tbl1, cols1)),
-			Str(","),
-			Str(PrintFullQualifiedColName(tbl2, cols2)),
-			Str("from"),
-			Str(tbl1.Name),
-			Or(Str("left join"), Str("join"), Str("right join")),
-			Str(tbl2.Name),
-			And(Str("on"), joinPredicates),
-			And(Str("where")),
-			predicates,
+			semiJoinStmt.SetW(10000),
 		)
 	})
 
