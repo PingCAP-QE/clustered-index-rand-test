@@ -230,7 +230,7 @@ func newGenerator(state *State) func() string {
 			state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
 			tbl.AppendPartitionColumn(partitionedCol)
 			const hashPart, rangePart, listPart = 0, 1, 2
-			randN := rand.Intn(4)
+			randN := rand.Intn(6)
 			switch w.CreateTable_Partition_Type {
 			case "hash":
 				randN = hashPart
@@ -745,6 +745,12 @@ func newGenerator(state *State) func() string {
 		cols1 := tbl1.GetRandColumns()
 		cols2 := tbl2.GetRandColumns()
 		state.Store(ScopeKeyCurrentMultiTable, NewScopeObj([]*Table{tbl1, tbl2}))
+		preferIndex := RandomBool()
+		if preferIndex {
+			state.Store(ScopePreferIndexColumn, NewScopeObj(1))
+		} else {
+			state.Store(ScopePreferIndexColumn, NewScopeObj(0))
+		}
 
 		joinPredicates = NewFn("joinPredicates", func() Fn {
 			return Or(
@@ -769,8 +775,7 @@ func newGenerator(state *State) func() string {
 			)
 		})
 		joinHint = NewFn("joinHint", func() Fn {
-			return Or(
-				Empty(),
+			noIndexHint := Or(
 				And(
 					Str("MERGE_JOIN("),
 					Str(tbl1.Name),
@@ -779,15 +784,21 @@ func newGenerator(state *State) func() string {
 					Str(")"),
 				),
 				And(
+					Str("HASH_JOIN("),
+					Str(tbl1.Name),
+					Str(","),
+					Str(tbl2.Name),
+					Str(")"),
+				),
+			)
+
+			useIndexHint := Or(
+				And(
 					Str("INL_JOIN("),
 					Str(tbl1.Name),
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
-					NewFn("", func() Fn {
-						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
-						return Empty()
-					}),
 				),
 				And(
 					Str("INL_HASH_JOIN("),
@@ -795,10 +806,6 @@ func newGenerator(state *State) func() string {
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
-					NewFn("", func() Fn {
-						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
-						return Empty()
-					}),
 				),
 				And(
 					Str("INL_MERGE_JOIN("),
@@ -806,18 +813,18 @@ func newGenerator(state *State) func() string {
 					Str(","),
 					Str(tbl2.Name),
 					Str(")"),
-					NewFn("", func() Fn {
-						state.Store(ScopePreferIndexColumn, NewScopeObj(1))
-						return Empty()
-					}),
 				),
-				And(
-					Str("HASH_JOIN("),
-					Str(tbl1.Name),
-					Str(","),
-					Str(tbl2.Name),
-					Str(")"),
-				),
+			)
+			if preferIndex {
+				return Or(
+					Empty(),
+					useIndexHint,
+				)
+			}
+
+			return Or(
+				Empty(),
+				noIndexHint,
 			)
 		})
 
