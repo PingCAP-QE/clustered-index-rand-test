@@ -1,6 +1,7 @@
 package sqlgen
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -1046,7 +1047,10 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	}
 	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
 	if h1 != h2 {
-		return fmt.Errorf("result digests mismatch: %s != %s %q", h1, h2, sql)
+		var b1, b2 bytes.Buffer
+		rs1.PrettyPrint(&b1)
+		rs2.PrettyPrint(&b2)
+		return fmt.Errorf("result digests mismatch: %s != %s %q\n%s\n%s", h1, h2, sql, b1.String(), b2.String())
 	}
 	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
 		return fmt.Errorf("rows affected mismatch: %d != %d %q",
