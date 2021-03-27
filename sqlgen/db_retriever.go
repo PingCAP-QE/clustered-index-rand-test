@@ -273,6 +273,10 @@ func (t *Table) GetRandColumns() []*Column {
 		return nil
 	}
 	// insert into t (cols..) values (...)
+	return t.GetRandColumnsNonEmpty()
+}
+
+func (t *Table) GetRandColumnsNonEmpty() []*Column {
 	totalCols := t.cloneColumns()
 	var selectedCols []*Column
 	for {

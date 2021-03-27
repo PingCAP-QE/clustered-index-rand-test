@@ -418,13 +418,13 @@ func newGenerator(state *State) func() string {
 		}
 
 		onDuplicateUpdate = NewFn("onDuplicateUpdate", func() Fn {
-			repeatLimit := len(tbl.Columns)
+			cols := tbl.GetRandColumnsNonEmpty()
 
 			return Or(
 				Empty().SetW(3),
-				And(
-					Str("on duplicate key update"),
-					RepeatRange(1, repeatLimit, onDupAssignment, Str(",")),
+				Strs(
+					"on duplicate key update",
+					PrintRandomAssignments(cols),
 				).SetW(w.Query_DML_INSERT_ON_DUP),
 			)
 		})

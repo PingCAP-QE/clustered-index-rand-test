@@ -27,5 +27,8 @@ gen: build
 #	@rm bin/tidb-4.0 2> /dev/null || echo "bin/tidb-4.0 not found"
 #	@rm bin/clustered-index-rand-test 2> /dev/null || echo "bin/tidb-4.0 not found"
 
+start-services:
+	@./tests/_utils/start_services
+
 stop-services:
 	@./tests/_utils/stop_services

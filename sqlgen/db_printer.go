@@ -192,3 +192,16 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	str += ")"
 	return str
 }
+
+func PrintRandomAssignments(cols []*Column) string {
+	var sb strings.Builder
+	for i, col := range cols {
+		sb.WriteString(col.Name)
+		sb.WriteString(" = ")
+		sb.WriteString(col.RandomValue())
+		if i != len(cols)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
