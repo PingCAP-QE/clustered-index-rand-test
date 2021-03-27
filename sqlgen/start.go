@@ -380,8 +380,8 @@ func newGenerator(state *State) func() string {
 				Str(tbl.Name),
 				Str("where"),
 				predicates,
-				If(groupByCols != nil, Str("group by")),
-				If(groupByCols != nil, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
+				If(len(groupByCols) > 0, Str("group by")),
+				If(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
 			)
 		})
 
