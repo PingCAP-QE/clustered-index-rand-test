@@ -356,70 +356,32 @@ func newGenerator(state *State) func() string {
 			)
 		})
 		aggSelect = NewFn("aggSelect", func() Fn {
-			intCol := tbl.GetRandIntColumn()
-			if intCol == nil {
-				return And(
-					Str("select"),
-					OptIf(state.ctrl.EnableTestTiFlash,
-						And(
-							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.Name),
-							Str("]) */"),
-						)),
-					OptIf(w.Query_INDEX_MERGE,
-						And(
-							Str("/*+ use_index_merge("),
-							Str(tbl.Name),
-							Str(") */"),
-						)),
-					Str("count(*) from"),
-					Str(tbl.Name),
-					Str("where"),
-					predicates,
-				)
+			cols = cols[:0]
+			for i := 0; i < 5; i++ {
+				cols = append(cols, tbl.GetRandColumn())
 			}
-			return Or(
-				And(
-					Str("select"),
-					OptIf(state.ctrl.EnableTestTiFlash,
-						And(
-							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.Name),
-							Str("]) */"),
-						)),
-					OptIf(w.Query_INDEX_MERGE,
-						And(
-							Str("/*+ use_index_merge("),
-							Str(tbl.Name),
-							Str(") */"),
-						)),
-					Str("count(*) from"),
-					Str(tbl.Name),
-					Str("where"),
-					predicates,
-				),
-				And(
-					Str("select"),
-					OptIf(state.ctrl.EnableTestTiFlash,
-						And(
-							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.Name),
-							Str("]) */"),
-						)),
-					OptIf(w.Query_INDEX_MERGE,
-						And(
-							Str("/*+ use_index_merge("),
-							Str(tbl.Name),
-							Str(") */"),
-						)),
-					Str("sum("),
-					Str(intCol.Name),
-					Str(")"),
-					Str("from"),
-					Str(tbl.Name),
-					Str("where"),
-					predicates,
-				),
+			groupByCols := tbl.GetRandColumns()
+			return And(
+				Str("select"),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("/*+ read_from_storage(tiflash["),
+						Str(tbl.Name),
+						Str("]) */"),
+					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
+					)),
+				Str(PrintRandomAggFunc(tbl, cols)),
+				Str("from"),
+				Str(tbl.Name),
+				Str("where"),
+				predicates,
+				If(groupByCols != nil, Str("group by")),
+				If(groupByCols != nil, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
 			)
 		})
 

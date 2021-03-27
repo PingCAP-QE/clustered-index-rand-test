@@ -2,6 +2,7 @@ package sqlgen
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 )
@@ -143,4 +144,51 @@ func PrintFullQualifiedColName(tbl *Table, cols []*Column) string {
 		}
 	}
 	return sb.String()
+}
+
+type aggArg struct {
+	name        string
+	minArg      int
+	maxArg      int
+	canDistinct bool
+}
+
+var aggFunctions = []aggArg{
+	{"count", 1, 1, true},
+	{"sum", 1, 1, true},
+	{"avg", 1, 1, true},
+	{"firstrow", 1, 1, true},
+	{"max", 1, 1, true},
+	{"min", 1, 1, true},
+	{"group_concat", 1, 1, true},
+	{"bit_or", 1, 1, false},
+	{"bit_xor", 1, 1, false},
+	{"bit_and", 1, 1, false},
+	{"var_pop", 1, 1, true},
+	{"var_samp", 1, 1, true},
+	{"stddev_pop", 1, 1, true},
+	{"stddev_samp", 1, 1, true},
+	{"json_objectagg", 2, 2, false},
+	{"approx_count_distinct", 1, 1, false},
+	{"approx_percentile", 1, 2, false},
+}
+
+func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
+	arg := aggFunctions[rand.Intn(len(aggFunctions))]
+	str := arg.name + "("
+	if arg.canDistinct && rand.Intn(3) == 0 {
+		str += "distinct "
+	}
+	for i := 0; i < arg.minArg; i++ {
+		col := cols[rand.Intn(len(cols))]
+		str += col.Name
+		if i > 0 {
+			str += ","
+		}
+	}
+	if arg.name == "approx_percentile" {
+		str += ", " + strconv.FormatInt(rand.Int63n(100), 10)
+	}
+	str += ")"
+	return str
 }
