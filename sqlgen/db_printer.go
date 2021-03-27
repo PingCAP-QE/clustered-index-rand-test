@@ -144,3 +144,16 @@ func PrintFullQualifiedColName(tbl *Table, cols []*Column) string {
 	}
 	return sb.String()
 }
+
+func PrintRandomAssignments(cols []*Column) string {
+	var sb strings.Builder
+	for i, col := range cols {
+		sb.WriteString(col.Name)
+		sb.WriteString(" = ")
+		sb.WriteString(col.RandomValue())
+		if i != len(cols)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
