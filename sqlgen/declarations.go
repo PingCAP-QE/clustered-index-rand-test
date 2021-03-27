@@ -59,4 +59,5 @@ var (
 	updateAssignments    Fn
 	multiTablePredicates Fn
 	insertSetStmt        Fn
+	semiJoinStmt         Fn
 )
