@@ -157,3 +157,16 @@ func PrintRandomAssignments(cols []*Column) string {
 	}
 	return sb.String()
 }
+
+func PrintSplitByItems(rows [][]string) string {
+	var sb strings.Builder
+	for i, item := range rows {
+		sb.WriteString("(")
+		sb.WriteString(PrintRandValues(item))
+		sb.WriteString(")")
+		if i != len(rows)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}

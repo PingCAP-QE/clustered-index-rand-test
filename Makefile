@@ -1,3 +1,5 @@
+count ?= 20
+
 all: build
 
 build: fmt
@@ -16,9 +18,8 @@ bins:
 	@which bin/tidb-4.0 || (echo "bin/tidb-4.0 not found" && exit 1)
 
 test-syntax: bins build
-	@python3 tests/run-syntax-check.py
+	@python3 tests/run-syntax-check.py $(count)
 
-count ?= 20
 gen: build
 	@bin/clustered-index-rand-test print --count $(count) | xargs -I _ echo "_;"
 

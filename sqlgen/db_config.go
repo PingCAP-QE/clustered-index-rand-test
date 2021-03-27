@@ -103,7 +103,7 @@ var DefaultWeight = Weight{
 	Query_DML_INSERT_ON_DUP:     4,
 	Query_DML_Can_Be_Replace:    true,
 	Query_DDL:                   5,
-	Query_Split:                 0,
+	Query_Split:                 5,
 	Query_Analyze:               0,
 	Query_Prepare:               2,
 	Query_HasLimit:              1,
