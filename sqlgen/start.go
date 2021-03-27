@@ -356,9 +356,9 @@ func newGenerator(state *State) func() string {
 			)
 		})
 		aggSelect = NewFn("aggSelect", func() Fn {
-			cols = cols[:0]
+			var aggCols []*Column
 			for i := 0; i < 5; i++ {
-				cols = append(cols, tbl.GetRandColumn())
+				aggCols = append(aggCols, tbl.GetRandColumn())
 			}
 			groupByCols := tbl.GetRandColumns()
 			return And(
@@ -375,7 +375,7 @@ func newGenerator(state *State) func() string {
 						Str(tbl.Name),
 						Str(") */"),
 					)),
-				Str(PrintRandomAggFunc(tbl, cols)),
+				Str(PrintRandomAggFunc(tbl, aggCols)),
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
