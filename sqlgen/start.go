@@ -214,10 +214,7 @@ func newGenerator(state *State) func() string {
 					OptIf(idx.Tp == IndexTypePrimary && w.CreateTable_WithClusterHint, Str(clusteredKeyword)),
 				)
 			})
-			return Or(
-				idxDef.SetW(1),
-				And(idxDef, Str(","), idxDefs).SetW(w.CreateTable_IndexMoreCol),
-			)
+			return RepeatRange(1, w.CreateTable_IndexMoreCol, idxDef, Str(","))
 		})
 
 		partitionDef = NewFn("partitionDef", func() Fn {
@@ -597,18 +594,7 @@ func newGenerator(state *State) func() string {
 	predicates = NewFn("predicates", func() Fn {
 		if w.Query_INDEX_MERGE {
 			andPredicates := NewFn("and predicate", func() Fn {
-				var tbl *Table
-				inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
-				if inMultiTableQuery {
-					tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
-					if RandomBool() {
-						tbl = tables[0]
-					} else {
-						tbl = tables[0]
-					}
-				} else {
-					tbl = state.Search(ScopeKeyCurrentTable).ToTable()
-				}
+				tbl := getTable(state)
 				tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
 				repeatCnt := len(tbl.colForPrefixIndex)
 				if repeatCnt == 0 {
@@ -625,37 +611,63 @@ func newGenerator(state *State) func() string {
 				return RepeatRange(2, 5, andPredicates, Str("or"))
 			}
 		}
+
+		pointGet := NewFn("point get", func() Fn {
+			tbl := getTable(state)
+			pickIdx := tbl.GetRandUniqueIndexForPointGet()
+			if pickIdx == nil {
+				return Empty()
+			}
+			idxCols := pickIdx.Columns
+			tbl.colForPointGet = idxCols
+			// Prepare data for select.
+			tbl.valuesForPointGet = make([]string, 0)
+			if len(tbl.values) > 0 && RandomBool() {
+				// Choose a row to select.
+				randPickRow := tbl.values[rand.Intn(len(tbl.values))]
+				for _, colp := range idxCols {
+					col := colp
+					tbl.valuesForPointGet = append(tbl.valuesForPointGet, randPickRow[tbl.GetColumnOffset(col)])
+				}
+			}
+
+			state.Store(ScopeUsePointGet, NewScopeObj(1))
+			return Repeat(predicate, len(idxCols), Str("and"))
+		})
+
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
+			pointGet,
+			RepeatRange(2, 5, pointGet, Str("or")),
 		)
 	})
 
 	predicate = NewFn("predicate", func() Fn {
-		var tbl *Table
+		tbl := getTable(state)
 		inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
-		if inMultiTableQuery {
-			tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
-			if RandomBool() {
-				tbl = tables[0]
-			} else {
-				tbl = tables[1]
-			}
-		} else {
-			tbl = state.Search(ScopeKeyCurrentTable).ToTable()
-		}
 
 		randCol := tbl.GetRandColumn()
-		if w.Query_INDEX_MERGE {
+		if w.Query_INDEX_MERGE && len(tbl.colForPointGet) == 0 {
 			if len(tbl.colForPrefixIndex) > 0 {
 				randCol = tbl.colForPrefixIndex[0]
 				tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
 			}
 		}
+		if len(tbl.colForPointGet) > 0 {
+			randCol = tbl.colForPointGet[0]
+			tbl.colForPointGet = tbl.colForPointGet[1:]
+		}
 		randVal = NewFn("randVal", func() Fn {
+			if len(tbl.valuesForPointGet) > 0 {
+				re := Str(tbl.valuesForPointGet[0])
+				tbl.valuesForPointGet = tbl.valuesForPointGet[1:]
+				return re
+			}
+
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
-			if !prepare.IsNil() && rand.Intn(5) == 0 {
+			if !prepare.IsNil() && rand.Intn(50) == 0 {
 				prepare.ToPrepare().AppendColumns(randCol)
 				v = "?"
 			} else if rand.Intn(3) == 0 || len(tbl.values) == 0 {
@@ -682,6 +694,9 @@ func newGenerator(state *State) func() string {
 	})
 
 	cmpSymbol = NewFn("cmpSymbol", func() Fn {
+		if !state.Search(ScopeUsePointGet).IsNil() && state.Search(ScopeUsePointGet).ToInt() == 1 {
+			return Str("=")
+		}
 		return Or(
 			Str("="),
 			Str("<"),
@@ -1120,4 +1135,20 @@ func OneOfContains(err1, err2 error, msg string) bool {
 	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
 	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
 	return c1 || c2
+}
+
+func getTable(state *State) *Table {
+	var tbl *Table
+	inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
+	if inMultiTableQuery {
+		tables := state.Search(ScopeKeyCurrentMultiTable).ToTables()
+		if RandomBool() {
+			tbl = tables[0]
+		} else {
+			tbl = tables[1]
+		}
+	} else {
+		tbl = state.Search(ScopeKeyCurrentTable).ToTable()
+	}
+	return tbl
 }

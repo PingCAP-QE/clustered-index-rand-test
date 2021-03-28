@@ -185,6 +185,7 @@ const (
 	ScopeKeyPrepareID
 	ScopeKeySplitTableRegion
 	ScopePreferIndexColumn
+	ScopeUsePointGet
 )
 
 const DefaultKeySize = 3072

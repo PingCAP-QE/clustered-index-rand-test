@@ -24,6 +24,8 @@ type Table struct {
 	PartitionColumns  []*Column
 	values            [][]string
 	colForPrefixIndex []*Column
+	colForPointGet    []*Column
+	valuesForPointGet []string
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.
