@@ -20,7 +20,6 @@ type Table struct {
 	Indices []*Index
 
 	containsPK        bool // to ensure at most 1 pk in each table
-	HandleCols        []*Column
 	PartitionColumns  []*Column
 	values            [][]string
 	colForPrefixIndex []*Column

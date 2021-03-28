@@ -174,7 +174,6 @@ func newGenerator(state *State) func() string {
 		state.AppendTable(tbl)
 		postListener.Register("createTable", func() {
 			tbl.ReorderColumns()
-			tbl.SetPrimaryKeyAndHandle(state)
 		})
 		colDefs = NewFn("colDefs", func() Fn {
 			colDef = NewFn("colDef", func() Fn {
@@ -1120,6 +1119,7 @@ func ValidateErrs(err1 error, err2 error) bool {
 		"with index covered now",                         // 4.0 cannot drop column with index
 		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
 		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
+		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
 		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
 	}
 	for _, msg := range ignoreErrMsgs {

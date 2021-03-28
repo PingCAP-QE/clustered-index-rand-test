@@ -129,18 +129,30 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	return row
 }
 
+// GenMultipleRowsAscForHandleCols generates random values for *possible* handle columns.
+// It may be a random int64 or primary key columns' random values, because
+// the generator have no idea about whether the primary key is clustered or not.
 func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 	rows := make([][]string, count)
-	firstColumn := t.HandleCols[0].RandomValuesAsc(count)
-	for i := 0; i < count; i++ {
-		rows[i] = make([]string, len(t.HandleCols))
-		for j := 0; j < len(t.HandleCols); j++ {
-			if j == 0 {
-				rows[i][j] = firstColumn[i]
-			} else {
-				rows[i][j] = t.HandleCols[j].RandomValue()
+	pkIdx := t.GetPrimaryKeyIndex()
+	chooseClustered := RandomBool() && pkIdx != nil
+	if chooseClustered {
+		firstColumn := pkIdx.Columns[0].RandomValuesAsc(count)
+		for i := 0; i < count; i++ {
+			rows[i] = make([]string, len(pkIdx.Columns))
+			for j := 0; j < len(pkIdx.Columns); j++ {
+				if j == 0 {
+					rows[i][j] = firstColumn[i]
+				} else {
+					rows[i][j] = pkIdx.Columns[j].RandomValue()
+				}
 			}
 		}
+		return rows
+	}
+	handles := RandomNums(0, 9223372036854775806, count)
+	for i := 0; i < count; i++ {
+		rows[i] = []string{handles[i]}
 	}
 	return rows
 }

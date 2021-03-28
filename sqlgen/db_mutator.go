@@ -73,30 +73,6 @@ func (t *Table) ReorderColumns() {
 	})
 }
 
-func (t *Table) SetPrimaryKeyAndHandle(state *State) {
-	t.containsPK = true
-	for _, idx := range t.Indices {
-		if idx.Tp == IndexTypePrimary {
-			if len(idx.Columns) == 1 && idx.Columns[0].Tp.IsIntegerType() {
-				t.HandleCols = idx.Columns
-				return
-			}
-			if state.enabledClustered {
-				t.HandleCols = idx.Columns
-				return
-			}
-			break
-		}
-	}
-	t.HandleCols = []*Column{{
-		Id:         0,
-		Name:       "_tidb_rowid",
-		Tp:         ColumnTypeBigInt,
-		isNotNull:  true,
-		isUnsigned: true,
-	}}
-}
-
 func (t *Table) AppendIndex(idx *Index) {
 	for _, idxCol := range idx.Columns {
 		idxCol.relatedIndices[idx.Id] = struct{}{}

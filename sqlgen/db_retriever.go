@@ -190,10 +190,6 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	return "GetRandRowVal: column not found"
 }
 
-func (t *Table) GetHandleColumns() []*Column {
-	return t.HandleCols
-}
-
 func (t *Table) cloneColumns() []*Column {
 	cols := make([]*Column, len(t.Columns))
 	for i, c := range t.Columns {
@@ -241,11 +237,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-	newHandleCols := make([]*Column, 0, len(t.HandleCols))
-	for _, oldHdCol := range t.HandleCols {
-		newHandleCols = append(newHandleCols, oldID2NewCol[oldHdCol.Id])
-	}
-	Assert(len(newHandleCols) > 0, oldID2NewCol)
 	newPartitionCols := make([]*Column, 0, len(t.PartitionColumns))
 	for _, oldPartCol := range t.PartitionColumns {
 		newPartitionCols = append(newPartitionCols, oldID2NewCol[oldPartCol.Id])
@@ -257,7 +248,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		Columns:          newCols,
 		Indices:          newIdxs,
 		containsPK:       t.containsPK,
-		HandleCols:       newHandleCols,
 		PartitionColumns: newPartitionCols,
 		values:           nil,
 	}
@@ -335,6 +325,15 @@ func (t *Table) GetRandColumnsPreferIndex() *Column {
 		}
 	}
 	return col
+}
+
+func (t *Table) GetPrimaryKeyIndex() *Index {
+	for _, idx := range t.Indices {
+		if idx.Tp == IndexTypePrimary {
+			return idx
+		}
+	}
+	return nil
 }
 
 // GetRandColumnsSimple gets a random column.
