@@ -157,7 +157,6 @@ var aggFunctions = []aggArg{
 	{"count", 1, 1, true},
 	{"sum", 1, 1, true},
 	{"avg", 1, 1, true},
-	{"firstrow", 1, 1, true},
 	{"max", 1, 1, true},
 	{"min", 1, 1, true},
 	{"group_concat", 1, 1, true},
@@ -189,6 +188,6 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	if arg.name == "approx_percentile" {
 		str += ", " + strconv.FormatInt(rand.Int63n(100), 10)
 	}
-	str += ")"
+	str += ") aggCol"
 	return str
 }

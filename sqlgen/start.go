@@ -361,6 +361,7 @@ func newGenerator(state *State) func() string {
 				aggCols = append(aggCols, tbl.GetRandColumn())
 			}
 			groupByCols := tbl.GetRandColumns()
+			aggFunc := PrintRandomAggFunc(tbl, aggCols)
 			return And(
 				Str("select"),
 				OptIf(state.ctrl.EnableTestTiFlash,
@@ -375,13 +376,14 @@ func newGenerator(state *State) func() string {
 						Str(tbl.Name),
 						Str(") */"),
 					)),
-				Str(PrintRandomAggFunc(tbl, aggCols)),
+				Str(aggFunc),
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
 				predicates,
-				If(len(groupByCols) > 0, Str("group by")),
-				If(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
+				OptIf(len(groupByCols) > 0, Str("group by")),
+				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
+				Str("order by aggcol"),
 			)
 		})
 
