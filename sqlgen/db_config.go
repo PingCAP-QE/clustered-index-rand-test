@@ -84,7 +84,7 @@ var DefaultWeight = Weight{
 	CreateTable:                 13,
 	CreateTable_WithClusterHint: true,
 	CreateTable_MoreCol:         2,
-	CreateTable_IndexMoreCol:    2,
+	CreateTable_IndexMoreCol:    4,
 	CreateTable_MustPrefixIndex: false,
 	CreateTable_WithoutLike:     4,
 	CreateTable_Partition_Type:  "",

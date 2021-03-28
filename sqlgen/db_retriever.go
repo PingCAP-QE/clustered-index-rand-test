@@ -289,6 +289,38 @@ func (t *Table) GetRandColumns() []*Column {
 	return selectedCols
 }
 
+// GetRandUniqueIndexForPointGet gets a random unique index.
+func (t *Table) GetRandUniqueIndexForPointGet() *Index {
+	idxs := make([]*Index, 0)
+	for _, idx := range t.Indices {
+		if idx.IsUnique() {
+			for _, col := range idx.Columns {
+				if col.Tp == ColumnTypeFloat || col.Tp == ColumnTypeDouble || col.Tp == ColumnTypeText || col.Tp == ColumnTypeBlob {
+					continue
+				}
+			}
+			idxs = append(idxs, idx)
+		}
+	}
+
+	if len(idxs) == 0 {
+		return nil
+	}
+
+	return idxs[rand.Intn(len(idxs))]
+}
+
+// GetColumnOffset gets the offset for a column.
+func (t *Table) GetColumnOffset(column *Column) int {
+	for i, col := range t.Columns {
+		if col.Id == column.Id {
+			return i
+		}
+	}
+	Assert(false)
+	return 0
+}
+
 // GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.
 func (t *Table) GetRandColumnsPreferIndex() *Column {
 	var col *Column
