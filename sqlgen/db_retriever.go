@@ -190,10 +190,6 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	return "GetRandRowVal: column not found"
 }
 
-func (t *Table) GetHandleColumns() []*Column {
-	return t.HandleCols
-}
-
 func (t *Table) cloneColumns() []*Column {
 	cols := make([]*Column, len(t.Columns))
 	for i, c := range t.Columns {
@@ -241,11 +237,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-	newHandleCols := make([]*Column, 0, len(t.HandleCols))
-	for _, oldHdCol := range t.HandleCols {
-		newHandleCols = append(newHandleCols, oldID2NewCol[oldHdCol.Id])
-	}
-	Assert(len(newHandleCols) > 0, oldID2NewCol)
 	newPartitionCols := make([]*Column, 0, len(t.PartitionColumns))
 	for _, oldPartCol := range t.PartitionColumns {
 		newPartitionCols = append(newPartitionCols, oldID2NewCol[oldPartCol.Id])
@@ -257,7 +248,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		Columns:          newCols,
 		Indices:          newIdxs,
 		containsPK:       t.containsPK,
-		HandleCols:       newHandleCols,
 		PartitionColumns: newPartitionCols,
 		values:           nil,
 	}
@@ -273,6 +263,10 @@ func (t *Table) GetRandColumns() []*Column {
 		return nil
 	}
 	// insert into t (cols..) values (...)
+	return t.GetRandColumnsNonEmpty()
+}
+
+func (t *Table) GetRandColumnsNonEmpty() []*Column {
 	totalCols := t.cloneColumns()
 	var selectedCols []*Column
 	for {
@@ -289,6 +283,38 @@ func (t *Table) GetRandColumns() []*Column {
 	return selectedCols
 }
 
+// GetRandUniqueIndexForPointGet gets a random unique index.
+func (t *Table) GetRandUniqueIndexForPointGet() *Index {
+	idxs := make([]*Index, 0)
+	for _, idx := range t.Indices {
+		if idx.IsUnique() {
+			for _, col := range idx.Columns {
+				if col.Tp == ColumnTypeFloat || col.Tp == ColumnTypeDouble || col.Tp == ColumnTypeText || col.Tp == ColumnTypeBlob {
+					continue
+				}
+			}
+			idxs = append(idxs, idx)
+		}
+	}
+
+	if len(idxs) == 0 {
+		return nil
+	}
+
+	return idxs[rand.Intn(len(idxs))]
+}
+
+// GetColumnOffset gets the offset for a column.
+func (t *Table) GetColumnOffset(column *Column) int {
+	for i, col := range t.Columns {
+		if col.Id == column.Id {
+			return i
+		}
+	}
+	Assert(false)
+	return 0
+}
+
 // GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.
 func (t *Table) GetRandColumnsPreferIndex() *Column {
 	var col *Column
@@ -299,6 +325,15 @@ func (t *Table) GetRandColumnsPreferIndex() *Column {
 		}
 	}
 	return col
+}
+
+func (t *Table) GetPrimaryKeyIndex() *Index {
+	for _, idx := range t.Indices {
+		if idx.Tp == IndexTypePrimary {
+			return idx
+		}
+	}
+	return nil
 }
 
 // GetRandColumnsSimple gets a random column.

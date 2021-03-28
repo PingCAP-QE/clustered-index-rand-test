@@ -20,10 +20,11 @@ type Table struct {
 	Indices []*Index
 
 	containsPK        bool // to ensure at most 1 pk in each table
-	HandleCols        []*Column
 	PartitionColumns  []*Column
 	values            [][]string
 	colForPrefixIndex []*Column
+	colForPointGet    []*Column
+	valuesForPointGet []string
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.
@@ -44,6 +45,7 @@ type Column struct {
 	defaultVal     string
 	isNotNull      bool
 	relatedIndices map[int]struct{}
+	collate        CollationType
 }
 
 type Index struct {

@@ -56,6 +56,10 @@ func PrintColumnType(c *Column) string {
 		}
 		sb.WriteString(")")
 	}
+	if c.Tp.IsStringType() {
+		sb.WriteString(" collate ")
+		sb.WriteString(c.collate.String())
+	}
 	if c.isUnsigned {
 		sb.WriteString(" unsigned")
 	}
@@ -190,4 +194,30 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	}
 	str += ") aggCol"
 	return str
+}
+
+func PrintRandomAssignments(cols []*Column) string {
+	var sb strings.Builder
+	for i, col := range cols {
+		sb.WriteString(col.Name)
+		sb.WriteString(" = ")
+		sb.WriteString(col.RandomValue())
+		if i != len(cols)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
+
+func PrintSplitByItems(rows [][]string) string {
+	var sb strings.Builder
+	for i, item := range rows {
+		sb.WriteString("(")
+		sb.WriteString(PrintRandValues(item))
+		sb.WriteString(")")
+		if i != len(rows)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
 }

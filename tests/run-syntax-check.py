@@ -1,8 +1,9 @@
 import subprocess
 import os
 import shlex
+import sys
 
-sql_count = 100
+sql_count = sys.argv[1]
 
 env = os.environ
 env["PATH"] = "tests/_utils:bin:" + env["PATH"]

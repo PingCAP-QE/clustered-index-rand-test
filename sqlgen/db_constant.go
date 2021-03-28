@@ -27,7 +27,7 @@ func (c *Column) EstimateSizeInBytes() int {
 		return mathutil.Max(c.arg1, 1)
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob:
 		return bytesPerChar * c.arg1
-	case ColumnTypeBinary:
+	case ColumnTypeBinary, ColumnTypeVarBinary:
 		return c.arg1
 	case ColumnTypeEnum:
 		return 2
@@ -63,6 +63,7 @@ const (
 	ColumnTypeText
 	ColumnTypeBlob
 	ColumnTypeBinary
+	ColumnTypeVarBinary
 	ColumnTypeEnum
 	ColumnTypeSet
 
@@ -74,10 +75,44 @@ const (
 	ColumnTypeMax
 )
 
+type CollationType int64
+
+const (
+	CollationBinary CollationType = iota
+	CollationUtf8Bin
+	CollationUtf8mb4Bin
+	CollationUtf8GeneralCI
+	CollationUtf8mb4GeneralCI
+	CollationUtf8UnicodeCI
+	CollationUtf8mb4UnicodeCI
+
+	CollationTypeMax
+)
+
+func (c CollationType) String() string {
+	switch c {
+	case CollationBinary:
+		return "binary"
+	case CollationUtf8Bin:
+		return "utf8_bin"
+	case CollationUtf8mb4Bin:
+		return "utf8mb4_bin"
+	case CollationUtf8GeneralCI:
+		return "utf8_general_ci"
+	case CollationUtf8mb4GeneralCI:
+		return "utf8mb4_general_ci"
+	case CollationUtf8UnicodeCI:
+		return "utf8_unicode_ci"
+	case CollationUtf8mb4UnicodeCI:
+		return "utf8mb4_unicode_ci"
+	}
+	return "invalid type"
+}
+
 func (c ColumnType) IsStringType() bool {
 	switch c {
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText,
-		ColumnTypeBlob, ColumnTypeBinary:
+		ColumnTypeBlob, ColumnTypeBinary, ColumnTypeVarBinary:
 		return true
 	}
 	return false
@@ -138,6 +173,8 @@ func (c ColumnType) String() string {
 		return "blob"
 	case ColumnTypeBinary:
 		return "binary"
+	case ColumnTypeVarBinary:
+		return "varbinary"
 	case ColumnTypeEnum:
 		return "enum"
 	case ColumnTypeSet:
@@ -185,6 +222,7 @@ const (
 	ScopeKeyPrepareID
 	ScopeKeySplitTableRegion
 	ScopePreferIndexColumn
+	ScopeUsePointGet
 )
 
 const DefaultKeySize = 3072

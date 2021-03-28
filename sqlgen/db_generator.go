@@ -21,6 +21,8 @@ func GenNewTable(id int) *Table {
 func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	// collate is only used if the type is string.
+	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1)+1)
 	if w.CreateTable_MustStrCol {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
@@ -42,13 +44,17 @@ func GenNewColumn(id int, w *Weight) *Column {
 		col.arg1 = 1 + rand.Intn(62)
 	case ColumnTypeChar, ColumnTypeBinary:
 		col.arg1 = 1 + rand.Intn(255)
-	case ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob:
+	case ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeVarBinary:
 		col.arg1 = 1 + rand.Intn(512)
 	case ColumnTypeEnum, ColumnTypeSet:
 		col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	}
 	if col.Tp != ColumnTypeVarchar && rand.Intn(5) == 0 {
 		col.arg1, col.arg2 = 0, 0
+	}
+	// Adjust collation. Set binary.
+	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
+		col.collate = CollationBinary
 	}
 	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()
@@ -129,33 +135,44 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	return row
 }
 
+// GenMultipleRowsAscForHandleCols generates random values for *possible* handle columns.
+// It may be a random int64 or primary key columns' random values, because
+// the generator have no idea about whether the primary key is clustered or not.
 func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 	rows := make([][]string, count)
-	firstColumn := t.HandleCols[0].RandomValuesAsc(count)
-	for i := 0; i < count; i++ {
-		rows[i] = make([]string, len(t.HandleCols))
-		for j := 0; j < len(t.HandleCols); j++ {
-			if j == 0 {
-				rows[i][j] = firstColumn[i]
-			} else {
-				rows[i][j] = t.HandleCols[j].RandomValue()
+	pkIdx := t.GetPrimaryKeyIndex()
+	chooseClustered := RandomBool() && pkIdx != nil
+	if chooseClustered {
+		firstColumn := pkIdx.Columns[0].RandomValuesAsc(count)
+		for i := 0; i < count; i++ {
+			rows[i] = make([]string, len(pkIdx.Columns))
+			for j := 0; j < len(pkIdx.Columns); j++ {
+				if j == 0 {
+					rows[i][j] = firstColumn[i]
+				} else {
+					rows[i][j] = pkIdx.Columns[j].RandomValue()
+				}
 			}
 		}
+		return rows
+	}
+	handles := RandomNums(0, 9223372036854775806, count)
+	for i := 0; i < count; i++ {
+		rows[i] = []string{handles[i]}
 	}
 	return rows
 }
 
-func (t *Table) GenMultipleRowsAscForRandomIndexCols(count int, idxOffset int) [][]string {
+func (t *Table) GenMultipleRowsAscForIndexCols(count int, idx *Index) [][]string {
 	rows := make([][]string, count)
-	randIdx := t.Indices[idxOffset]
-	firstColumn := randIdx.Columns[0].RandomValuesAsc(count)
+	firstColumn := idx.Columns[0].RandomValuesAsc(count)
 	for i := 0; i < count; i++ {
-		rows[i] = make([]string, len(randIdx.Columns))
-		for j := 0; j < len(randIdx.Columns); j++ {
+		rows[i] = make([]string, len(idx.Columns))
+		for j := 0; j < len(idx.Columns); j++ {
 			if j == 0 {
 				rows[i][j] = firstColumn[i]
 			} else {
-				rows[i][j] = randIdx.Columns[j].RandomValue()
+				rows[i][j] = idx.Columns[j].RandomValue()
 			}
 		}
 	}
@@ -176,7 +193,7 @@ func (c *Column) ZeroValue() string {
 		return "0"
 	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal, ColumnTypeBit:
 		return "0"
-	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary:
+	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary, ColumnTypeVarBinary:
 		return "''"
 	case ColumnTypeEnum, ColumnTypeSet:
 		return fmt.Sprintf("'%s'", c.args[0])
@@ -242,7 +259,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return RandFloats(m, d, count)
 	case ColumnTypeBit:
 		return RandomNums(0, (1<<c.arg1)-1, count)
-	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeBinary:
+	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeBinary, ColumnTypeVarBinary:
 		length := c.arg1
 		if length == 0 {
 			length = 1
