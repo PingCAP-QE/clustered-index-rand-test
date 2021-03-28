@@ -55,6 +55,10 @@ func PrintColumnType(c *Column) string {
 		}
 		sb.WriteString(")")
 	}
+	if c.Tp.IsStringType() {
+		sb.WriteString(" collate ")
+		sb.WriteString(c.collate.String())
+	}
 	if c.isUnsigned {
 		sb.WriteString(" unsigned")
 	}
