@@ -364,6 +364,9 @@ func newGenerator(state *State) func() string {
 			aggFunc := PrintRandomAggFunc(tbl, aggCols)
 			return And(
 				Str("select"),
+				Str(aggFunc),
+				Str("from"),
+				Str("(select"),
 				OptIf(state.ctrl.EnableTestTiFlash,
 					And(
 						Str("/*+ read_from_storage(tiflash["),
@@ -376,14 +379,16 @@ func newGenerator(state *State) func() string {
 						Str(tbl.Name),
 						Str(") */"),
 					)),
-				Str(aggFunc),
+				Str("*"),
 				Str("from"),
 				Str(tbl.Name),
 				Str("where"),
 				predicates,
+				Str("order by"),
+				Str(PrintColumnNamesWithoutPar(tbl.Columns, "*")),
+				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
-				Str("order by aggcol"),
 			)
 		})
 
