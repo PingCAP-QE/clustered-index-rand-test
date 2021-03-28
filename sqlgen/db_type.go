@@ -45,6 +45,7 @@ type Column struct {
 	defaultVal     string
 	isNotNull      bool
 	relatedIndices map[int]struct{}
+	collate        CollationType
 }
 
 type Index struct {

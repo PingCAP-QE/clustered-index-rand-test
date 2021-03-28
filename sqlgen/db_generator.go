@@ -21,6 +21,8 @@ func GenNewTable(id int) *Table {
 func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	// collate is only used if the type is string.
+	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1)+1)
 	if w.CreateTable_MustStrCol {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
@@ -42,13 +44,17 @@ func GenNewColumn(id int, w *Weight) *Column {
 		col.arg1 = 1 + rand.Intn(62)
 	case ColumnTypeChar, ColumnTypeBinary:
 		col.arg1 = 1 + rand.Intn(255)
-	case ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob:
+	case ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeVarBinary:
 		col.arg1 = 1 + rand.Intn(512)
 	case ColumnTypeEnum, ColumnTypeSet:
 		col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	}
 	if col.Tp != ColumnTypeVarchar && rand.Intn(5) == 0 {
 		col.arg1, col.arg2 = 0, 0
+	}
+	// Adjust collation. Set binary.
+	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
+		col.collate = CollationBinary
 	}
 	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()
@@ -187,7 +193,7 @@ func (c *Column) ZeroValue() string {
 		return "0"
 	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal, ColumnTypeBit:
 		return "0"
-	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary:
+	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary, ColumnTypeVarBinary:
 		return "''"
 	case ColumnTypeEnum, ColumnTypeSet:
 		return fmt.Sprintf("'%s'", c.args[0])
@@ -253,7 +259,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return RandFloats(m, d, count)
 	case ColumnTypeBit:
 		return RandomNums(0, (1<<c.arg1)-1, count)
-	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeBinary:
+	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeBinary, ColumnTypeVarBinary:
 		length := c.arg1
 		if length == 0 {
 			length = 1
