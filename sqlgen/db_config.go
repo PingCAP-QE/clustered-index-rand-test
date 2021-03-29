@@ -21,6 +21,10 @@ type ControlOption struct {
 	EnableSelectOutFileAndLoadData bool
 	// Test TiFlash
 	EnableTestTiFlash bool
+	// Test aggregation push down
+	EnableAggPushDown bool
+	// AggType specify aggregation executor type.
+	AggType string
 	// indicate whether attach stmt inside txn
 	AttachToTxn bool
 	// max stmt count in a txn
@@ -74,6 +78,8 @@ func DefaultControlOption() *ControlOption {
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
+		EnableAggPushDown:              false,
+		AggType:                        "",
 		AttachToTxn:                    false,
 		MaxTxnStmtCount:                20,
 		Weight:                         &cloneWeight,

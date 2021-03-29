@@ -358,8 +358,14 @@ func newGenerator(state *State) func() string {
 			}
 			groupByCols := tbl.GetRandColumns()
 			aggFunc := PrintRandomAggFunc(tbl, aggCols)
+			state.ctrl.EnableAggPushDown = rand.Intn(2) == 1
+			state.ctrl.AggType = []string{"", "hash_agg", "stream_agg"}[rand.Intn(3)]
 			return And(
 				Str("select"),
+				Str("/*+"),
+				OptIf(state.ctrl.EnableAggPushDown, Str("agg_to_cop()")),
+				OptIf(state.ctrl.AggType != "", Str(state.ctrl.AggType+"()")),
+				Str("*/"),
 				Str(aggFunc),
 				Str("from"),
 				Str("(select"),
@@ -381,7 +387,8 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str("order by"),
-				Str(PrintColumnNamesWithoutPar(tbl.Columns, "*")),
+				OptIf(tbl.GetPrimaryKeyIndex() != nil, Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))),
+				OptIf(tbl.GetPrimaryKeyIndex() == nil, Str("_tidb_rowid")),
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
