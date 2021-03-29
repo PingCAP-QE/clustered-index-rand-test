@@ -349,6 +349,8 @@ func newGenerator(state *State) func() string {
 			return Or(
 				Str("union"),
 				Str("union all"),
+				Str("except"),
+				Str("intersect"),
 			)
 		})
 		aggSelect = NewFn("aggSelect", func() Fn {
