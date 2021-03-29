@@ -184,10 +184,10 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	}
 	for i := 0; i < arg.minArg; i++ {
 		col := cols[rand.Intn(len(cols))]
-		str += col.Name
 		if i > 0 {
 			str += ","
 		}
+		str += col.Name
 	}
 	if arg.name == "approx_percentile" {
 		str += ", " + strconv.FormatInt(rand.Int63n(100), 10)
