@@ -396,7 +396,31 @@ func newGenerator(state *State) func() string {
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
 			)
 		})
-
+		windowSelect = NewFn("windowSelect", func() Fn {
+			windowFunc := PrintRandomWindowFunc(tbl)
+			window := PrintRandomWindow(tbl)
+			return And(
+				Str("select"),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("/*+ read_from_storage(tiflash["),
+						Str(tbl.Name),
+						Str("]) */"),
+					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
+					)),
+				Str(windowFunc),
+				Str("over w"),
+				Str("from"),
+				Str(tbl.Name),
+				Str("window w as"),
+				Str(window),
+			)
+		})
 		return Or(
 			And(commonSelect, forUpdateOpt),
 			And(
@@ -405,10 +429,16 @@ func newGenerator(state *State) func() string {
 				Str("("), commonSelect, forUpdateOpt, Str(")"),
 			),
 			And(aggSelect, forUpdateOpt),
+			And(windowSelect, forUpdateOpt),
 			And(
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
+			),
+			And(
+				Str("("), windowSelect, forUpdateOpt, Str(")"),
+				union,
+				Str("("), windowSelect, forUpdateOpt, Str(")"),
 			),
 			If(len(state.tables) > 1,
 				multiTableQuery,
