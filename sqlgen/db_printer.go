@@ -196,7 +196,7 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	return str
 }
 
-var windowFunctions = []string {
+var windowFunctions = []string{
 	"row_number",
 	"rank",
 	"dense_rank",
@@ -212,18 +212,19 @@ var windowFunctions = []string {
 
 func PrintRandomWindowFunc(tbl *Table) string {
 	f := windowFunctions[rand.Intn(len(windowFunctions))]
-	f = f + "("
 	switch f {
 	case "ntile":
-		f += fmt.Sprintf("%d", rand.Intn(5)+1)
+		f = f + fmt.Sprintf("(%d)", rand.Intn(5)+1)
 	case "lead", "lag":
-		f += fmt.Sprintf("%s,%d,NULL", tbl.GetRandColumn().Name, rand.Intn(5)+1)
+		f = f + fmt.Sprintf("(%s,%d,NULL)", tbl.GetRandColumn().Name, rand.Intn(5)+1)
 	case "first_value", "last_value":
-		f += tbl.GetRandColumn().Name
+		f = f + "(" + tbl.GetRandColumn().Name + ")"
 	case "nth_value":
-		f += fmt.Sprintf("%s,%d", tbl.GetRandColumn().Name, rand.Intn(5)+1)
+		f = f + fmt.Sprintf("(%s,%d)", tbl.GetRandColumn().Name, rand.Intn(5)+1)
+	default:
+		f = f + "()"
 	}
-	return f + ")"
+	return f
 }
 
 func PrintRandomWindow(tbl *Table) string {
