@@ -196,6 +196,60 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	return str
 }
 
+var windowFunctions = []string {
+	"row_number",
+	"rank",
+	"dense_rank",
+	"cume_dist",
+	"percent_rank",
+	"ntile",
+	"lead",
+	"lag",
+	"first_value",
+	"last_value",
+	"nth_value",
+}
+
+func PrintRandomWindowFunc(tbl *Table) string {
+	f := windowFunctions[rand.Intn(len(windowFunctions))]
+	f = f + "("
+	switch f {
+	case "ntile":
+		f += fmt.Sprintf("%d", rand.Intn(5)+1)
+	case "lead", "lag":
+		f += fmt.Sprintf("%s,%d,NULL", tbl.GetRandColumn().Name, rand.Intn(5)+1)
+	case "first_value", "last_value":
+		f += tbl.GetRandColumn().Name
+	case "nth_value":
+		f += fmt.Sprintf("%s,%d", tbl.GetRandColumn().Name, rand.Intn(5)+1)
+	}
+	return f + ")"
+}
+
+func PrintRandomWindow(tbl *Table) string {
+	hasPartition := rand.Intn(2) == 0
+	hasOrderBy := rand.Intn(2) == 0
+	hasFrame := rand.Intn(2) == 0
+	var partitionClause, orderByClause, frameClause string
+	if hasPartition {
+		partitionClause = fmt.Sprintf("partition by %s", tbl.GetRandColumn().Name)
+	}
+	if hasOrderBy {
+		orderByClause = fmt.Sprintf("order by %s", tbl.GetRandColumn().Name)
+	}
+	if hasFrame && hasOrderBy {
+		frames := []string{
+			"current row",
+			fmt.Sprintf("%d preceding", rand.Intn(5)),
+			fmt.Sprintf("%d following", rand.Intn(5)),
+			fmt.Sprintf("%d preceding", rand.Intn(5)),
+			fmt.Sprintf("%d following", rand.Intn(5)),
+		}
+		frameClause = fmt.Sprintf("rows between %s and %s", frames[rand.Intn(len(frames))], frames[rand.Intn(len(frames))])
+	}
+	return fmt.Sprintf("(%s %s %s)", partitionClause, orderByClause, frameClause)
+}
+
 func PrintRandomAssignments(cols []*Column) string {
 	var sb strings.Builder
 	for i, col := range cols {
