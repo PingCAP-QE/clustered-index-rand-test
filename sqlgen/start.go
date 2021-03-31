@@ -1091,8 +1091,16 @@ func newGenerator(state *State) func() string {
 
 func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
 	log.Printf("%s", sql)
+	lsql := strings.ToLower(sql)
+	isAdminCheck := strings.Contains(lsql, "admin") && strings.Contains(lsql, "check")
 	rs1, err1 := runQuery(ctx, db1, sql)
 	rs2, err2 := runQuery(ctx, db2, sql)
+	if isAdminCheck && err1 != nil {
+		return err1
+	}
+	if isAdminCheck && err2 != nil {
+		return err2
+	}
 	if !ValidateErrs(err1, err2) {
 		return fmt.Errorf("errors mismatch: %v <> %v %q", err1, err2, sql)
 	}
