@@ -347,10 +347,13 @@ func newGenerator(state *State) func() string {
 		})
 		union = NewFn("union", func() Fn {
 			return Or(
-				Str("union"),
-				Str("union all"),
-				Str("except"),
-				Str("intersect"),
+				Empty(),
+				Or(
+					Str("union"),
+					Str("union all"),
+					Str("except"),
+					Str("intersect"),
+				).SetW(w.Query_Union),
 			)
 		})
 		aggSelect = NewFn("aggSelect", func() Fn {
@@ -399,26 +402,29 @@ func newGenerator(state *State) func() string {
 		windowSelect = NewFn("windowSelect", func() Fn {
 			windowFunc := PrintRandomWindowFunc(tbl)
 			window := PrintRandomWindow(tbl)
-			return And(
-				Str("select"),
-				OptIf(state.ctrl.EnableTestTiFlash,
-					And(
-						Str("/*+ read_from_storage(tiflash["),
-						Str(tbl.Name),
-						Str("]) */"),
-					)),
-				OptIf(w.Query_INDEX_MERGE,
-					And(
-						Str("/*+ use_index_merge("),
-						Str(tbl.Name),
-						Str(") */"),
-					)),
-				Str(windowFunc),
-				Str("over w"),
-				Str("from"),
-				Str(tbl.Name),
-				Str("window w as"),
-				Str(window),
+			return Or(
+				Empty(),
+				And(
+					Str("select"),
+					OptIf(state.ctrl.EnableTestTiFlash,
+						And(
+							Str("/*+ read_from_storage(tiflash["),
+							Str(tbl.Name),
+							Str("]) */"),
+						)),
+					OptIf(w.Query_INDEX_MERGE,
+						And(
+							Str("/*+ use_index_merge("),
+							Str(tbl.Name),
+							Str(") */"),
+						)),
+					Str(windowFunc),
+					Str("over w"),
+					Str("from"),
+					Str(tbl.Name),
+					Str("window w as"),
+					Str(window),
+				).SetW(w.Query_Window),
 			)
 		})
 		return Or(
@@ -1095,10 +1101,10 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	isAdminCheck := strings.Contains(lsql, "admin") && strings.Contains(lsql, "check")
 	rs1, err1 := runQuery(ctx, db1, sql)
 	rs2, err2 := runQuery(ctx, db2, sql)
-	if isAdminCheck && err1 != nil {
+	if isAdminCheck && err1 != nil && !strings.Contains(err1.Error(), "t exist") {
 		return err1
 	}
-	if isAdminCheck && err2 != nil {
+	if isAdminCheck && err2 != nil && !strings.Contains(err1.Error(), "t exist") {
 		return err2
 	}
 	if !ValidateErrs(err1, err2) {
