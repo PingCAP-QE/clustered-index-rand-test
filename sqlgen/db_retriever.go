@@ -257,6 +257,15 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	return newTable
 }
 
+func (t *Table) GetAllColFns() []Fn {
+	result := make([]Fn, 0, len(t.Columns))
+	cols := t.cloneColumns()
+	for _, col := range cols {
+		result = append(result, Str(col.Name))
+	}
+	return result
+}
+
 func (t *Table) GetRandColumns() []*Column {
 	if RandomBool() {
 		// insert into t values (...)

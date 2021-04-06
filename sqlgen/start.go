@@ -5,12 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/zyguan/sqlz/resultset"
 	"log"
 	"math/rand"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/zyguan/sqlz/resultset"
 )
 
 func NewGenerator(state *State) func() string {
@@ -340,6 +341,18 @@ func newGenerator(state *State) func() string {
 				Str(tbl.Name),
 				Str("where"),
 				predicates,
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), tbl.GetAllColFns()...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 		forUpdateOpt = NewFn("forUpdateOpt", func() Fn {
@@ -385,6 +398,15 @@ func newGenerator(state *State) func() string {
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
+				OptIf(w.Query_HasOrderby > 0,
+					Str("order by aggCol"),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 
@@ -394,12 +416,33 @@ func newGenerator(state *State) func() string {
 				Str("("), commonSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), commonSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), tbl.GetAllColFns()...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			And(aggSelect, forUpdateOpt),
 			And(
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					Str("order by aggCol"),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			If(len(state.tables) > 1,
 				multiTableQuery,
@@ -872,6 +915,18 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), tbl1.GetAllColFns()...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 
@@ -901,6 +956,18 @@ func newGenerator(state *State) func() string {
 				And(Str("on"), joinPredicates),
 				And(Str("where")),
 				predicates,
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), append(tbl1.GetAllColFns(), tbl2.GetAllColFns()...)...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			And(
 				Str("select"),
@@ -932,6 +999,18 @@ func newGenerator(state *State) func() string {
 				Str(tbl1.Name),
 				Str("join"),
 				Str(tbl2.Name),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), append(tbl1.GetAllColFns(), tbl2.GetAllColFns()...)...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			semiJoinStmt,
 		)
@@ -1051,6 +1130,14 @@ func newGenerator(state *State) func() string {
 }
 
 func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	return runInteractTest(ctx, db1, db2, state, sql, true)
+}
+
+func RunInteractTestNoSort(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	return runInteractTest(ctx, db1, db2, state, sql, false)
+}
+
+func runInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string, sortQueryResult bool) error {
 	log.Printf("%s", sql)
 	rs1, err1 := runQuery(ctx, db1, sql)
 	rs2, err2 := runQuery(ctx, db2, sql)
@@ -1060,7 +1147,12 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	if rs1 == nil || rs2 == nil {
 		return nil
 	}
-	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
+	var h1, h2 string
+	if sortQueryResult {
+		h1, h2 = rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
+	} else {
+		h1, h2 = rs1.DataDigest(resultset.DigestOptions{}), rs2.DataDigest(resultset.DigestOptions{})
+	}
 	if h1 != h2 {
 		var b1, b2 bytes.Buffer
 		rs1.PrettyPrint(&b1)
