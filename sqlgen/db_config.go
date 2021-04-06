@@ -21,6 +21,10 @@ type ControlOption struct {
 	EnableSelectOutFileAndLoadData bool
 	// Test TiFlash
 	EnableTestTiFlash bool
+	// Test aggregation push down
+	EnableAggPushDown bool
+	// AggType specify aggregation executor type.
+	AggType string
 	// indicate whether attach stmt inside txn
 	AttachToTxn bool
 	// max stmt count in a txn
@@ -52,6 +56,8 @@ type Weight struct {
 	Query_DML_Can_Be_Replace    bool
 	Query_DML_UPDATE            int
 	Query_DDL                   int
+	Query_Window                int
+	Query_Union                 int
 	Query_Split                 int
 	Query_Analyze               int
 	Query_Prepare               int
@@ -75,6 +81,8 @@ func DefaultControlOption() *ControlOption {
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
+		EnableAggPushDown:              false,
+		AggType:                        "",
 		AttachToTxn:                    false,
 		MaxTxnStmtCount:                20,
 		Weight:                         &cloneWeight,
@@ -100,8 +108,10 @@ var DefaultWeight = Weight{
 	Query_DML_DEL_INDEX_PK:      1,
 	Query_DML_DEL_INDEX_COMMON:  1,
 	Query_DML_UPDATE:            1,
+	Query_Union:                 1,
 	Query_DML_INSERT:            1,
 	Query_DML_INSERT_ON_DUP:     4,
+	Query_Window:                1,
 	Query_DML_Can_Be_Replace:    true,
 	Query_DDL:                   5,
 	Query_Split:                 1,

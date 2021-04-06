@@ -18,6 +18,7 @@ var (
 	forUpdateOpt            Fn
 	union                   Fn
 	aggSelect               Fn
+	windowSelect            Fn
 	commonInsert            Fn
 	onDupAssignment         Fn
 	multipleRowVals         Fn
