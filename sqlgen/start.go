@@ -446,6 +446,18 @@ func newGenerator(state *State) func() string {
 					Str(tbl.Name),
 					Str("window w as"),
 					Str(window),
+					OptIf(w.Query_HasOrderby > 0,
+						And(
+							Str("order by"),
+							Join(Str(","), tbl.GetAllColFns()...),
+						),
+					),
+					OptIf(w.Query_HasLimit > 0,
+						And(
+							Str("limit"),
+							Str(RandomNum(1, 1000)),
+						),
+					),
 				).SetW(w.Query_Window),
 			)
 		})
@@ -488,6 +500,18 @@ func newGenerator(state *State) func() string {
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Join(Str(","), tbl.GetAllColFns()...),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			If(len(state.tables) > 1,
 				multiTableQuery,
