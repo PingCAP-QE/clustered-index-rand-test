@@ -344,7 +344,7 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), tbl.GetAllColFns()...),
+						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
@@ -449,7 +449,7 @@ func newGenerator(state *State) func() string {
 					OptIf(w.Query_HasOrderby > 0,
 						And(
 							Str("order by"),
-							Join(Str(","), tbl.GetAllColFns()...),
+							Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
 						),
 					),
 					OptIf(w.Query_HasLimit > 0,
@@ -470,7 +470,7 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), tbl.GetAllColFns()...),
+						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
@@ -503,7 +503,7 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), tbl.GetAllColFns()...),
+						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
@@ -987,7 +987,7 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), tbl1.GetAllColFns()...),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
@@ -1028,7 +1028,9 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), append(tbl1.GetAllColFns(), tbl2.GetAllColFns()...)...),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
+						Str(","),
+						Str(PrintColumnNamesWithoutPar(tbl2.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
@@ -1071,7 +1073,9 @@ func newGenerator(state *State) func() string {
 				OptIf(w.Query_HasOrderby > 0,
 					And(
 						Str("order by"),
-						Join(Str(","), append(tbl1.GetAllColFns(), tbl2.GetAllColFns()...)...),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
+						Str(","),
+						Str(PrintColumnNamesWithoutPar(tbl2.Columns, "")),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
