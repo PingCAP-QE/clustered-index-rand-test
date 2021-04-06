@@ -1202,6 +1202,8 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	return runInteractTest(ctx, db1, db2, state, sql, true)
 }
 
+// RunInteractTestNoSort is similar to RunInteractTest, but RunInteractTestNoSort doesn't sort the query results
+// before compare them. It'll be useful to run tests for SQLs with "order by" clause.
 func RunInteractTestNoSort(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
 	return runInteractTest(ctx, db1, db2, state, sql, false)
 }
