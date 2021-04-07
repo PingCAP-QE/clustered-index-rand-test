@@ -182,8 +182,9 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	if arg.canDistinct && rand.Intn(3) == 0 {
 		str += "distinct "
 	}
+	var col *Column
 	for i := 0; i < arg.minArg; i++ {
-		col := cols[rand.Intn(len(cols))]
+		col = cols[rand.Intn(len(cols))]
 		if i > 0 {
 			str += ","
 		}
@@ -192,6 +193,12 @@ func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
 	if arg.name == "approx_percentile" {
 		str += ", " + strconv.FormatInt(rand.Int63n(100), 10)
 	}
+
+	// make result of group_concat not affected by ordering of data
+	if arg.name == "group_concat" {
+		str += " order by " + col.Name
+	}
+
 	str += ") aggCol"
 	return str
 }
