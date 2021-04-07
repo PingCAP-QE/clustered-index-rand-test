@@ -236,16 +236,13 @@ func PrintRandomWindowFunc(tbl *Table) string {
 
 func PrintRandomWindow(tbl *Table) string {
 	hasPartition := rand.Intn(2) == 0
-	hasOrderBy := rand.Intn(2) == 0
 	hasFrame := rand.Intn(2) == 0
 	var partitionClause, orderByClause, frameClause string
 	if hasPartition {
 		partitionClause = fmt.Sprintf("partition by %s", tbl.GetRandColumn().Name)
 	}
-	if hasOrderBy {
-		orderByClause = fmt.Sprintf("order by %s", tbl.GetRandColumn().Name)
-	}
-	if hasFrame && hasOrderBy {
+	orderByClause = fmt.Sprintf("order by %s", PrintColumnNamesWithoutPar(tbl.Columns, ""))
+	if hasFrame {
 		frames := []string{
 			"current row",
 			fmt.Sprintf("%d preceding", rand.Intn(5)),
