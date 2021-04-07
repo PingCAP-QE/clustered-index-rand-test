@@ -82,7 +82,7 @@ func printCmd() *cobra.Command {
 			state := sqlgen.NewState()
 			gen := sqlgen.NewGenerator(state)
 			for i := 0; i < count; i++ {
-				fmt.Printf("%s\n", gen())
+				fmt.Printf("%s;\n", gen())
 			}
 			return nil
 		},

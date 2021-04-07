@@ -280,3 +280,80 @@ func PrintSplitByItems(rows [][]string) string {
 	}
 	return sb.String()
 }
+
+// (col1, col2...) = (val11, val12...) or (col1, col2...) = (val21, val22...)...
+func PrintPredicateCompoundDNF(cols []*Column, values [][]string) string {
+	Assert(len(cols) > 0)
+	var sb strings.Builder
+	sb.WriteString("(")
+	for i, c := range cols {
+		sb.WriteString(c.Name)
+		if i < len(cols)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+	sb.WriteString(" = ")
+	condPrefix := sb.String()
+	sb.Reset()
+	for i := 0; i < len(values); i++ {
+		sb.WriteString(condPrefix)
+		sb.WriteString("(")
+		sb.WriteString(strings.Join(values[i], ", "))
+		sb.WriteString(")")
+		if i < len(values)-1 {
+			sb.WriteString(" or ")
+		}
+	}
+	return sb.String()
+}
+
+// (col1 = val11 and col2 = val12 and ...) or (col1 = val21 and col2 = val22 and ...) ...
+func PrintPredicateDNF(cols []*Column, values [][]string) string {
+	var sb strings.Builder
+	for i, row := range values {
+		sb.WriteString("(")
+		for j, v := range row {
+			sb.WriteString(cols[j].Name)
+			sb.WriteString(" = ")
+			sb.WriteString(v)
+			if j < len(row)-1 {
+				sb.WriteString(" and ")
+			}
+		}
+		sb.WriteString(")")
+		if i < len(values)-1 {
+			sb.WriteString(" or ")
+		}
+	}
+	return sb.String()
+}
+
+// (col1, col2...) in ((val11, val12...), (val21, val22...), ...)
+func PrintPredicateIn(cols []*Column, values [][]string) string {
+	var sb strings.Builder
+	sb.WriteString("(")
+	for i, c := range cols {
+		sb.WriteString(c.Name)
+		if i < len(cols)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+	sb.WriteString(" in (")
+	for i, row := range values {
+		sb.WriteString("(")
+		for j, v := range row {
+			sb.WriteString(v)
+			if j < len(row)-1 {
+				sb.WriteString(", ")
+			}
+		}
+		sb.WriteString(")")
+		if i < len(values)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	sb.WriteString(")")
+	return sb.String()
+}

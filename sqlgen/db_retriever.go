@@ -135,13 +135,23 @@ func (t *Table) HasDroppableColumn() bool {
 }
 
 func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
-	restCols := make([]*Column, 0, len(t.Columns))
+	restCols := make([]*Column, 0, len(t.Columns)/2)
 	for _, c := range t.Columns {
 		if pred(c) {
 			restCols = append(restCols, c)
 		}
 	}
 	return restCols
+}
+
+func (t *Table) FilterIndexes(pred func(idx *Index) bool) []*Index {
+	restIdx := make([]*Index, 0, len(t.Indices)/2)
+	for _, i := range t.Indices {
+		if pred(i) {
+			restIdx = append(restIdx, i)
+		}
+	}
+	return restIdx
 }
 
 func (t *Table) GetRandomIndex() *Index {
@@ -175,6 +185,17 @@ func (t *Table) GetRandRow(cols []*Column) []string {
 		}
 	}
 	return vals
+}
+
+func (t *Table) GetRandRows(cols []*Column, rowCount int) [][]string {
+	if len(t.values) == 0 {
+		return nil
+	}
+	rows := make([][]string, rowCount)
+	for i := 0; i < rowCount; i++ {
+		rows[i] = t.GetRandRow(cols)
+	}
+	return rows
 }
 
 func (t *Table) GetRandRowVal(col *Column) string {
@@ -285,23 +306,13 @@ func (t *Table) GetRandColumnsNonEmpty() []*Column {
 
 // GetRandUniqueIndexForPointGet gets a random unique index.
 func (t *Table) GetRandUniqueIndexForPointGet() *Index {
-	idxs := make([]*Index, 0)
-	for _, idx := range t.Indices {
-		if idx.IsUnique() {
-			for _, col := range idx.Columns {
-				if col.Tp == ColumnTypeFloat || col.Tp == ColumnTypeDouble || col.Tp == ColumnTypeText || col.Tp == ColumnTypeBlob {
-					continue
-				}
-			}
-			idxs = append(idxs, idx)
-		}
-	}
-
-	if len(idxs) == 0 {
+	uniqueIdxs := t.FilterIndexes(func(idx *Index) bool {
+		return idx.IsUnique() && idx.Columns[0].Tp.IsPointGetableType()
+	})
+	if len(uniqueIdxs) == 0 {
 		return nil
 	}
-
-	return idxs[rand.Intn(len(idxs))]
+	return uniqueIdxs[rand.Intn(len(uniqueIdxs))]
 }
 
 // GetColumnOffset gets the offset for a column.

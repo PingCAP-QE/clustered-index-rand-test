@@ -21,7 +21,7 @@ test-syntax: bins build
 	@python3 tests/run-syntax-check.py $(count)
 
 gen: build
-	@bin/clustered-index-rand-test print --count $(count) | xargs -I _ echo "_;"
+	@bin/clustered-index-rand-test print --count $(count)
 
 #clean:
 #	@rm bin/tidb-master 2> /dev/null || echo "bin/tidb-master not found"

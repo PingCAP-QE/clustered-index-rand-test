@@ -405,7 +405,9 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str("order by"),
-				OptIf(tbl.GetPrimaryKeyIndex() != nil, Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))),
+				OptIf(tbl.GetPrimaryKeyIndex() != nil, NewFn("optOrderByPK", func() Fn {
+					return Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))
+				})),
 				OptIf(tbl.GetPrimaryKeyIndex() == nil, Str("_tidb_rowid")),
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
@@ -672,8 +674,11 @@ func newGenerator(state *State) func() string {
 	})
 
 	predicates = NewFn("predicates", func() Fn {
+		tbl := getTable(state)
+		uniqueIdx := tbl.GetRandUniqueIndexForPointGet()
+
 		if w.Query_INDEX_MERGE {
-			andPredicates := NewFn("and predicate", func() Fn {
+			andPredicates := NewFn("andPredicates", func() Fn {
 				tbl := getTable(state)
 				tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
 				repeatCnt := len(tbl.colForPrefixIndex)
@@ -692,59 +697,40 @@ func newGenerator(state *State) func() string {
 			}
 		}
 
-		pointGet := NewFn("point get", func() Fn {
-			tbl := getTable(state)
-			pickIdx := tbl.GetRandUniqueIndexForPointGet()
-			if pickIdx == nil {
-				return Empty()
-			}
-			idxCols := pickIdx.Columns
-			tbl.colForPointGet = idxCols
-			// Prepare data for select.
-			tbl.valuesForPointGet = make([]string, 0)
-			if len(tbl.values) > 0 && RandomBool() {
-				// Choose a row to select.
-				randPickRow := tbl.values[rand.Intn(len(tbl.values))]
-				for _, colp := range idxCols {
-					col := colp
-					tbl.valuesForPointGet = append(tbl.valuesForPointGet, randPickRow[tbl.GetColumnOffset(col)])
+		predicatesPointGet = NewFn("predicatesPointGet", func() Fn {
+			pointsCount := rand.Intn(4) + 1
+			pointGetVals := make([][]string, pointsCount)
+			for i := 0; i < pointsCount; i++ {
+				if len(tbl.values) > 0 && RandomBool() {
+					pointGetVals[i] = tbl.GetRandRow(uniqueIdx.Columns)
+				} else {
+					pointGetVals[i] = tbl.GenRandValues(uniqueIdx.Columns)
 				}
 			}
-
-			state.Store(ScopeUsePointGet, NewScopeObj(1))
-			return Repeat(predicate, len(idxCols), Str("and"))
+			return Or(
+				Str(PrintPredicateDNF(uniqueIdx.Columns, pointGetVals)),
+				Str(PrintPredicateCompoundDNF(uniqueIdx.Columns, pointGetVals)),
+				Str(PrintPredicateIn(uniqueIdx.Columns, pointGetVals)),
+			)
 		})
 
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
-			pointGet,
-			RepeatRange(2, 5, pointGet, Str("or")),
+			If(uniqueIdx != nil, predicatesPointGet).SetW(10),
 		)
 	})
 
 	predicate = NewFn("predicate", func() Fn {
 		tbl := getTable(state)
-		inMultiTableQuery := !state.Search(ScopeKeyCurrentMultiTable).IsNil()
-
 		randCol := tbl.GetRandColumn()
-		if w.Query_INDEX_MERGE && len(tbl.colForPointGet) == 0 {
+		if w.Query_INDEX_MERGE {
 			if len(tbl.colForPrefixIndex) > 0 {
 				randCol = tbl.colForPrefixIndex[0]
 				tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
 			}
 		}
-		if len(tbl.colForPointGet) > 0 {
-			randCol = tbl.colForPointGet[0]
-			tbl.colForPointGet = tbl.colForPointGet[1:]
-		}
 		randVal = NewFn("randVal", func() Fn {
-			if len(tbl.valuesForPointGet) > 0 {
-				re := Str(tbl.valuesForPointGet[0])
-				tbl.valuesForPointGet = tbl.valuesForPointGet[1:]
-				return re
-			}
-
 			var v string
 			prepare := state.Search(ScopeKeyCurrentPrepare)
 			if !prepare.IsNil() && rand.Intn(50) == 0 {
@@ -763,20 +749,14 @@ func newGenerator(state *State) func() string {
 				And(randVal, Str(","), randColVals).SetW(3),
 			)
 		})
-		columnName := randCol.Name
-		if inMultiTableQuery {
-			columnName = fmt.Sprintf("%s.%s", tbl.Name, columnName)
-		}
+		colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
 		return Or(
-			And(Str(columnName), cmpSymbol, randVal),
-			And(Str(columnName), Str("in"), Str("("), randColVals, Str(")")),
+			And(Str(colName), cmpSymbol, randVal),
+			And(Str(colName), Str("in"), Str("("), randColVals, Str(")")),
 		)
 	})
 
 	cmpSymbol = NewFn("cmpSymbol", func() Fn {
-		if !state.Search(ScopeUsePointGet).IsNil() && state.Search(ScopeUsePointGet).ToInt() == 1 {
-			return Str("=")
-		}
 		return Or(
 			Str("="),
 			Str("<"),
@@ -842,11 +822,6 @@ func newGenerator(state *State) func() string {
 		cols2 := tbl2.GetRandColumns()
 		state.Store(ScopeKeyCurrentMultiTable, NewScopeObj([]*Table{tbl1, tbl2}))
 		preferIndex := RandomBool()
-		if preferIndex {
-			state.Store(ScopePreferIndexColumn, NewScopeObj(1))
-		} else {
-			state.Store(ScopePreferIndexColumn, NewScopeObj(0))
-		}
 
 		joinPredicates = NewFn("joinPredicates", func() Fn {
 			return Or(
@@ -857,7 +832,7 @@ func newGenerator(state *State) func() string {
 
 		joinPredicate = NewFn("joinPredicate", func() Fn {
 			var col1, col2 *Column
-			if a := state.Search(ScopePreferIndexColumn); !a.IsNil() && a.ToInt() == 1 {
+			if preferIndex {
 				col1 = tbl1.GetRandColumnsPreferIndex()
 				col2 = tbl2.GetRandColumnsPreferIndex()
 			} else {
@@ -924,9 +899,8 @@ func newGenerator(state *State) func() string {
 			)
 		})
 
-		semiJoinStmt = NewFn("seme join", func() Fn {
+		semiJoinStmt = NewFn("semiJoinStmt", func() Fn {
 			var col1, col2 *Column
-			preferIndex := !state.Search(ScopePreferIndexColumn).IsNil() && state.Search(ScopePreferIndexColumn).ToInt() == 1
 			if preferIndex {
 				col1 = tbl1.GetRandColumnsPreferIndex()
 				col2 = tbl2.GetRandColumnsPreferIndex()
