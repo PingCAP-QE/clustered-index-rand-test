@@ -28,4 +28,4 @@ for port in ["4001", "4002"]:
         if "ERROR 1064" in result:
             raise Exception(f"port: {port}\nsql: {line}\nresult: {result}\n")
 
-print(f"Generated {sql_count} SQLs, no syntax error found.")
+print(f"\nGenerated {sql_count} SQLs, no syntax error found.")

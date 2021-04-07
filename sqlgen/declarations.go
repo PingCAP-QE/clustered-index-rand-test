@@ -54,11 +54,11 @@ var (
 	queryPrepare            Fn
 	deallocPrepareStmt      Fn
 	updateAssignments       Fn
-	multiTablePredicates    Fn
 	insertSetStmt           Fn
 	semiJoinStmt            Fn
 	splitTableRegionBetween Fn
 	splitIndexRegionBetween Fn
 	splitTableRegionBy      Fn
 	splitIndexRegionBy      Fn
+	predicatesPointGet      Fn
 )

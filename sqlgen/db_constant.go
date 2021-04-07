@@ -136,6 +136,14 @@ func (c ColumnType) IsPartitionType() bool {
 	return c.IsIntegerType()
 }
 
+func (c ColumnType) IsPointGetableType() bool {
+	switch c {
+	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeText, ColumnTypeBlob:
+		return false
+	}
+	return true
+}
+
 // BLOB/TEXT/JSON column can't have a default value.
 func (c ColumnType) DisallowDefaultValue() bool {
 	return c == ColumnTypeText || c == ColumnTypeBlob
@@ -206,22 +214,16 @@ type ScopeKeyType int8
 const (
 	ScopeKeyCurrentTable ScopeKeyType = iota
 	ScopeKeyCurrentMultiTable
-	ScopeKeyCurrentColumn
-	ScopeKeyCurrentIndex
 	ScopeKeyCurrentPrepare
 	ScopeKeyLastDropTable
 	ScopeKeyCurrentPartitionColumn
 	ScopeKeyLastOutFileTable
-
-	ScopeKeySelectedCols
 
 	ScopeKeyTableUniqID
 	ScopeKeyColumnUniqID
 	ScopeKeyIndexUniqID
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
-	ScopeKeySplitTableRegion
-	ScopePreferIndexColumn
 	ScopeUsePointGet
 )
 

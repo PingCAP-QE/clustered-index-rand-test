@@ -22,7 +22,7 @@ func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	// collate is only used if the type is string.
-	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1)+1)
+	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	if w.CreateTable_MustStrCol {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
