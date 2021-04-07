@@ -392,7 +392,9 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str("order by"),
-				OptIf(tbl.GetPrimaryKeyIndex() != nil, Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))),
+				OptIf(tbl.GetPrimaryKeyIndex() != nil, NewFn("optOrderByPK", func() Fn {
+					return Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))
+				})),
 				OptIf(tbl.GetPrimaryKeyIndex() == nil, Str("_tidb_rowid")),
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
