@@ -365,6 +365,11 @@ func newGenerator(state *State) func() string {
 			aggFunc := PrintRandomAggFunc(tbl, aggCols)
 			state.ctrl.EnableAggPushDown = rand.Intn(2) == 1
 			state.ctrl.AggType = []string{"", "hash_agg", "stream_agg"}[rand.Intn(3)]
+			primaryKeyIdx := tbl.GetPrimaryKeyIndex()
+			var primaryKeyCols []*Column
+			if primaryKeyIdx != nil {
+				primaryKeyCols = primaryKeyIdx.Columns
+			}
 			return And(
 				Str("select"),
 				Str("/*+"),
@@ -392,10 +397,8 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str("order by"),
-				OptIf(tbl.GetPrimaryKeyIndex() != nil, NewFn("optOrderByPK", func() Fn {
-					return Str(PrintColumnNamesWithoutPar(tbl.GetPrimaryKeyIndex().Columns, ""))
-				})),
-				OptIf(tbl.GetPrimaryKeyIndex() == nil, Str("_tidb_rowid")),
+				OptIf(primaryKeyIdx != nil, Str(PrintColumnNamesWithoutPar(primaryKeyCols, ""))),
+				OptIf(primaryKeyIdx == nil, Str("_tidb_rowid")),
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
@@ -650,7 +653,7 @@ func newGenerator(state *State) func() string {
 		return Or(
 			predicate.SetW(3),
 			And(predicate, Or(Str("and"), Str("or")), predicates),
-			If(uniqueIdx != nil, predicatesPointGet).SetW(10),
+			If(uniqueIdx != nil, predicatesPointGet).SetW(1),
 		)
 	})
 
@@ -1117,6 +1120,7 @@ func ValidateErrs(err1 error, err2 error) bool {
 		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
 		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
 		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
+		"Unknown column '_tidb_rowid'",                   // 5.0 clustered index table don't have _tidb_row_id.
 	}
 	for _, msg := range ignoreErrMsgs {
 		match := OneOfContains(err1, err2, msg)
