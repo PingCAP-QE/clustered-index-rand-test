@@ -77,6 +77,9 @@ func (t *Table) GetRandIndexFirstColumnWithWeight(pkW, npkW int) *Column {
 
 // GetRandIndexPrefixColumn returns a random index's random prefix columns.
 func (t *Table) GetRandIndexPrefixColumn() []*Column {
+	if len(t.Indices) == 0 {
+		return nil
+	}
 	idx := t.Indices[rand.Intn(len(t.Indices))]
 	randIdx := rand.Intn(len(idx.Columns))
 	for i, idxCol := range idx.Columns {
