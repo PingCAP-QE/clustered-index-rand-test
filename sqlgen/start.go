@@ -5,12 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/zyguan/sqlz/resultset"
 	"log"
 	"math/rand"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/zyguan/sqlz/resultset"
 )
 
 func NewGenerator(state *State) func() string {
@@ -340,6 +341,18 @@ func newGenerator(state *State) func() string {
 				Str(tbl.Name),
 				Str("where"),
 				predicates,
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 		forUpdateOpt = NewFn("forUpdateOpt", func() Fn {
@@ -402,6 +415,15 @@ func newGenerator(state *State) func() string {
 				Str(") ordered_tbl"),
 				OptIf(len(groupByCols) > 0, Str("group by")),
 				OptIf(len(groupByCols) > 0, Str(PrintColumnNamesWithoutPar(groupByCols, ""))),
+				OptIf(w.Query_HasOrderby > 0,
+					Str("order by aggCol"),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 		windowSelect = NewFn("windowSelect", func() Fn {
@@ -429,6 +451,20 @@ func newGenerator(state *State) func() string {
 					Str(tbl.Name),
 					Str("window w as"),
 					Str(window),
+					OptIf(w.Query_HasOrderby > 0,
+						And(
+							Str("order by"),
+							Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
+							Str(", "),
+							Str(windowFunc+" over w"),
+						),
+					),
+					OptIf(w.Query_HasLimit > 0,
+						And(
+							Str("limit"),
+							Str(RandomNum(1, 1000)),
+						),
+					),
 				).SetW(w.Query_Window),
 			)
 		})
@@ -438,6 +474,18 @@ func newGenerator(state *State) func() string {
 				Str("("), commonSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), commonSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(cols, "")),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			And(aggSelect, forUpdateOpt),
 			And(windowSelect, forUpdateOpt),
@@ -445,11 +493,31 @@ func newGenerator(state *State) func() string {
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					Str("order by aggCol"),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			And(
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
 				union,
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by 1"),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			If(len(state.tables) > 1,
 				multiTableQuery,
@@ -894,6 +962,18 @@ func newGenerator(state *State) func() string {
 				Str("where"),
 				predicates,
 				Str(")"),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			)
 		})
 
@@ -923,6 +1003,20 @@ func newGenerator(state *State) func() string {
 				And(Str("on"), joinPredicates),
 				And(Str("where")),
 				predicates,
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
+						Str(","),
+						Str(PrintColumnNamesWithoutPar(tbl2.Columns, "")),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			And(
 				Str("select"),
@@ -954,6 +1048,20 @@ func newGenerator(state *State) func() string {
 				Str(tbl1.Name),
 				Str("join"),
 				Str(tbl2.Name),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(tbl1.Columns, "")),
+						Str(","),
+						Str(PrintColumnNamesWithoutPar(tbl2.Columns, "")),
+					),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
+					),
+				),
 			),
 			semiJoinStmt,
 		)
@@ -1073,6 +1181,16 @@ func newGenerator(state *State) func() string {
 }
 
 func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	return runInteractTest(ctx, db1, db2, state, sql, true)
+}
+
+// RunInteractTestNoSort is similar to RunInteractTest, but RunInteractTestNoSort doesn't sort the query results
+// before compare them. It'll be useful to run tests for SQLs with "order by" clause.
+func RunInteractTestNoSort(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
+	return runInteractTest(ctx, db1, db2, state, sql, false)
+}
+
+func runInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string, sortQueryResult bool) error {
 	log.Printf("%s", sql)
 	lsql := strings.ToLower(sql)
 	isAdminCheck := strings.Contains(lsql, "admin") && strings.Contains(lsql, "check")
@@ -1090,7 +1208,12 @@ func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	if rs1 == nil || rs2 == nil {
 		return nil
 	}
-	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
+	var h1, h2 string
+	if sortQueryResult {
+		h1, h2 = rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
+	} else {
+		h1, h2 = rs1.DataDigest(resultset.DigestOptions{}), rs2.DataDigest(resultset.DigestOptions{})
+	}
 	if h1 != h2 {
 		var b1, b2 bytes.Buffer
 		rs1.PrettyPrint(&b1)

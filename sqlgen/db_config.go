@@ -62,6 +62,7 @@ type Weight struct {
 	Query_Analyze               int
 	Query_Prepare               int
 	Query_HasLimit              int
+	Query_HasOrderby            int
 	Query_INDEX_MERGE           bool
 	SetRowFormat                int
 	SetClustered                int
@@ -116,7 +117,8 @@ var DefaultWeight = Weight{
 	Query_Split:                 1,
 	Query_Analyze:               0,
 	Query_Prepare:               2,
-	Query_HasLimit:              1,
+	Query_HasLimit:              0,
+	Query_HasOrderby:            0,
 	SetClustered:                1,
 	SetRowFormat:                1,
 	AdminCheck:                  1,
