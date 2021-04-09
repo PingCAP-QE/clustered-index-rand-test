@@ -509,8 +509,7 @@ func newGenerator(state *State) func() string {
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
 				OptIf(w.Query_HasOrderby > 0,
 					And(
-						Str("order by"),
-						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
+						Str("order by 1"),
 					),
 				),
 				OptIf(w.Query_HasLimit > 0,
