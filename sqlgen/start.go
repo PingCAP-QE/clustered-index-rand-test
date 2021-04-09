@@ -455,6 +455,8 @@ func newGenerator(state *State) func() string {
 						And(
 							Str("order by"),
 							Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
+							Str(", "),
+							Str(windowFunc+" over w"),
 						),
 					),
 					OptIf(w.Query_HasLimit > 0,
