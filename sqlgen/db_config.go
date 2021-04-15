@@ -23,6 +23,8 @@ type ControlOption struct {
 	EnableTestTiFlash bool
 	// Test aggregation push down
 	EnableAggPushDown bool
+	// Test column type change
+	EnableColumnTypeChange bool
 	// AggType specify aggregation executor type.
 	AggType string
 	// indicate whether attach stmt inside txn
@@ -82,6 +84,7 @@ func DefaultControlOption() *ControlOption {
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
 		EnableAggPushDown:              false,
+		EnableColumnTypeChange:         true,
 		AggType:                        "",
 		AttachToTxn:                    false,
 		MaxTxnStmtCount:                20,

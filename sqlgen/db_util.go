@@ -11,3 +11,8 @@ func Assert(cond bool, targets ...interface{}) {
 		log.Fatal("assertion failed")
 	}
 }
+
+func NeverReach() Fn {
+	log.Fatal("assertion failed: should not reach here")
+	return Fn{}
+}

@@ -32,6 +32,7 @@ var (
 	dropIndex               Fn
 	addColumn               Fn
 	dropColumn              Fn
+	alterColumn             Fn
 	dmlStmt                 Fn
 	ddlStmt                 Fn
 	initStart               Fn

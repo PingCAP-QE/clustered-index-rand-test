@@ -33,6 +33,7 @@ func PrintRandValues(values []string) string {
 	return strings.Join(values, ",")
 }
 
+// DECIMAL(10,3) / VARCHAR(255) COLLATE utf8_bin / INT UNSIGNED DEFAULT 0 / FLOAT(5, 3) NOT NULL...
 func PrintColumnType(c *Column) string {
 	var sb strings.Builder
 	sb.WriteString(c.Tp.String())

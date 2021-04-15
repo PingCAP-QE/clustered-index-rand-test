@@ -118,6 +118,10 @@ func (c ColumnType) IsStringType() bool {
 	return false
 }
 
+func (c ColumnType) RequiredFieldLength() bool {
+	return c == ColumnTypeVarchar || c == ColumnTypeVarBinary
+}
+
 func (c ColumnType) NeedKeyLength() bool {
 	return c == ColumnTypeBlob || c == ColumnTypeText
 }

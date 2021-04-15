@@ -49,7 +49,7 @@ func GenNewColumn(id int, w *Weight) *Column {
 	case ColumnTypeEnum, ColumnTypeSet:
 		col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	}
-	if col.Tp != ColumnTypeVarchar && rand.Intn(5) == 0 {
+	if !col.Tp.RequiredFieldLength() && rand.Intn(5) == 0 {
 		col.arg1, col.arg2 = 0, 0
 	}
 	// Adjust collation. Set binary.

@@ -54,7 +54,7 @@ func (t *Table) AppendPartitionColumn(c *Column) {
 func (t *Table) RemoveColumn(c *Column) {
 	var pos int
 	for i := range t.Columns {
-		if t.Columns[i].Name == c.Name {
+		if t.Columns[i].Id == c.Id {
 			pos = i
 			break
 		}
@@ -62,6 +62,20 @@ func (t *Table) RemoveColumn(c *Column) {
 	t.Columns = append(t.Columns[:pos], t.Columns[pos+1:]...)
 	for i := range t.values {
 		t.values[i] = append(t.values[i][:pos], t.values[i][pos+1:]...)
+	}
+}
+
+func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
+	for colIdx := range t.Columns {
+		if t.Columns[colIdx].Id != oldCol.Id {
+			continue
+		}
+		t.Columns[colIdx] = newCol
+		for rowIdx := range t.values {
+			// TODO: support reasonable data change.
+			t.values[rowIdx][colIdx] = newCol.ZeroValue()
+		}
+		break
 	}
 }
 

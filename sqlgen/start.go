@@ -118,6 +118,9 @@ func newGenerator(state *State) func() string {
 			If(len(tbl.Indices) > 0,
 				dropIndex,
 			),
+			If(state.ctrl.EnableColumnTypeChange,
+				alterColumn,
+			),
 		)
 	})
 
@@ -819,6 +822,22 @@ func newGenerator(state *State) func() string {
 		)
 	})
 
+	alterColumn = NewFn("alterColumn", func() Fn {
+		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+		col := tbl.GetRandColumn()
+		newCol := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
+		tbl.ReplaceColumn(col, newCol)
+		const modify, change = false, true
+		switch RandomBool() {
+		case modify:
+			newCol.Name = col.Name
+			return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
+		case change:
+			return Strs("alter table", tbl.Name, "change column", col.Name, newCol.Name, PrintColumnType(newCol))
+		}
+		return NeverReach()
+	})
+
 	multiTableQuery = NewFn("multiTableQuery", func() Fn {
 		tbl1 := state.GetRandTable()
 		tbl2 := state.GetRandTable()
@@ -1199,7 +1218,7 @@ func runInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql st
 	if isAdminCheck && err1 != nil && !strings.Contains(err1.Error(), "t exist") {
 		return err1
 	}
-	if isAdminCheck && err2 != nil && !strings.Contains(err1.Error(), "t exist") {
+	if isAdminCheck && err2 != nil && !strings.Contains(err2.Error(), "t exist") {
 		return err2
 	}
 	if !ValidateErrs(err1, err2) {
