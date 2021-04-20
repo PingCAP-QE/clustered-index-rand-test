@@ -363,13 +363,10 @@ func newGenerator(state *State) func() string {
 		})
 		union = NewFn("union", func() Fn {
 			return Or(
-				Empty(),
-				Or(
-					Str("union"),
-					Str("union all"),
-					Str("except"),
-					Str("intersect"),
-				).SetW(w.Query_Union),
+				Str("union"),
+				Str("union all"),
+				Str("except"),
+				Str("intersect"),
 			)
 		})
 		aggSelect = NewFn("aggSelect", func() Fn {
@@ -432,43 +429,40 @@ func newGenerator(state *State) func() string {
 		windowSelect = NewFn("windowSelect", func() Fn {
 			windowFunc := PrintRandomWindowFunc(tbl)
 			window := PrintRandomWindow(tbl)
-			return Or(
-				Empty(),
-				And(
-					Str("select"),
-					OptIf(state.ctrl.EnableTestTiFlash,
-						And(
-							Str("/*+ read_from_storage(tiflash["),
-							Str(tbl.Name),
-							Str("]) */"),
-						)),
-					OptIf(w.Query_INDEX_MERGE,
-						And(
-							Str("/*+ use_index_merge("),
-							Str(tbl.Name),
-							Str(") */"),
-						)),
-					Str(windowFunc),
-					Str("over w"),
-					Str("from"),
-					Str(tbl.Name),
-					Str("window w as"),
-					Str(window),
-					OptIf(w.Query_HasOrderby > 0,
-						And(
-							Str("order by"),
-							Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
-							Str(", "),
-							Str(windowFunc+" over w"),
-						),
+			return And(
+				Str("select"),
+				OptIf(state.ctrl.EnableTestTiFlash,
+					And(
+						Str("/*+ read_from_storage(tiflash["),
+						Str(tbl.Name),
+						Str("]) */"),
+					)),
+				OptIf(w.Query_INDEX_MERGE,
+					And(
+						Str("/*+ use_index_merge("),
+						Str(tbl.Name),
+						Str(") */"),
+					)),
+				Str(windowFunc),
+				Str("over w"),
+				Str("from"),
+				Str(tbl.Name),
+				Str("window w as"),
+				Str(window),
+				OptIf(w.Query_HasOrderby > 0,
+					And(
+						Str("order by"),
+						Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
+						Str(", "),
+						Str(windowFunc+" over w"),
 					),
-					OptIf(w.Query_HasLimit > 0,
-						And(
-							Str("limit"),
-							Str(RandomNum(1, 1000)),
-						),
+				),
+				OptIf(w.Query_HasLimit > 0,
+					And(
+						Str("limit"),
+						Str(RandomNum(1, 1000)),
 					),
-				).SetW(w.Query_Window),
+				),
 			)
 		})
 		return Or(
@@ -489,9 +483,9 @@ func newGenerator(state *State) func() string {
 						Str(RandomNum(1, 1000)),
 					),
 				),
-			),
+			).SetW(w.Query_Union),
 			And(aggSelect, forUpdateOpt),
-			And(windowSelect, forUpdateOpt),
+			And(windowSelect, forUpdateOpt).SetW(w.Query_Window),
 			And(
 				Str("("), aggSelect, forUpdateOpt, Str(")"),
 				union,
@@ -505,7 +499,7 @@ func newGenerator(state *State) func() string {
 						Str(RandomNum(1, 1000)),
 					),
 				),
-			),
+			).SetW(w.Query_Union),
 			And(
 				Str("("), windowSelect, forUpdateOpt, Str(")"),
 				union,
@@ -521,7 +515,7 @@ func newGenerator(state *State) func() string {
 						Str(RandomNum(1, 1000)),
 					),
 				),
-			),
+			).SetW(w.Query_Window+w.Query_Union),
 			If(len(state.tables) > 1,
 				multiTableQuery,
 			),
