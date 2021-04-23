@@ -1190,6 +1190,32 @@ func newGenerator(state *State) func() string {
 		state.InjectTodoSQL(fmt.Sprintf("execute %s using %s", prepare.Name, userVarsStr))
 		return Str(assignments[0])
 	})
+
+	withClause = NewFn("with clause", func() Fn {
+		cteCount := rand.Intn(5) + 1
+		for i := 0; i < cteCount; i++ {
+
+		}
+
+		return And(
+			Str("with"),
+			Opt(Str("recursive")),
+			withList,
+		)
+	})
+
+	withList = NewFn("with list", func() Fn {
+		return Or(
+			cte.SetW(3),
+			And(cte, Str(","), withList),
+		)
+	})
+
+	cte = NewFn("commonTableExpr", func() Fn {
+
+		return Str("123")
+	})
+
 	return retFn
 }
 

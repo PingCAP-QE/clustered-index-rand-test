@@ -4,6 +4,7 @@ type State struct {
 	ctrl *ControlOption
 
 	tables           []*Table
+	ctes             []*CTE
 	scope            []map[ScopeKeyType]ScopeObj
 	enabledClustered bool
 
@@ -58,6 +59,11 @@ type Prepare struct {
 	Id   int
 	Name string
 	Args []func() string
+}
+
+type CTE struct {
+	Name     string
+	ColNames []string
 }
 
 func NewState(opts ...func(ctl *ControlOption)) *State {

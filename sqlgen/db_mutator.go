@@ -25,6 +25,10 @@ func (s *State) AppendTable(tbl *Table) {
 	s.tables = append(s.tables, tbl)
 }
 
+func (s *State) AppendCTE(cte *CTE) {
+	s.ctes = append(s.ctes, cte)
+}
+
 func (s *State) AppendPrepare(pre *Prepare) {
 	s.prepareStmts = append(s.prepareStmts, pre)
 }

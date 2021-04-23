@@ -62,4 +62,7 @@ var (
 	splitTableRegionBy      Fn
 	splitIndexRegionBy      Fn
 	predicatesPointGet      Fn
+	cte                     Fn
+	withClause              Fn
+	withList                Fn
 )
