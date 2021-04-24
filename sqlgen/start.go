@@ -1191,12 +1191,14 @@ func newGenerator(state *State) func() string {
 		return Str(assignments[0])
 	})
 
+	cteStart = NewFn("cteStart", func() Fn {
+		return Or(
+			And(withClause, queryExpressionBody),
+			And(withClause, queryExpressionParens),
+		)
+	})
+
 	withClause = NewFn("with clause", func() Fn {
-		cteCount := rand.Intn(5) + 1
-		for i := 0; i < cteCount; i++ {
-
-		}
-
 		return And(
 			Str("with"),
 			Opt(Str("recursive")),
@@ -1212,8 +1214,76 @@ func newGenerator(state *State) func() string {
 	})
 
 	cte = NewFn("commonTableExpr", func() Fn {
+		cteName := fmt.Sprintf("cte_%d", len(state.ctes))
+		colNames := make([]string, rand.Int31n(5))
+		for i := range colNames {
+			colNames[i] = fmt.Sprintf("%s_col_%d", cteName, i)
+		}
+		state.AppendCTE(&CTE{Name: cteName, ColNames: colNames})
 
-		return Str("123")
+		deriveTableList := NewFn("deriveTableList", func() Fn {
+			return Opt(And(Str("(" + strings.Join(colNames, ",") + ")")))
+		})
+
+		return And(
+			Str(cteName),
+			If(len(colNames) != 0, deriveTableList),
+			Str("AS"),
+			queryExpressionParens,
+		)
+	})
+
+	queryExpressionParens = NewFn("queryExpressionParens", func() Fn {
+		return Or(
+			And(Str("("), queryExpressionParens, Str(")")),
+			And(Str("("), queryExpression, Str(")")),
+		)
+	})
+
+	queryExpression = NewFn("queryExpression", func() Fn {
+		return Or(
+			queryExpressionBody,
+			And(withClause, queryExpressionBody),
+			And(withClause, queryExpressionParens),
+		)
+	})
+
+	queryExpressionBody = NewFn("queryExpressionBody", func() Fn {
+		return Or(
+			queryPrimary,
+			And(queryExpressionBody, Str("UNION"), unionOption, queryPrimary),
+			And(queryExpressionParens, Str("UNION"), unionOption, queryPrimary),
+			And(queryExpressionBody, Str("UNION"), unionOption, queryExpressionParens),
+			And(queryExpressionParens, Str("UNION"), unionOption, queryExpressionParens),
+		)
+	})
+
+	queryPrimary = NewFn("queryPrimary", func() Fn {
+		return Or(
+			commonSelect,
+			tableValueConstructor,
+			explicitTable,
+		)
+	})
+
+	querySpecification = NewFn("querySpecification", func() Fn {
+		return Fn{}
+	})
+
+	tableValueConstructor = NewFn("tableValueConstructor", func() Fn {
+		return Fn{}
+	})
+
+	explicitTable = NewFn("explicitTable", func() Fn {
+		return Fn{}
+	})
+
+	unionOption = NewFn("unionOption", func() Fn {
+		return Or(
+			Empty(),
+			Str("DISTINCT"),
+			Str("ALL"),
+		)
 	})
 
 	return retFn

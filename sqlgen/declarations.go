@@ -65,4 +65,13 @@ var (
 	cte                     Fn
 	withClause              Fn
 	withList                Fn
+	queryExpressionParens   Fn
+	queryExpression         Fn
+	queryExpressionBody     Fn
+	queryPrimary            Fn
+	unionOption             Fn
+	querySpecification      Fn
+	tableValueConstructor   Fn
+	explicitTable           Fn
+	cteStart                Fn
 )
