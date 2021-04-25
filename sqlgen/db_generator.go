@@ -18,6 +18,12 @@ func GenNewTable(id int) *Table {
 	return newTbl
 }
 
+func GenNewCTE(id int) *CTE {
+	return &CTE{
+		Name:     fmt.Sprintf("cte_%d", id),
+	}
+}
+
 func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))

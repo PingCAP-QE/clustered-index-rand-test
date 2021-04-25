@@ -54,6 +54,7 @@ func newGenerator(state *State) func() string {
 			switchRowFormatVer.SetW(w.SetRowFormat),
 			switchClustered.SetW(w.SetClustered),
 			adminCheck.SetW(w.AdminCheck),
+			cteStart.SetW(w.CTE),
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
 					createTable.SetW(w.CreateTable_WithoutLike),
@@ -597,7 +598,7 @@ func newGenerator(state *State) func() string {
 			//	Opt(Str("ignore")),
 			//	Str("into"),
 			//	Str(tbl.Name),
-			//	Str(PrintColumnNamesWithPar(cols, "")),
+			//	Str(PrintColumnNamesWithPar(Cols, "")),
 			//	commonSelect,
 			//	OptIf(insertOrReplace == "insert", onDuplicateUpdate),
 			//),
@@ -1192,16 +1193,44 @@ func newGenerator(state *State) func() string {
 	})
 
 	cteStart = NewFn("cteStart", func() Fn {
+		state.IncCTEDeep()
 		return Or(
-			And(withClause, queryExpressionBody),
-			And(withClause, queryExpressionParens),
+			And(withClause, simpleCTEQuery),
+		)
+	})
+
+	simpleCTEQuery = NewFn("simpleCTEQuery", func() Fn {
+		parentCTEColCount := state.ParentCTEColCount()
+		ctes := state.PopCTE()
+		cteNames := make([]string, len(ctes))
+		colNames := make([]string, 0, len(ctes)*2)
+		for i := range ctes {
+			cteNames[i] = ctes[i].Name
+			for _, col := range ctes[i].Cols {
+				colNames = append(colNames, col.Name)
+			}
+		}
+
+		rand.Shuffle(len(colNames), func(i, j int) {
+			colNames[i], colNames[j] = colNames[j], colNames[i]
+		})
+		// todo: it can infer the cte or the common table
+		field := "*"
+		if parentCTEColCount == 0 {
+			field = strings.Join(colNames[:parentCTEColCount], ",")
+		}
+		return And(
+			Str("select"),
+			Str(field),
+			Str("from"),
+			Str(strings.Join(cteNames, ",")),
 		)
 	})
 
 	withClause = NewFn("with clause", func() Fn {
 		return And(
 			Str("with"),
-			Opt(Str("recursive")),
+			Str("recursive"),
 			withList,
 		)
 	})
@@ -1214,68 +1243,84 @@ func newGenerator(state *State) func() string {
 	})
 
 	cte = NewFn("commonTableExpr", func() Fn {
-		cteName := fmt.Sprintf("cte_%d", len(state.ctes))
-		colNames := make([]string, rand.Int31n(5))
-		for i := range colNames {
-			colNames[i] = fmt.Sprintf("%s_col_%d", cteName, i)
+		cte := GenNewCTE(state.AllocGlobalID(ScopeKeyCTEUniqID))
+		colCnt := state.ParentCTEColCount()
+		if colCnt == 0 {
+			colCnt = 2
 		}
-		state.AppendCTE(&CTE{Name: cteName, ColNames: colNames})
-
-		deriveTableList := NewFn("deriveTableList", func() Fn {
-			return Opt(And(Str("(" + strings.Join(colNames, ",") + ")")))
-		})
+		for i := 0; i < colCnt + rand.Intn(5); i++ {
+			cte.AppendColumn(GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w))
+		}
+		state.PushCTE(cte)
 
 		return And(
-			Str(cteName),
-			If(len(colNames) != 0, deriveTableList),
+			Str(cte.Name),
+			Str("("+PrintColumnNamesWithoutPar(cte.Cols, "")+")"),
 			Str("AS"),
 			queryExpressionParens,
 		)
 	})
 
 	queryExpressionParens = NewFn("queryExpressionParens", func() Fn {
+		cteSeedPart := NewFn("cteSeedPart", func() Fn {
+			tbl := state.GetRandTable()
+			currentCTE := state.CurrentCTE()
+			fields := make([]string, len(currentCTE.Cols)-1)
+			for i := range fields {
+				if RandomBool() {
+					fields[i] = tbl.GetRandColumn().Name
+				} else {
+					fields[i] = fmt.Sprintf("%d", i + 2)
+				}
+			}
+
+			return Or(
+				And(
+					Str("select 1,"),
+					Str(strings.Join(fields, ",")),
+					Str("from"),
+					Str(tbl.Name),
+				),
+				cteStart,
+			)
+		})
+
+		cteRecursivePart := NewFn("cteRecursivePart", func() Fn {
+			lastCTE := state.CurrentCTE()
+			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
+			for _, col := range lastCTE.Cols[1:] {
+				fields = append(fields, PrintColumnWithFunction(col))
+			}
+
+			// todo: recursive part can be a function, const
+			return Or(
+				And(
+					Str("select"),
+					Str(strings.Join(fields, ",")),
+					Str("from"),
+					Str(lastCTE.Name), // todo: it also can be a cte
+					Str("where"),
+					Str(fmt.Sprintf("%s < 10", lastCTE.Cols[0].Name)),
+				),
+				//Str("select 3, 4"),
+			)
+		})
+
+		cteBody := NewFn("cteBody", func() Fn {
+			return And(
+				cteSeedPart,
+				Opt(
+					And(
+						Str("UNION"),
+						unionOption,
+						cteRecursivePart,
+					),
+				),
+			)
+		})
 		return Or(
-			And(Str("("), queryExpressionParens, Str(")")),
-			And(Str("("), queryExpression, Str(")")),
+			And(Str("("), cteBody, Str(")")),
 		)
-	})
-
-	queryExpression = NewFn("queryExpression", func() Fn {
-		return Or(
-			queryExpressionBody,
-			And(withClause, queryExpressionBody),
-			And(withClause, queryExpressionParens),
-		)
-	})
-
-	queryExpressionBody = NewFn("queryExpressionBody", func() Fn {
-		return Or(
-			queryPrimary,
-			And(queryExpressionBody, Str("UNION"), unionOption, queryPrimary),
-			And(queryExpressionParens, Str("UNION"), unionOption, queryPrimary),
-			And(queryExpressionBody, Str("UNION"), unionOption, queryExpressionParens),
-			And(queryExpressionParens, Str("UNION"), unionOption, queryExpressionParens),
-		)
-	})
-
-	queryPrimary = NewFn("queryPrimary", func() Fn {
-		return Or(
-			commonSelect,
-			tableValueConstructor,
-			explicitTable,
-		)
-	})
-
-	querySpecification = NewFn("querySpecification", func() Fn {
-		return Fn{}
-	})
-
-	tableValueConstructor = NewFn("tableValueConstructor", func() Fn {
-		return Fn{}
-	})
-
-	explicitTable = NewFn("explicitTable", func() Fn {
-		return Fn{}
 	})
 
 	unionOption = NewFn("unionOption", func() Fn {

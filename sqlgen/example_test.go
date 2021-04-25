@@ -13,3 +13,15 @@ func TestA(t *testing.T) {
 		fmt.Printf("%s;\n", gen())
 	}
 }
+
+func TestB(t *testing.T) {
+	state := NewState(func(ctl *ControlOption) {
+		ctl.Weight.CTE = 100000
+		ctl.Weight.CreateTable_MustIntCol = true
+		ctl.InitTableCount = 2
+	})
+	gen := NewGenerator(state)
+	for i := 0; i < 200; i++ {
+		fmt.Printf("%s;\n", gen())
+	}
+}

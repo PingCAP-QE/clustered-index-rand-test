@@ -67,7 +67,7 @@ var (
 	withList                Fn
 	queryExpressionParens   Fn
 	queryExpression         Fn
-	queryExpressionBody     Fn
+	simpleCTEQuery          Fn
 	queryPrimary            Fn
 	unionOption             Fn
 	querySpecification      Fn

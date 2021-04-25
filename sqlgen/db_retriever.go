@@ -37,6 +37,10 @@ func (s *State) GetFirstNonFullTable() *Table {
 	return nil
 }
 
+func (s *State) IncCTEDeep() {
+	s.ctes = append(s.ctes, make([]*CTE, 0))
+}
+
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
@@ -114,7 +118,7 @@ func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
 		// insert into t values (...)
 		return nil
 	}
-	// insert into t (cols..) values (...)
+	// insert into t (Cols..) values (...)
 	totalCols := t.FilterColumns(func(c *Column) bool { return c.defaultVal != "" })
 	selectedCols := t.FilterColumns(func(c *Column) bool { return c.defaultVal == "" })
 	for len(totalCols) > 0 && RandomBool() {
@@ -286,7 +290,7 @@ func (t *Table) GetRandColumns() []*Column {
 		// insert into t values (...)
 		return nil
 	}
-	// insert into t (cols..) values (...)
+	// insert into t (Cols..) values (...)
 	return t.GetRandColumnsNonEmpty()
 }
 
@@ -378,4 +382,12 @@ func (p *Prepare) UserVars() []string {
 		userVars[i] = fmt.Sprintf("@i%d", i)
 	}
 	return userVars
+}
+
+func (c *CTE) GenCols() {
+
+}
+
+func (c *CTE) AppendColumn(col *Column) {
+	c.Cols = append(c.Cols, col)
 }

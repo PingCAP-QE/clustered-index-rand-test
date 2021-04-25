@@ -4,7 +4,6 @@ type State struct {
 	ctrl *ControlOption
 
 	tables           []*Table
-	ctes             []*CTE
 	scope            []map[ScopeKeyType]ScopeObj
 	enabledClustered bool
 
@@ -12,6 +11,8 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
+
+	ctes [][]*CTE
 }
 
 type Table struct {
@@ -47,6 +48,11 @@ type Column struct {
 	collate        CollationType
 }
 
+type CTE struct {
+	Name string
+	Cols []*Column
+}
+
 type Index struct {
 	Id           int
 	Name         string
@@ -59,11 +65,6 @@ type Prepare struct {
 	Id   int
 	Name string
 	Args []func() string
-}
-
-type CTE struct {
-	Name     string
-	ColNames []string
 }
 
 func NewState(opts ...func(ctl *ControlOption)) *State {

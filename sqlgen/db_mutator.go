@@ -25,8 +25,40 @@ func (s *State) AppendTable(tbl *Table) {
 	s.tables = append(s.tables, tbl)
 }
 
-func (s *State) AppendCTE(cte *CTE) {
-	s.ctes = append(s.ctes, cte)
+func (s *State) PushCTE(cte *CTE) {
+	s.ctes[len(s.ctes)-1] = append(s.ctes[len(s.ctes)-1], cte)
+}
+
+func (s *State) PopCTE() []*CTE {
+	if len(s.ctes) == 0 {
+		panic("0 CTEs")
+	}
+	tc := s.ctes[len(s.ctes)-1]
+	s.ctes = s.ctes[:len(s.ctes)-1]
+	return tc
+}
+
+func (s *State) CurrentCTE() *CTE {
+	if len(s.ctes) == 0 {
+		return nil
+	}
+	l := s.ctes[len(s.ctes)-1]
+	if len(l) == 0 {
+		return nil
+	}
+	return l[len(l)-1]
+}
+
+func (s *State) LastCTEs() []*CTE {
+	return s.ctes[len(s.ctes)-1]
+}
+
+func (s *State) ParentCTEColCount() int {
+	if len(s.ctes) < 2 {
+		return 0
+	}
+	ctes := s.ctes[len(s.ctes)-2]
+	return len(ctes[len(ctes)-1].Cols)
 }
 
 func (s *State) AppendPrepare(pre *Prepare) {

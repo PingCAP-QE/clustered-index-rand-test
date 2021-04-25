@@ -358,3 +358,7 @@ func PrintPredicateIn(cols []*Column, values [][]string) string {
 	sb.WriteString(")")
 	return sb.String()
 }
+
+func PrintColumnWithFunction(col *Column) string {
+	return fmt.Sprintf("%s + 1", col.Name)
+}

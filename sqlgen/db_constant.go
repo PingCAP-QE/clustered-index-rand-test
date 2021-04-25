@@ -222,6 +222,7 @@ const (
 	ScopeKeyLastDropTable
 	ScopeKeyCurrentPartitionColumn
 	ScopeKeyLastOutFileTable
+	ScopeKeyCTESeedPartInit
 
 	ScopeKeyTableUniqID
 	ScopeKeyColumnUniqID
@@ -229,6 +230,7 @@ const (
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
 	ScopeUsePointGet
+	ScopeKeyCTEUniqID
 )
 
 const DefaultKeySize = 3072
