@@ -128,7 +128,7 @@ var DefaultWeight = Weight{
 	SetClustered:                1,
 	SetRowFormat:                1,
 	AdminCheck:                  1,
-	MustCTE:                     true,
+	MustCTE:                     false,
 	CTERatio:                    4,
 	CTESimpleSeed:               4,
 }

@@ -294,14 +294,14 @@ func newGenerator(state *State) func() string {
 			Str(tbl.Name),
 			Str("("),
 			colDefs,
-			OptIf(rand.Intn(indexOpt) != 0,
+			OptIf(rand.Intn(indexOpt) != 0 && !w.MustCTE,
 				And(
 					Str(","),
 					idxDefs,
 				),
 			),
 			Str(")"),
-			partitionDef,
+			If(!w.MustCTE, partitionDef),
 		)
 	})
 
@@ -1251,7 +1251,7 @@ func newGenerator(state *State) func() string {
 		if colCnt == 0 {
 			colCnt = 2
 		}
-		for i := 0; i < colCnt + rand.Intn(5); i++ {
+		for i := 0; i < colCnt+rand.Intn(5); i++ {
 			cte.AppendColumn(GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w))
 		}
 		state.PushCTE(cte)
@@ -1273,7 +1273,7 @@ func newGenerator(state *State) func() string {
 				if rand.Intn(5) == 0 {
 					fields[i] = tbl.GetRandColumn().Name
 				} else {
-					fields[i] = fmt.Sprintf("%d", i + 2)
+					fields[i] = fmt.Sprintf("%d", i+2)
 				}
 			}
 
