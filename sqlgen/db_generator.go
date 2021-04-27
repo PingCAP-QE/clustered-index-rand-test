@@ -20,7 +20,7 @@ func GenNewTable(id int) *Table {
 
 func GenNewCTE(id int) *CTE {
 	return &CTE{
-		Name:     fmt.Sprintf("cte_%d", id),
+		Name: fmt.Sprintf("cte_%d", id),
 	}
 }
 
@@ -34,6 +34,9 @@ func GenNewColumn(id int, w *Weight) *Column {
 	}
 	if w.CreateTable_MustIntCol {
 		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
+	}
+	if w.MustCTE {
+		col.Tp = ColumnTypeInt
 	}
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric

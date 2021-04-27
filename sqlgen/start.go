@@ -50,11 +50,14 @@ func newGenerator(state *State) func() string {
 		if state.IsInitializing() {
 			return initStart
 		}
+
+		if w.MustCTE {
+			return cteStart
+		}
 		return Or(
 			switchRowFormatVer.SetW(w.SetRowFormat),
 			switchClustered.SetW(w.SetClustered),
 			adminCheck.SetW(w.AdminCheck),
-			cteStart.SetW(w.CTE),
 			If(len(state.tables) < state.ctrl.MaxTableNum,
 				Or(
 					createTable.SetW(w.CreateTable_WithoutLike),
