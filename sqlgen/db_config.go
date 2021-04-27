@@ -70,6 +70,7 @@ type Weight struct {
 	SetClustered                int
 	AdminCheck                  int
 	CTE                         int
+	CTERatio                    int
 }
 
 func DefaultControlOption() *ControlOption {
@@ -127,4 +128,5 @@ var DefaultWeight = Weight{
 	SetRowFormat:                1,
 	AdminCheck:                  1,
 	CTE:                         1,
+	CTERatio:                    4,
 }

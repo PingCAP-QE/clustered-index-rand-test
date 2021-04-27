@@ -1237,7 +1237,7 @@ func newGenerator(state *State) func() string {
 
 	withList = NewFn("with list", func() Fn {
 		return Or(
-			cte.SetW(3),
+			cte.SetW(w.CTERatio),
 			And(cte, Str(","), withList),
 		)
 	})
@@ -1267,7 +1267,7 @@ func newGenerator(state *State) func() string {
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
 			for i := range fields {
-				if RandomBool() {
+				if rand.Intn(5) == 0 {
 					fields[i] = tbl.GetRandColumn().Name
 				} else {
 					fields[i] = fmt.Sprintf("%d", i + 2)
