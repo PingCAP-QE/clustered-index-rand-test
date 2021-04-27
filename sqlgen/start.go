@@ -301,7 +301,7 @@ func newGenerator(state *State) func() string {
 				),
 			),
 			Str(")"),
-			If(!w.MustCTE, partitionDef),
+			OptIf(!w.MustCTE, partitionDef),
 		)
 	})
 

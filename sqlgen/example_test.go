@@ -16,7 +16,7 @@ func TestA(t *testing.T) {
 
 func TestB(t *testing.T) {
 	state := NewState(func(ctl *ControlOption) {
-		ctl.Weight.CTE = 100000
+		ctl.Weight.MustCTE = true
 		ctl.Weight.CreateTable_MustIntCol = true
 		ctl.InitTableCount = 2
 	})
