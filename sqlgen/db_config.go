@@ -71,6 +71,7 @@ type Weight struct {
 	AdminCheck                  int
 	CTE                         int
 	CTERatio                    int
+	CTESimpleSeed               int
 }
 
 func DefaultControlOption() *ControlOption {
@@ -129,4 +130,5 @@ var DefaultWeight = Weight{
 	AdminCheck:                  1,
 	CTE:                         1,
 	CTERatio:                    4,
+	CTESimpleSeed:               4,
 }

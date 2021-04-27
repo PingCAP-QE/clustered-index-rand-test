@@ -1280,7 +1280,7 @@ func newGenerator(state *State) func() string {
 					Str(strings.Join(fields, ",")),
 					Str("from"),
 					Str(tbl.Name),
-				),
+				).SetW(w.CTESimpleSeed),
 				cteStart,
 			)
 		})
