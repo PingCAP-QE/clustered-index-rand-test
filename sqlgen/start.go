@@ -1216,7 +1216,7 @@ func newGenerator(state *State) func() string {
 		})
 		// todo: it can infer the cte or the common table
 		field := "*"
-		if parentCTEColCount == 0 {
+		if parentCTEColCount != 0 {
 			field = strings.Join(colNames[:parentCTEColCount], ",")
 		}
 		return And(
