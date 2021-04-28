@@ -52,6 +52,7 @@ func newGenerator(state *State) func() string {
 		}
 
 		if w.MustCTE {
+			state.Store(ScopeKeyCTEValid, NewScopeObj(rand.Intn(100) < w.CTEValidSQL))
 			return cteStart
 		}
 		return Or(
@@ -1233,15 +1234,19 @@ func newGenerator(state *State) func() string {
 	withClause = NewFn("with clause", func() Fn {
 		return And(
 			Str("with"),
-			Str("recursive"),
+			IfElse(
+				state.Search(ScopeKeyCTEValid).ToBool(),
+				Str("recursive"),
+				Opt(Str("recursive")),
+			),
 			withList,
 		)
 	})
 
 	withList = NewFn("with list", func() Fn {
 		return Or(
-			cte.SetW(w.CTERatio),
-			And(cte, Str(","), withList),
+			cte.SetW(100-w.CTEMultiRatio),
+			And(cte, Str(","), withList).SetW(w.CTEMultiRatio),
 		)
 	})
 
@@ -1253,6 +1258,13 @@ func newGenerator(state *State) func() string {
 		}
 		for i := 0; i < colCnt+rand.Intn(5); i++ {
 			cte.AppendColumn(GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w))
+		}
+		if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+			if RandomBool() && state.GetCTECount() != 0 {
+				cte.Name = state.GetRandomCTE().Name
+			} else {
+				cte.Name = state.GetRandTable().Name
+			}
 		}
 		state.PushCTE(cte)
 
@@ -1269,8 +1281,11 @@ func newGenerator(state *State) func() string {
 			tbl := state.GetRandTable()
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
+			if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+				fields = append(fields, make([]string, rand.Intn(3))...)
+			}
 			for i := range fields {
-				if rand.Intn(5) == 0 {
+				if rand.Intn(3) == 0 {
 					fields[i] = tbl.GetRandColumn().Name
 				} else {
 					fields[i] = fmt.Sprintf("%d", i+2)
@@ -1290,6 +1305,9 @@ func newGenerator(state *State) func() string {
 
 		cteRecursivePart := NewFn("cteRecursivePart", func() Fn {
 			lastCTE := state.CurrentCTE()
+			if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+				lastCTE = state.GetRandomCTE()
+			}
 			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
 			for _, col := range lastCTE.Cols[1:] {
 				fields = append(fields, PrintColumnWithFunction(col))
@@ -1303,7 +1321,7 @@ func newGenerator(state *State) func() string {
 					Str("from"),
 					Str(lastCTE.Name), // todo: it also can be a cte
 					Str("where"),
-					Str(fmt.Sprintf("%s < 10", lastCTE.Cols[0].Name)),
+					Str(fmt.Sprintf("%s < %d", lastCTE.Cols[0].Name, w.CTERecursiveDeep)),
 				),
 				//Str("select 3, 4"),
 			)

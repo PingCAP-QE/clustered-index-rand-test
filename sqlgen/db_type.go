@@ -1,5 +1,7 @@
 package sqlgen
 
+import "math/rand"
+
 type State struct {
 	ctrl *ControlOption
 
@@ -115,6 +117,10 @@ func (s ScopeObj) ToInt() int {
 	return s.obj.(int)
 }
 
+func (s ScopeObj) ToBool() bool {
+	return s.obj.(bool)
+}
+
 func (s ScopeObj) ToColumns() []*Column {
 	return s.obj.([]*Column)
 }
@@ -176,6 +182,41 @@ func (s *State) AllocGlobalID(key ScopeKeyType) int {
 	}
 	s.scope[0][key] = NewScopeObj(result + 1)
 	return result
+}
+
+func (s *State) PickRandomCTEOrTableName() string {
+	names := make([]string, 0, 10)
+	for _, cteL := range s.ctes {
+		for _, cte := range cteL {
+			names = append(names, cte.Name)
+		}
+	}
+
+	for _, tbl := range s.tables {
+		names = append(names, tbl.Name)
+	}
+
+	return names[rand.Intn(len(names))]
+}
+
+func (s *State) GetRandomCTE() *CTE {
+	ctes := make([]*CTE, 0, 10)
+	for _, cteL := range s.ctes {
+		for _, cte := range cteL {
+			ctes = append(ctes, cte)
+		}
+	}
+
+	return ctes[rand.Intn(len(ctes))]
+}
+
+func (s *State) GetCTECount() int {
+	c := 0
+	for _, cteL := range s.ctes {
+		c += len(cteL)
+	}
+
+	return c
 }
 
 type ScopeListener struct {

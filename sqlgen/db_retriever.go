@@ -384,10 +384,6 @@ func (p *Prepare) UserVars() []string {
 	return userVars
 }
 
-func (c *CTE) GenCols() {
-
-}
-
 func (c *CTE) AppendColumn(col *Column) {
 	c.Cols = append(c.Cols, col)
 }

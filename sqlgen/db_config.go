@@ -70,8 +70,10 @@ type Weight struct {
 	SetClustered                int
 	AdminCheck                  int
 	MustCTE                     bool
-	CTERatio                    int
+	CTEMultiRatio               int
 	CTESimpleSeed               int
+	CTEValidSQL                 int
+	CTERecursiveDeep            int
 }
 
 func DefaultControlOption() *ControlOption {
@@ -129,6 +131,8 @@ var DefaultWeight = Weight{
 	SetRowFormat:                1,
 	AdminCheck:                  1,
 	MustCTE:                     false,
-	CTERatio:                    4,
+	CTEMultiRatio:               25,
 	CTESimpleSeed:               4,
+	CTEValidSQL:                 100,
+	CTERecursiveDeep:            5,
 }
