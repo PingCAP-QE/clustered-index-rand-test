@@ -52,7 +52,6 @@ func newGenerator(state *State) func() string {
 		}
 
 		if w.MustCTE {
-			state.Store(ScopeKeyCTEValid, NewScopeObj(rand.Intn(100) < w.CTEValidSQL))
 			return cteStart
 		}
 		return Or(
@@ -1235,7 +1234,7 @@ func newGenerator(state *State) func() string {
 		return And(
 			Str("with"),
 			IfElse(
-				state.Search(ScopeKeyCTEValid).ToBool(),
+				rand.Intn(w.CTEValidSQL) < w.CTEValidSQL,
 				Str("recursive"),
 				Opt(Str("recursive")),
 			),
@@ -1259,7 +1258,7 @@ func newGenerator(state *State) func() string {
 		for i := 0; i < colCnt+rand.Intn(5); i++ {
 			cte.AppendColumn(GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w))
 		}
-		if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+		if !(rand.Intn(w.CTEValidSQL) < w.CTEValidSQL) {
 			if RandomBool() && state.GetCTECount() != 0 {
 				cte.Name = state.GetRandomCTE().Name
 			} else {
@@ -1281,7 +1280,7 @@ func newGenerator(state *State) func() string {
 			tbl := state.GetRandTable()
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
-			if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+			if !(rand.Intn(w.CTEValidSQL) < w.CTEValidSQL) {
 				fields = append(fields, make([]string, rand.Intn(3))...)
 			}
 			for i := range fields {
@@ -1305,7 +1304,7 @@ func newGenerator(state *State) func() string {
 
 		cteRecursivePart := NewFn("cteRecursivePart", func() Fn {
 			lastCTE := state.CurrentCTE()
-			if !state.Search(ScopeKeyCTEValid).ToBool() && rand.Intn(20) == 0 {
+			if !(rand.Intn(w.CTEValidSQL) < w.CTEValidSQL) {
 				lastCTE = state.GetRandomCTE()
 			}
 			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
