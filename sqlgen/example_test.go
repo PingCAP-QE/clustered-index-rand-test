@@ -19,6 +19,7 @@ func TestB(t *testing.T) {
 		ctl.Weight.MustCTE = true
 		ctl.Weight.CreateTable_MustIntCol = true
 		ctl.InitTableCount = 2
+		ctl.Weight.CTEValidSQL = 0
 	})
 	gen := NewGenerator(state)
 	for i := 0; i < 200; i++ {
