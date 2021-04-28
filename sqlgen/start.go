@@ -1215,8 +1215,8 @@ func newGenerator(state *State) func() string {
 			}
 		}
 
-		rand.Shuffle(len(colNames), func(i, j int) {
-			colNames[i], colNames[j] = colNames[j], colNames[i]
+		rand.Shuffle(len(colNames[1:]), func(i, j int) {
+			colNames[1+i], colNames[1+j] = colNames[1+j], colNames[1+i]
 		})
 		// todo: it can infer the cte or the common table
 		field := "*"
