@@ -1237,6 +1237,12 @@ func newGenerator(state *State) func() string {
 			Str(field),
 			Str("from"),
 			Str(strings.Join(cteNames, ",")),
+			OptIf(parentCTEColCount == 0,
+				And(
+					Str("order by"),
+					Str(colNames[0]),
+				),
+			),
 		)
 	})
 
@@ -1303,7 +1309,11 @@ func newGenerator(state *State) func() string {
 						if ShouldValid(w.CTEValidSQL) {
 							fields[i] = fmt.Sprintf("cast(\"%d\" as char(20))", i+2)
 						} else {
-							fields[i] = fmt.Sprintf("\"%d\"", i+2)
+							if rand.Intn(3) == 0 {
+								fields[i] = fmt.Sprintf("a")
+							} else {
+								fields[i] = fmt.Sprintf("\"%d\"", i+2)
+							}
 						}
 					}
 				}
