@@ -232,6 +232,8 @@ const (
 	ScopeUsePointGet
 	ScopeKeyCTEUniqID
 	ScopeKeyCTEValid
+	ScopeKeyCTESyntaxExprDeep
+	ScopeKeyCTESyntaxBodyDeep
 )
 
 const DefaultKeySize = 3072

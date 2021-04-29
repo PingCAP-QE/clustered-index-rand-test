@@ -47,6 +47,13 @@ func newGenerator(state *State) func() string {
 		if s, ok := state.PopOneTodoSQL(); ok {
 			return Str(s)
 		}
+
+		if w.CTEJustSyntax {
+			state.Store(ScopeKeyCTESyntaxExprDeep, NewScopeObj(0))
+			state.Store(ScopeKeyCTESyntaxBodyDeep, NewScopeObj(0))
+			return synQueryExpression
+		}
+
 		if state.IsInitializing() {
 			return initStart
 		}
@@ -308,6 +315,9 @@ func newGenerator(state *State) func() string {
 	insertInto = NewFn("insertInto", func() Fn {
 		tbl := state.GetFirstNonFullTable()
 		vals := tbl.GenRandValues(tbl.Columns)
+		if w.MustCTE {
+			vals = tbl.GenRandValuesForCTE(tbl.Columns)
+		}
 		tbl.AppendRow(vals)
 		return And(
 			Str("insert into"),
@@ -1258,7 +1268,7 @@ func newGenerator(state *State) func() string {
 		for i := 0; i < colCnt+rand.Intn(5); i++ {
 			cte.AppendColumn(GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w))
 		}
-		if !(rand.Intn(100) < w.CTEValidSQL) {
+		if !ShouldValid(w.CTEValidSQL) {
 			if RandomBool() && state.GetCTECount() != 0 {
 				cte.Name = state.GetRandomCTE().Name
 			} else {
@@ -1280,14 +1290,22 @@ func newGenerator(state *State) func() string {
 			tbl := state.GetRandTable()
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
-			if !(rand.Intn(100) < w.CTEValidSQL) {
+			if !ShouldValid(w.CTEValidSQL) {
 				fields = append(fields, make([]string, rand.Intn(3))...)
 			}
 			for i := range fields {
 				if rand.Intn(3) == 0 {
 					fields[i] = tbl.GetRandColumn().Name
 				} else {
-					fields[i] = fmt.Sprintf("%d", i+2)
+					if RandomBool() {
+						fields[i] = fmt.Sprintf("%d", i+2)
+					} else {
+						if ShouldValid(w.CTEValidSQL) {
+							fields[i] = fmt.Sprintf("cast(\"%d\" as char(20))", i+2)
+						} else {
+							fields[i] = fmt.Sprintf("\"%d\"", i+2)
+						}
+					}
 				}
 			}
 
@@ -1304,12 +1322,15 @@ func newGenerator(state *State) func() string {
 
 		cteRecursivePart := NewFn("cteRecursivePart", func() Fn {
 			lastCTE := state.CurrentCTE()
-			if !(rand.Intn(100) < w.CTEValidSQL) {
+			if !ShouldValid(w.CTEValidSQL) {
 				lastCTE = state.GetRandomCTE()
 			}
 			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
 			for _, col := range lastCTE.Cols[1:] {
 				fields = append(fields, PrintColumnWithFunction(col))
+			}
+			if !ShouldValid(w.CTEValidSQL) && rand.Intn(20) == 0 {
+				fields = append(fields, "1")
 			}
 
 			// todo: recursive part can be a function, const
@@ -1348,6 +1369,62 @@ func newGenerator(state *State) func() string {
 			Empty(),
 			Str("DISTINCT"),
 			Str("ALL"),
+		)
+	})
+
+	synQueryExpression = NewFn("synQueryExpression", func() Fn {
+		weight := state.Search(ScopeKeyCTESyntaxExprDeep).ToInt()
+		state.Store(ScopeKeyCTESyntaxExprDeep, NewScopeObj(weight+1))
+		return Or(
+			synQueryExpressionBody.SetW(weight*3),
+			And(synWithClause, synQueryExpressionBody),
+			synQueryExpressionParens,
+			And(synWithClause, synQueryExpressionParens),
+		)
+	})
+
+	synQueryExpressionBody = NewFn("synQueryExpressionBody", func() Fn {
+		weight := state.Search(ScopeKeyCTESyntaxBodyDeep).ToInt()
+		state.Store(ScopeKeyCTESyntaxBodyDeep, NewScopeObj(weight+1))
+		return Or(
+			synQueryPrimary.SetW(weight*3),
+			And(synQueryExpressionBody, Str("union"), unionOption, synQueryPrimary),
+			And(synQueryExpressionParens, Str("union"), unionOption, synQueryPrimary),
+			And(synQueryExpressionBody, Str("union"), unionOption, synQueryExpressionParens),
+			And(synQueryExpressionParens, Str("union"), unionOption, synQueryExpressionParens),
+		)
+	})
+
+	synQueryPrimary = NewFn("synQueryPrimary", func() Fn {
+		return Str("select 1")
+	})
+
+	synWithListClause = NewFn("synWithListClause", func() Fn {
+		return Or(
+			And(synWithListClause, Str(","), synCTE),
+			synCTE,
+		)
+	})
+
+	synCTE = NewFn("synCTE", func() Fn {
+		return And(
+			Str("cte as "),
+			synQueryExpressionParens,
+		)
+	})
+
+	synWithClause = NewFn("synWithClause", func() Fn {
+		return And(
+			Str("with"),
+			Opt(Str("recursive")),
+			synWithListClause,
+		)
+	})
+
+	synQueryExpressionParens = NewFn("synQueryExpressionParens", func() Fn {
+		return Or(
+			And(Str("("), synQueryExpressionParens, Str(")")),
+			And(Str("("), synQueryExpression, Str(")")).SetW(4),
 		)
 	})
 

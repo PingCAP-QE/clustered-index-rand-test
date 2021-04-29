@@ -36,7 +36,12 @@ func GenNewColumn(id int, w *Weight) *Column {
 		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
 	}
 	if w.MustCTE {
-		col.Tp = ColumnTypeInt
+		if RandomBool() {
+			col.Tp = ColumnTypeInt
+		} else {
+			col.Tp = ColumnTypeChar
+		}
+
 	}
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
@@ -69,7 +74,7 @@ func GenNewColumn(id int, w *Weight) *Column {
 		col.isUnsigned = RandomBool()
 	}
 	col.isNotNull = RandomBool()
-	if !col.Tp.DisallowDefaultValue() && RandomBool() {
+	if !col.Tp.DisallowDefaultValue() && RandomBool() && !w.MustCTE {
 		col.defaultVal = col.RandomValue()
 	}
 	col.relatedIndices = map[int]struct{}{}
@@ -140,6 +145,24 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	row := make([]string, len(cols))
 	for i, c := range cols {
 		row[i] = c.RandomValue()
+	}
+	return row
+}
+
+func (t *Table) GenRandValuesForCTE(cols []*Column) []string {
+	if len(cols) == 0 {
+		cols = t.Columns
+	}
+	row := make([]string, len(cols))
+	for i, c := range cols {
+		if !c.isNotNull && rand.Intn(30) == 0 {
+			row[i] = "null"
+		} else {
+			row[i] = RandomNums(0, 1, 1)[0]
+			if c.Tp != ColumnTypeInt {
+				row[i] = fmt.Sprintf("\"%s\"", row[i])
+			}
+		}
 	}
 	return row
 }

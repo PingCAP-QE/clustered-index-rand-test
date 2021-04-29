@@ -360,5 +360,8 @@ func PrintPredicateIn(cols []*Column, values [][]string) string {
 }
 
 func PrintColumnWithFunction(col *Column) string {
-	return fmt.Sprintf("%s + 1", col.Name)
+	if RandomBool() {
+		return fmt.Sprintf("%s + 1", col.Name)
+	}
+	return fmt.Sprintf("concat(%s, 1)", col.Name)
 }

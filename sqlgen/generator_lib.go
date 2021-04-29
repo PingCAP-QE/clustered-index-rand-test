@@ -73,6 +73,10 @@ func RandomBool() bool {
 	return rand.Intn(2) == 0
 }
 
+func ShouldValid(i int) bool {
+	return rand.Intn(100) < i
+}
+
 func If(condition bool, fn Fn) Fn {
 	if condition {
 		return fn
