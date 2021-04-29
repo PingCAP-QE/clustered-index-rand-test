@@ -1240,7 +1240,7 @@ func newGenerator(state *State) func() string {
 			OptIf(parentCTEColCount == 0,
 				And(
 					Str("order by"),
-					Str(colNames[0]),
+					Str(strings.Join(colNames, ",")),
 				),
 			),
 		)
