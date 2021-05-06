@@ -51,8 +51,9 @@ type Column struct {
 }
 
 type CTE struct {
-	Name string
-	Cols []*Column
+	Name   string
+	AsName string
+	Cols   []*Column
 }
 
 type Index struct {

@@ -1227,7 +1227,7 @@ func newGenerator(state *State) func() string {
 			ctes[i].AsName = fmt.Sprintf("cte_as_%d", state.AllocGlobalID(ScopeKeyCTEAsNameID))
 			cteNames = append(cteNames, fmt.Sprintf("%s as %s", ctes[i].Name, ctes[i].AsName))
 			for _, col := range ctes[i].Cols {
-				colNames = append(colNames,fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
+				colNames = append(colNames, fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
 			}
 		}
 
@@ -1331,7 +1331,7 @@ func newGenerator(state *State) func() string {
 					Str("select 1,"),
 					Str(strings.Join(fields, ",")),
 					Str("from"),
-					Str(tbl.Name),
+					Str(tbl.Name), // todo: it can refer the exist cte and the common table
 				).SetW(w.CTESimpleSeed),
 				cteStart,
 			)
@@ -1413,7 +1413,11 @@ func newGenerator(state *State) func() string {
 	})
 
 	synQueryPrimary = NewFn("synQueryPrimary", func() Fn {
-		return Str("select 1")
+		return Or(
+			Str("select 1"),
+			Str("select 1 as a group by a"),
+			Str("select 1 as a order by a"),
+		)
 	})
 
 	synWithListClause = NewFn("synWithListClause", func() Fn {
@@ -1425,7 +1429,10 @@ func newGenerator(state *State) func() string {
 
 	synCTE = NewFn("synCTE", func() Fn {
 		return And(
-			Str("cte as "),
+			Or(
+				Str("cte as "),
+				Str("cte (c1,c2) as "),
+			),
 			synQueryExpressionParens,
 		)
 	})
