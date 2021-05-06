@@ -231,6 +231,7 @@ const (
 	ScopeKeyPrepareID
 	ScopeUsePointGet
 	ScopeKeyCTEUniqID
+	ScopeKeyCTEAsNameID
 	ScopeKeyCTEValid
 	ScopeKeyCTESyntaxExprDeep
 	ScopeKeyCTESyntaxBodyDeep

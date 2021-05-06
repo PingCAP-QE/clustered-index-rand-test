@@ -1215,12 +1215,19 @@ func newGenerator(state *State) func() string {
 	simpleCTEQuery = NewFn("simpleCTEQuery", func() Fn {
 		parentCTEColCount := state.ParentCTEColCount()
 		ctes := state.PopCTE()
-		cteNames := make([]string, len(ctes))
+		cteNames := make([]string, 0, len(ctes))
 		colNames := make([]string, 0, len(ctes)*2)
+		if rand.Intn(10) == 0 {
+			c := rand.Intn(len(ctes))
+			for i := 0; i < c; i++ {
+				ctes = append(ctes, ctes[rand.Intn(len(ctes))])
+			}
+		}
 		for i := range ctes {
-			cteNames[i] = ctes[i].Name
+			ctes[i].AsName = fmt.Sprintf("cte_as_%d", state.AllocGlobalID(ScopeKeyCTEAsNameID))
+			cteNames = append(cteNames, fmt.Sprintf("%s as %s", ctes[i].Name, ctes[i].AsName))
 			for _, col := range ctes[i].Cols {
-				colNames = append(colNames, col.Name)
+				colNames = append(colNames,fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
 			}
 		}
 
