@@ -18,9 +18,22 @@ func GenNewTable(id int) *Table {
 	return newTbl
 }
 
+func randColumnType(w *Weight) (ctp ColumnType) {
+retry:
+	for {
+		ctp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+		for _, ignoredType := range w.CreateTable_IgnoredTypeCols {
+			if ignoredType == ctp {
+				continue retry
+			}
+		}
+		return ctp
+	}
+}
+
 func GenNewColumn(id int, w *Weight) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
-	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	col.Tp = randColumnType(w)
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	if w.CreateTable_MustStrCol {
