@@ -45,6 +45,7 @@ type Weight struct {
 	CreateTable_MustPrefixIndex bool
 	CreateTable_MustStrCol      bool
 	CreateTable_MustIntCol      bool
+	CreateTable_IgnoredTypeCols []ColumnType
 	Query                       int
 	Query_DML                   int
 	Query_Select                int
