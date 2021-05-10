@@ -1,7 +1,8 @@
 package sqlgen
 
 type State struct {
-	ctrl *ControlOption
+	ctrl        *ControlOption
+	fnListeners []ProductionListener
 
 	tables           []*Table
 	scope            []map[ScopeKeyType]ScopeObj
@@ -61,12 +62,18 @@ type Prepare struct {
 }
 
 func NewState(opts ...func(ctl *ControlOption)) *State {
-	s := &State{ctrl: DefaultControlOption()}
+	s := &State{
+		ctrl: DefaultControlOption(),
+	}
 	for _, opt := range opts {
 		opt(s.ctrl)
 	}
 	s.enabledClustered = s.ctrl.EnableTestTiFlash
+	s.fnListeners = []ProductionListener{&ScopeListener{state: s}}
 	s.CreateScope()
+	if s.ctrl.AttachToTxn {
+		s.fnListeners = append(s.fnListeners, &TxnListener{ctl: s.ctrl})
+	}
 	return s
 }
 
@@ -171,56 +178,56 @@ func (s *State) AllocGlobalID(key ScopeKeyType) int {
 	return result
 }
 
+var _ ProductionListener = (*ScopeListener)(nil)
+
 type ScopeListener struct {
 	state *State
 }
 
-func (s *ScopeListener) BeforeProductionGen(fn *Fn) {
+func (s *ScopeListener) BeforeProductionGen(fn Fn) Fn {
 	s.state.CreateScope()
+	return fn
 }
 
-func (s *ScopeListener) AfterProductionGen(fn *Fn, result *Result) {
+func (s *ScopeListener) AfterProductionGen(fn Fn, result string) string {
 	s.state.DestroyScope()
+	return result
 }
 
-func (s *ScopeListener) ProductionCancel(fn *Fn) {
-	return
-}
+var _ ProductionListener = (*PostListener)(nil)
 
 type PostListener struct {
 	callbacks map[string]func()
 }
 
-func (p *PostListener) BeforeProductionGen(fn *Fn) {}
-
-func (p *PostListener) AfterProductionGen(fn *Fn, result *Result) {
-	if f, ok := p.callbacks[fn.Name]; ok {
-		f()
-		delete(p.callbacks, fn.Name)
-	}
+func (p *PostListener) BeforeProductionGen(fn Fn) Fn {
+	return fn
 }
 
-func (p *PostListener) ProductionCancel(fn *Fn) {}
+func (p *PostListener) AfterProductionGen(fn Fn, result string) string {
+	return result
+}
 
 func (p *PostListener) Register(fnName string, fn func()) {
 	p.callbacks[fnName] = fn
 }
 
+var _ ProductionListener = (*DebugListener)(nil)
+
 type DebugListener struct {
 	parentsFn      []string
-	obtainedResult []*Result
+	obtainedResult []string
 }
 
-func (d *DebugListener) BeforeProductionGen(fn *Fn) {
-	d.parentsFn = append(d.parentsFn, fn.Name)
+func (d *DebugListener) BeforeProductionGen(fn Fn) Fn {
+	d.parentsFn = append(d.parentsFn, fn.Info)
+	return fn
 }
 
-func (d *DebugListener) AfterProductionGen(fn *Fn, result *Result) {
+func (d *DebugListener) AfterProductionGen(fn Fn, result string) string {
 	d.parentsFn = d.parentsFn[:len(d.parentsFn)-1]
 	d.obtainedResult = append(d.obtainedResult, result)
-}
-
-func (d *DebugListener) ProductionCancel(fn *Fn) {
+	return result
 }
 
 type TxnListener struct {
@@ -231,35 +238,21 @@ type TxnListener struct {
 
 const txnStartWrapName = "txnWrappedStart"
 
-func (s *TxnListener) BeforeProductionGen(fn *Fn) {
-	if fn.Name != "start" {
-		return
+func (s *TxnListener) BeforeProductionGen(fn Fn) Fn {
+	if fn.Info == start.Info {
+		return fn
 	}
-	actualFn := *fn
-	*fn = Fn{
-		Name: txnStartWrapName,
-		F: func() Result {
+	return Fn{
+		Info: txnStartWrapName,
+		Gen: func(state *State) string {
 			startTxnRs := s.startTxn()
-			if startTxnRs.Tp != PlainString {
-				return InvalidResult()
-			}
-			currRs := actualFn.F()
-			if currRs.Tp != PlainString {
-				return InvalidResult()
-			}
-			if len(startTxnRs.Value) == 0 {
-				return currRs
-			}
-			return Result{
-				Tp:    PlainString,
-				Value: startTxnRs.Value + " ; " + currRs.Value,
-			}
+			currRs := fn.Gen(state)
+			return startTxnRs + " ; " + currRs
 		},
 	}
-	return
 }
 
-func (s *TxnListener) startTxn() Result {
+func (s *TxnListener) startTxn() string {
 	fns := []Fn{
 		Empty().SetW(1),
 		And(
@@ -278,33 +271,23 @@ func (s *TxnListener) startTxn() Result {
 		chosenFn = fns[randomSelectByFactor(fns, func(f Fn) int {
 			return f.Weight
 		})]
-		if chosenFn.Name != Empty().Name {
+		if chosenFn.Equal(Empty()) {
 			s.inTxn = true
 			s.inflightStmts = 0
 		}
 	}
-	return evaluateFn(chosenFn)
+	return chosenFn.Eval(nil)
 }
 
-func (s *TxnListener) AfterProductionGen(fn *Fn, result *Result) {
-	if fn.Name != txnStartWrapName {
-		return
-	}
-	if result.Tp != PlainString {
-		return
+func (s *TxnListener) AfterProductionGen(fn Fn, result string) string {
+	if fn.Info != txnStartWrapName {
+		return result
 	}
 	endTxnRs := s.endTxn()
-	if endTxnRs.Tp != PlainString || len(endTxnRs.Value) == 0 {
-		return
-	}
-	*result = Result{
-		Tp:    result.Tp,
-		Value: result.Value + " ; " + endTxnRs.Value,
-	}
-	return
+	return result + " ; " + endTxnRs
 }
 
-func (s *TxnListener) endTxn() Result {
+func (s *TxnListener) endTxn() string {
 	fns := []Fn{
 		Empty(),
 		Or(
@@ -322,25 +305,17 @@ func (s *TxnListener) endTxn() Result {
 		}
 		outTxnW := s.inflightStmts
 		fnIdx = randomSelectByFactor(fns, func(f Fn) int {
-			if f.Name == Empty().Name {
+			if f.Equal(Empty()) {
 				return inTxnW
 			}
 			return outTxnW
 		})
 	}
 	chosenFn := fns[fnIdx]
-	if chosenFn.Name != Empty().Name {
+	if chosenFn.Equal(Empty()) {
 		s.inTxn = false
 	} else if s.inTxn {
 		s.inflightStmts++
 	}
-	rs := evaluateFn(chosenFn)
-	if rs.Tp == PlainString {
-		return rs
-	}
-	return InvalidResult()
-}
-
-func (s TxnListener) ProductionCancel(fn *Fn) {
-	return
+	return chosenFn.Eval(nil)
 }

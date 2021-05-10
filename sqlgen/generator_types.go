@@ -14,88 +14,104 @@
 package sqlgen
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"regexp"
+	"runtime"
 	"strings"
 )
 
-// ResultType is used to determine whether a Result is valid.
-type ResultType int
-
-const (
-	// Pending indicates the result is not evaluate yet.
-	Pending ResultType = iota
-	// PlainString indicates the result is a plain string
-	PlainString
-	// Invalid indicates the result is invalid.
-	Invalid
-)
-
-// Result stands for the result of Function evaluation.
-type Result struct {
-	Tp    ResultType
-	Value string
-}
-
-func InvalidResult() Result {
-	return innerInvalidResult
-}
-
-var innerInvalidResult = Result{Tp: Invalid}
-
-// InvalidFunc return a functions that returns invalid result.
-func InvalidFunc(msg string) func() Result {
-	return func() Result {
-		return Result{Tp: Invalid, Value: msg}
-	}
-}
-
-// StrResult returns a PlainString Result.
-func StrResult(str string) Result {
-	return Result{Tp: PlainString, Value: str}
-}
-
-// Fn is a callable object.
 type Fn struct {
-	Name       string
-	F          func() Result
-	Weight     int
-	EvalResult Result
+	Gen    func(state *State) string
+	Info   string
+	Weight int
 }
 
-func NewFn(name string, fn func() Fn) Fn {
+var newFnUsagePattern = regexp.MustCompile("(?P<VAR>(var)?).*(?P<FN>(:?)=\\s*NewFn)")
+
+// NewFn can only be used for
+func NewFn(fn func(state *State) Fn) Fn {
+	_, filePath, line, _ := runtime.Caller(1)
 	return Fn{
-		Name: name,
-		F: func() Result {
-			return evaluateFn(fn())
+		Info: constructFnInfo(filePath, line),
+		Gen: func(state *State) string {
+			return fn(state).Eval(state)
 		},
 		Weight: 1,
 	}
 }
 
-func (f Fn) SetW(weight int) Fn {
-	return Fn{
-		Name:   f.Name,
-		F:      f.F,
-		Weight: weight,
-	}
-}
-
-// Evaluate the productions in order from left to right. The result will be stored into a cache.
-func PreEvalWithOrder(fns ...*Fn) {
-	for _, f := range fns {
-		if f.EvalResult.Tp == Pending {
-			f.EvalResult = evaluateFn(*f)
+func constructFnInfo(filePath string, line int) string {
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0600)
+	Assert(err == nil)
+	sc := bufio.NewScanner(file)
+	currentLine := 0
+	for sc.Scan() {
+		currentLine++
+		if currentLine != line {
+			continue
+		}
+		result := extractVarName(sc.Text())
+		if result == "" {
+			return fmt.Sprintf("%s-%d", filePath, line)
 		}
 	}
+	return ""
+}
+
+func extractVarName(source string) string {
+	locs := newFnUsagePattern.FindStringSubmatchIndex(source)
+	ns := newFnUsagePattern.SubexpNames()
+	var varSymEnd, assignSymBegin int
+	if len(locs) > 0 {
+		for i, n := range ns {
+			if n == "VAR" {
+				varSymEnd = locs[i*2+1]
+			}
+			if n == "FN" {
+				assignSymBegin = locs[i*2]
+			}
+		}
+	}
+	if assignSymBegin != 0 {
+		ret := strings.Trim(source[varSymEnd:assignSymBegin], " ")
+		return ret
+	}
+	return ""
+}
+
+func (f Fn) Equal(other Fn) bool {
+	if f.Info == "" || other.Info == "" {
+		return false
+	}
+	return f.Info == other.Info
+}
+
+func (f Fn) SetW(weight int) Fn {
+	newFn := f
+	newFn.Weight = weight
+	return newFn
+}
+
+func (f Fn) Eval(state *State) string {
+	newFn := f
+	for _, l := range state.fnListeners {
+		newFn = l.BeforeProductionGen(newFn)
+	}
+	res := newFn.Gen(state)
+	for _, l := range state.fnListeners {
+		res = l.AfterProductionGen(newFn, res)
+	}
+	return res
 }
 
 // Str is a Fn which simply returns str.
 func Str(str string) Fn {
 	return Fn{
-		Name:   "_$str_fn",
 		Weight: 1,
-		F: func() Result {
-			return StrResult(str)
+		Gen: func(_ *State) string {
+			return str
 		}}
 }
 
@@ -105,7 +121,7 @@ func Strf(str string, fns ...Fn) Fn {
 	}
 	ss := strings.Split(str, "[%fn]")
 	if len(ss) != len(fns)+1 {
-		return InvalidFn("[param count mismatched] str: %s", str)
+		panic(fmt.Sprintf("[param count mismatched] str: %s", str))
 	}
 	strs := make([]Fn, 0, 2*len(ss)-1)
 	for i := 0; i < len(fns); i++ {
@@ -120,10 +136,9 @@ func Strf(str string, fns ...Fn) Fn {
 
 func Strs(strs ...string) Fn {
 	return Fn{
-		Name:   "_$str_fn",
 		Weight: 1,
-		F: func() Result {
-			return StrResult(strings.Join(strs, " "))
+		Gen: func(state *State) string {
+			return strings.Join(strs, " ")
 		},
 	}
 }
@@ -134,15 +149,10 @@ func Empty() Fn {
 }
 
 var innerEmptyFn = Fn{
-	Name:   "_$empty_fn",
 	Weight: 1,
-	F: func() Result {
-		return Result{Tp: PlainString, Value: ""}
+	Gen: func(state *State) string {
+		return ""
 	},
-}
-
-func IsEmptyFn(fn Fn) bool {
-	return fn.Name == "_$empty_fn"
 }
 
 func NoneFn() Fn {
@@ -151,15 +161,4 @@ func NoneFn() Fn {
 
 var innerNoneFn = Fn{
 	Weight: 1,
-	Name:   "_$none_fn",
-}
-
-func InvalidFn(msg string, params ...interface{}) Fn {
-	msg = fmt.Sprintf(msg, params...)
-	return Fn{
-		F: func() Result {
-			return Result{Tp: Invalid, Value: msg}
-		},
-		Weight: 1,
-	}
 }

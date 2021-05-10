@@ -1,6 +1,7 @@
 package sqlgen
 
 import (
+	"os"
 	"sort"
 )
 
@@ -19,6 +20,16 @@ func (s *State) InjectTodoSQL(sqls ...string) {
 
 func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
 	fn(s.ctrl)
+}
+
+func (s *State) AddListener(listener ProductionListener) {
+	s.fnListeners = append(s.fnListeners, listener)
+}
+
+func (s *State) SetInitialized() {
+	_ = os.RemoveAll(SelectOutFileDir)
+	_ = os.Mkdir(SelectOutFileDir, 0644)
+	s.finishInit = true
 }
 
 func (s *State) AppendTable(tbl *Table) {

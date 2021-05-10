@@ -14,27 +14,20 @@
 package sqlgen
 
 import (
-	"log"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-var GenPlugins []Plugin
-
-type Plugin interface{}
-
 type ProductionListener interface {
-	Plugin
-	BeforeProductionGen(fn *Fn)
-	AfterProductionGen(fn *Fn, result *Result)
-	ProductionCancel(fn *Fn)
+	BeforeProductionGen(fn Fn) Fn
+	AfterProductionGen(fn Fn, res string) string
 }
 
 func And(fn ...Fn) Fn {
-	return Fn{Name: "_$and_fn", Weight: 1, F: func() Result {
-		return collectResult(fn...)
+	return Fn{Weight: 1, Gen: func(state *State) string {
+		return collectResult(state, fn...)
 	}}
 }
 
@@ -89,20 +82,12 @@ func OptIf(condition bool, fn Fn) Fn {
 
 func Or(fns ...Fn) Fn {
 	fns = filterNoneFns(fns)
-	return Fn{Name: "_$or_fn", Weight: 1, F: func() Result {
-		for len(fns) > 0 {
-			randNum := randomSelectByFactor(fns, func(f Fn) int {
-				return f.Weight
-			})
-			chosenFn := fns[randNum]
-			rs := evaluateFn(chosenFn)
-			if rs.Tp == PlainString {
-				return rs
-			}
-			fns[0], fns[randNum] = fns[randNum], fns[0]
-			fns = fns[1:]
-		}
-		return InvalidResult()
+	return Fn{Weight: 1, Gen: func(state *State) string {
+		randNum := randomSelectByFactor(fns, func(f Fn) int {
+			return f.Weight
+		})
+		chosenFn := fns[randNum]
+		return chosenFn.Eval(state)
 	}}
 }
 
@@ -137,7 +122,8 @@ func Join(sep Fn, fns ...Fn) Fn {
 
 func filterNoneFns(fns []Fn) []Fn {
 	for i := 0; i < len(fns); i++ {
-		if fns[i].Name == NoneFn().Name {
+		isNoneFn := fns[i].Gen == nil
+		if isNoneFn {
 			fns[i], fns[len(fns)-1] = fns[len(fns)-1], fns[i]
 			fns = fns[:len(fns)-1]
 			i--
@@ -146,48 +132,18 @@ func filterNoneFns(fns []Fn) []Fn {
 	return fns
 }
 
-func collectResult(fns ...Fn) Result {
+func collectResult(state *State, fns ...Fn) string {
 	var doneF []Fn
 	var resStr strings.Builder
 	for i, f := range fns {
-		res := evaluateFn(f)
-		switch res.Tp {
-		case PlainString:
-			doneF = append(doneF, f)
-			resStr.WriteString(strings.Trim(res.Value, " "))
-			if i != len(fns) {
-				resStr.WriteString(" ")
-			}
-		case Invalid:
-			for _, df := range doneF {
-				forEachProdListener(func(p ProductionListener) {
-					p.ProductionCancel(&df)
-				})
-			}
-			return InvalidResult()
-		default:
-			log.Fatalf("Unsupport result type '%v'", res.Tp)
+		res := f.Eval(state)
+		doneF = append(doneF, f)
+		resStr.WriteString(strings.Trim(res, " "))
+		if i != len(fns) {
+			resStr.WriteString(" ")
 		}
 	}
-	return StrResult(resStr.String())
-}
-
-func evaluateFn(fn Fn) Result {
-	if fn.EvalResult.Tp != Pending {
-		return fn.EvalResult
-	}
-	if len(fn.Name) == 0 {
-		rs := fn.F()
-		return rs
-	}
-	forEachProdListener(func(p ProductionListener) {
-		p.BeforeProductionGen(&fn)
-	})
-	res := fn.F()
-	forEachProdListener(func(p ProductionListener) {
-		p.AfterProductionGen(&fn, &res)
-	})
-	return res
+	return resStr.String()
 }
 
 func randomSelectByFactor(fns []Fn, weightFn func(f Fn) int) int {
@@ -200,14 +156,6 @@ func randomSelectByFactor(fns []Fn, weightFn func(f Fn) int) int {
 		}
 	}
 	return len(fns) - 1
-}
-
-func forEachProdListener(fn func(ProductionListener)) {
-	for _, p := range GenPlugins {
-		if lp, ok := p.(ProductionListener); ok {
-			fn(lp)
-		}
-	}
 }
 
 func sumRandFactor(fs []Fn, weightFn func(f Fn) int) int {

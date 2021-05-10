@@ -3,25 +3,22 @@ package sqlgen
 import (
 	"fmt"
 	"math/rand"
-	"os"
 )
 
-func (s *State) IsInitializing() bool {
-	if s.finishInit {
-		return false
-	}
+func (s *State) Initialized() bool {
+	return s.finishInit
+}
+
+func (s *State) MeetInitializedDemand() bool {
 	if len(s.tables) < s.ctrl.InitTableCount {
-		return true
+		return false
 	}
 	for _, t := range s.tables {
 		if len(t.values) < s.ctrl.InitRowCount {
-			return true
+			return false
 		}
 	}
-	_ = os.RemoveAll(SelectOutFileDir)
-	_ = os.Mkdir(SelectOutFileDir, 0644)
-	s.finishInit = true
-	return false
+	return true
 }
 
 func (s *State) GetRandTable() *Table {

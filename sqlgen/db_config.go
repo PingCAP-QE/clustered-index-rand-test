@@ -38,7 +38,7 @@ type ControlOption struct {
 type Weight struct {
 	CreateTable                 int
 	CreateTable_WithClusterHint bool
-	CreateTable_MoreCol         int
+	CreateTable_MoreCol         int // deprecated, use CreateTable_MaxColumnCnt instead.
 	CreateTable_WithoutLike     int
 	CreateTable_Partition_Type  string
 	CreateTable_IndexMoreCol    int
@@ -46,6 +46,7 @@ type Weight struct {
 	CreateTable_MustStrCol      bool
 	CreateTable_MustIntCol      bool
 	CreateTable_IgnoredTypeCols []ColumnType
+	CreateTable_MaxColumnCnt    int
 	Query                       int
 	Query_DML                   int
 	Query_Select                int
@@ -103,6 +104,7 @@ var DefaultWeight = Weight{
 	CreateTable_Partition_Type:  "",
 	CreateTable_MustStrCol:      false,
 	CreateTable_MustIntCol:      false,
+	CreateTable_MaxColumnCnt:    10,
 	Query:                       15,
 	Query_DML:                   20,
 	Query_Select:                1,
