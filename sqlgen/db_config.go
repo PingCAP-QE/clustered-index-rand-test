@@ -39,7 +39,7 @@ type Weight struct {
 	CreateTable                 int
 	CreateTable_WithClusterHint bool
 	CreateTable_MoreCol         int // deprecated, use CreateTable_MaxColumnCnt instead.
-	CreateTable_WithoutLike     int
+	CreateTable_WithoutLike     int    // deprecated, it will be removed later.
 	CreateTable_Partition_Type  string // deprecated, use self-defined replacer instead.
 	CreateTable_IndexMoreCol    int    // deprecated, use self-defined replacer instead.
 	CreateTable_MustPrefixIndex bool
@@ -47,7 +47,7 @@ type Weight struct {
 	CreateTable_MustIntCol      bool
 	CreateTable_IgnoredTypeCols []ColumnType
 	CreateTable_MaxColumnCnt    int
-	Query                       int
+	Query                       int  // deprecated, it will be removed later.
 	Query_DML                   int
 	Query_Select                int
 	Query_DML_DEL               int

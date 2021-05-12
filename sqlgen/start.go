@@ -37,37 +37,18 @@ var start = NewFn(func(state *State) Fn {
 		switchRowFormatVer.SetW(w.SetRowFormat),
 		switchClustered.SetW(w.SetClustered),
 		adminCheck.SetW(w.AdminCheck),
-		If(len(state.tables) < state.ctrl.MaxTableNum,
-			Or(
-				createTable.SetW(w.CreateTable_WithoutLike),
-				createTableLike,
-			),
-		).SetW(w.CreateTable),
-		If(len(state.tables) > 0,
-			Or(
-				dmlStmt.SetW(w.Query_DML),
-				ddlStmt.SetW(w.Query_DDL),
-				splitRegion.SetW(w.Query_Split),
-				commonAnalyze.SetW(w.Query_Analyze),
-				prepareStmt.SetW(w.Query_Prepare),
-				If(len(state.prepareStmts) > 0,
-					deallocPrepareStmt,
-				).SetW(1),
-				If(state.ctrl.CanReadGCSavePoint,
-					flashBackTable,
-				).SetW(1),
-				If(state.ctrl.EnableSelectOutFileAndLoadData,
-					Or(
-						selectIntoOutFile.SetW(1),
-						If(!state.Search(ScopeKeyLastOutFileTable).IsNil(),
-							loadTable,
-						),
-					),
-				).SetW(1),
-				If(len(state.tables) > 2,
-					dropTable).SetW(1),
-			),
-		).SetW(w.Query),
+		createTable.SetW(w.CreateTable),
+		createTableLike.SetW(w.CreateTable),
+		dmlStmt.SetW(w.Query_DML),
+		ddlStmt.SetW(w.Query_DDL),
+		splitRegion.SetW(w.Query_Split),
+		commonAnalyze.SetW(w.Query_Analyze),
+		prepareStmt.SetW(w.Query_Prepare),
+		deallocPrepareStmt.SetW(1),
+		flashBackTable.SetW(1),
+		selectIntoOutFile.SetW(1),
+		loadTable.SetW(1),
+		dropTable.SetW(1),
 	)
 })
 
@@ -81,13 +62,13 @@ var initStart = NewFn(func(state *State) Fn {
 })
 
 var dmlStmt = NewFn(func(state *State) Fn {
-	Assert(len(state.tables) > 0)
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	w := state.ctrl.Weight
 	return Or(
 		query.SetW(w.Query_Select),
-		If(len(state.prepareStmts) > 0,
-			queryPrepare,
-		),
+		queryPrepare,
 		commonDelete.SetW(w.Query_DML_DEL),
 		commonInsert.SetW(w.Query_DML_INSERT),
 		commonUpdate.SetW(w.Query_DML_UPDATE),
@@ -95,20 +76,17 @@ var dmlStmt = NewFn(func(state *State) Fn {
 })
 
 var ddlStmt = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTable, NewScopeObj(tbl))
 	return Or(
 		addColumn,
 		addIndex,
-		If(len(tbl.Columns) > 1 && tbl.HasDroppableColumn(),
-			dropColumn,
-		),
-		If(len(tbl.Indices) > 0,
-			dropIndex,
-		),
-		If(state.ctrl.EnableColumnTypeChange,
-			alterColumn,
-		),
+		dropColumn,
+		dropIndex,
+		alterColumn,
 	)
 })
 
@@ -127,12 +105,17 @@ var switchClustered = NewFn(func(state *State) Fn {
 })
 
 var dropTable = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyLastDropTable, NewScopeObj(tbl))
 	return Strs("drop table", tbl.Name)
 })
 
 var flashBackTable = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables, CanReadGCSavePoint) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.Name))
 	return Or(
@@ -160,6 +143,9 @@ var adminCheck = NewFn(func(state *State) Fn {
 })
 
 var createTable = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(NoTooMuchTables) {
+		return None()
+	}
 	tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID))
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTable, NewScopeObj(tbl))
@@ -612,6 +598,9 @@ var commonUpdate = NewFn(func(state *State) Fn {
 })
 
 var commonAnalyze = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	return And(Str("analyze table"), Str(tbl.Name))
 })
@@ -758,6 +747,11 @@ var addIndex = NewFn(func(state *State) Fn {
 })
 
 var dropIndex = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		HasKey(ScopeKeyCurrentTable),
+		HasIndices) {
+		return None()
+	}
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
 	idx := tbl.GetRandomIndex()
 	tbl.RemoveIndex(idx)
@@ -778,6 +772,12 @@ var addColumn = NewFn(func(state *State) Fn {
 })
 
 var dropColumn = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		HasKey(ScopeKeyCurrentTable),
+		MoreThan1Columns,
+		HasDroppableColumn) {
+		return None()
+	}
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
 	col := tbl.GetRandDroppableColumn()
 	tbl.RemoveColumn(col)
@@ -788,19 +788,42 @@ var dropColumn = NewFn(func(state *State) Fn {
 })
 
 var alterColumn = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		HasKey(ScopeKeyCurrentTable),
+		EnableColumnTypeChange) {
+		return None()
+	}
+	return Or(
+		alterColumnModify,
+		alterColumnChange,
+	)
+})
+
+var alterColumnModify = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		HasKey(ScopeKeyCurrentTable),
+		EnableColumnTypeChange) {
+		return None()
+	}
+	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+	col := tbl.GetRandColumn()
+	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
+	newCol.Name = col.Name
+	tbl.ReplaceColumn(col, newCol)
+	return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
+})
+
+var alterColumnChange = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		HasKey(ScopeKeyCurrentTable),
+		EnableColumnTypeChange) {
+		return None()
+	}
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
 	col := tbl.GetRandColumn()
 	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
 	tbl.ReplaceColumn(col, newCol)
-	const modify, change = false, true
-	switch RandomBool() {
-	case modify:
-		newCol.Name = col.Name
-		return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
-	case change:
-		return Strs("alter table", tbl.Name, "change column", col.Name, newCol.Name, PrintColumnType(newCol))
-	}
-	return NeverReach()
+	return Strs("alter table", tbl.Name, "change column", col.Name, newCol.Name, PrintColumnType(newCol))
 })
 
 var multiTableQuery = NewFn(func(state *State) Fn {
@@ -1052,6 +1075,9 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 })
 
 var createTableLike = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(NoTooMuchTables) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	newTbl := tbl.Clone(func() int {
 		return state.AllocGlobalID(ScopeKeyTableUniqID)
@@ -1065,6 +1091,9 @@ var createTableLike = NewFn(func(state *State) Fn {
 })
 
 var selectIntoOutFile = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	state.StoreInRoot(ScopeKeyLastOutFileTable, NewScopeObj(tbl))
 	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
@@ -1072,6 +1101,9 @@ var selectIntoOutFile = NewFn(func(state *State) Fn {
 })
 
 var loadTable = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad, AlreadySelectOutfile) {
+		return None()
+	}
 	tbl := state.Search(ScopeKeyLastOutFileTable).ToTable()
 	id := state.Search(ScopeKeyTmpFileID).ToInt()
 	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, id))
@@ -1080,6 +1112,9 @@ var loadTable = NewFn(func(state *State) Fn {
 })
 
 var splitRegion = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	tbl := state.GetRandTable()
 	splitTablePrefix := fmt.Sprintf("split table %s", tbl.Name)
 
@@ -1128,6 +1163,9 @@ var splitRegion = NewFn(func(state *State) Fn {
 })
 
 var prepareStmt = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None()
+	}
 	prepare := GenNewPrepare(state.AllocGlobalID(ScopeKeyPrepareID))
 	state.AppendPrepare(prepare)
 	state.Store(ScopeKeyCurrentPrepare, NewScopeObj(prepare))
@@ -1141,13 +1179,18 @@ var prepareStmt = NewFn(func(state *State) Fn {
 })
 
 var deallocPrepareStmt = NewFn(func(state *State) Fn {
-	Assert(len(state.prepareStmts) > 0, state)
+	if !state.CheckAssumptions(HasTables, HasPreparedStmts) {
+		return None()
+	}
 	prepare := state.GetRandPrepare()
 	state.RemovePrepare(prepare)
 	return Strs("deallocate prepare", prepare.Name)
 })
 
 var queryPrepare = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables, HasPreparedStmts) {
+		return None()
+	}
 	Assert(len(state.prepareStmts) > 0, state)
 	prepare := state.GetRandPrepare()
 	assignments := prepare.GenAssignments()

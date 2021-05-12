@@ -218,7 +218,6 @@ const (
 	ScopeKeyCurrentTable ScopeKeyType = iota
 	ScopeKeyCurrentMultiTable
 	ScopeKeyCurrentPrepare
-	ScopeKeyLastDropTable
 	ScopeKeyCurrentPartitionColumn
 	ScopeKeyLastOutFileTable
 

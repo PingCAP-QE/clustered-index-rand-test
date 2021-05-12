@@ -61,6 +61,14 @@ func (s *State) RemovePrepare(p *Prepare) {
 	s.prepareStmts = append(s.prepareStmts[:pos], s.prepareStmts[pos+1:]...)
 }
 
+func (s *State) Invalidate() {
+	s.invalid = true
+}
+
+func (s *State) Recover() {
+	s.invalid = false
+}
+
 func (t *Table) AppendColumn(c *Column) {
 	t.Columns = append(t.Columns, c)
 	for i := range t.values {

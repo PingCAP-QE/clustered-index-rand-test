@@ -155,10 +155,8 @@ var innerEmptyFn = Fn{
 	},
 }
 
-func NoneFn() Fn {
+func None() Fn {
 	return innerNoneFn
 }
 
-var innerNoneFn = Fn{
-	Weight: 1,
-}
+var innerNoneFn = Str("")

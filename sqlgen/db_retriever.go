@@ -38,6 +38,10 @@ func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
 
+func (s *State) Valid() bool {
+	return s.invalid
+}
+
 func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }

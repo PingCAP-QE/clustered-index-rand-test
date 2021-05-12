@@ -65,7 +65,7 @@ func If(condition bool, fn Fn) Fn {
 	if condition {
 		return fn
 	}
-	return NoneFn()
+	return None()
 }
 
 func OptIf(condition bool, fn Fn) Fn {
@@ -76,13 +76,22 @@ func OptIf(condition bool, fn Fn) Fn {
 }
 
 func Or(fns ...Fn) Fn {
-	fns = filterNoneFns(fns)
 	return Fn{Weight: 1, Gen: func(state *State) string {
-		randNum := randomSelectByFactor(fns, func(f Fn) int {
-			return f.Weight
-		})
-		chosenFn := fns[randNum]
-		return chosenFn.Eval(state)
+		for len(fns) > 0 {
+			randNum := randomSelectByFactor(fns, func(f Fn) int {
+				return f.Weight
+			})
+			chosenFn := fns[randNum]
+			result := chosenFn.Eval(state)
+			if state.Valid() {
+				return result
+			}
+			state.Recover()
+			fns = append(fns[:randNum], fns[randNum+1:]...)
+		}
+		// Need backtracking.
+		state.Invalidate()
+		return ""
 	}}
 }
 
@@ -113,18 +122,6 @@ func Join(sep Fn, fns ...Fn) Fn {
 		}
 	}
 	return And(newFns...)
-}
-
-func filterNoneFns(fns []Fn) []Fn {
-	for i := 0; i < len(fns); i++ {
-		isNoneFn := fns[i].Gen == nil
-		if isNoneFn {
-			fns[i], fns[len(fns)-1] = fns[len(fns)-1], fns[i]
-			fns = fns[:len(fns)-1]
-			i--
-		}
-	}
-	return fns
 }
 
 func collectResult(state *State, fns ...Fn) string {

@@ -14,6 +14,7 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
+	invalid bool
 }
 
 type Table struct {
@@ -165,13 +166,6 @@ func (s *State) StoreConfig(key ConfigKeyType, val ScopeObj) {
 	s.config[key] = val
 }
 
-func (s *State) StoreInParent(key ScopeKeyType, val ScopeObj) {
-	Assert(len(s.scope) > 1, "cannot StoreInParent in the root scope")
-	Assert(!val.IsNil(), "storing a nil object")
-	current := s.scope[len(s.scope)-2]
-	current[key] = val
-}
-
 func (s *State) StoreInRoot(key ScopeKeyType, val ScopeObj) {
 	s.scope[0][key] = val
 }
@@ -202,11 +196,6 @@ func (s *State) SearchConfig(key ConfigKeyType) ScopeObj {
 
 func (s *State) Exists(key ScopeKeyType) bool {
 	return !s.Search(key).IsNil()
-}
-
-func (s *State) CreateScopeAndStore(key ScopeKeyType, val ScopeObj) {
-	s.CreateScope()
-	s.Store(key, val)
 }
 
 func (s *State) AllocGlobalID(key ScopeKeyType) int {
