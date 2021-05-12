@@ -64,6 +64,8 @@ var start = NewFn(func(state *State) Fn {
 						),
 					),
 				).SetW(1),
+				If(len(state.tables) > 2,
+					dropTable).SetW(1),
 			),
 		).SetW(w.Query),
 	)
@@ -119,10 +121,8 @@ var switchRowFormatVer = NewFn(func(state *State) Fn {
 
 var switchClustered = NewFn(func(state *State) Fn {
 	if RandomBool() {
-		state.enabledClustered = false
 		return Str("set @@global.tidb_enable_clustered_index = 0")
 	}
-	state.enabledClustered = true
 	return Str("set @@global.tidb_enable_clustered_index = 1")
 })
 
@@ -160,127 +160,123 @@ var adminCheck = NewFn(func(state *State) Fn {
 })
 
 var createTable = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID))
 	state.AppendTable(tbl)
-	var colDefs = NewFn(func(state *State) Fn {
-		var colDef = NewFn(func(state *State) Fn {
-			col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
-			tbl.AppendColumn(col)
-			return And(Str(col.Name), Str(PrintColumnType(col)))
-		})
-		if !state.Initialized() {
-			return Repeat(colDef, state.ctrl.InitColCount, Str(","))
-		}
-		return RepeatRange(1, w.CreateTable_MaxColumnCnt, colDef, Str(","))
-	})
-	var idxDefs = NewFn(func(state *State) Fn {
-		var idxDef = NewFn(func(state *State) Fn {
-			idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
-			if idx.IsUnique() {
-				partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn)
-				if !partitionedCol.IsNil() {
-					// all partitioned Columns should be contained in every unique/primary index.
-					c := partitionedCol.ToColumn()
-					Assert(c != nil)
-					idx.AppendColumnIfNotExists(c)
-				}
-			}
-			tbl.AppendIndex(idx)
-			clusteredKeyword := "/*T![clustered_index] clustered */"
-			return And(
-				Str(PrintIndexType(idx)),
-				Str("key"),
-				Str(idx.Name),
-				Str("("),
-				Str(PrintIndexColumnNames(idx)),
-				Str(")"),
-				OptIf(idx.Tp == IndexTypePrimary && w.CreateTable_WithClusterHint, Str(clusteredKeyword)),
-			)
-		})
-		return RepeatRange(1, w.CreateTable_IndexMoreCol, idxDef, Str(","))
-	})
-
-	var partitionDef = NewFn(func(state *State) Fn {
-		partitionedCol := tbl.GetRandColumnForPartition()
-		if partitionedCol == nil {
-			return Empty()
-		}
-		state.StoreInParent(ScopeKeyCurrentPartitionColumn, NewScopeObj(partitionedCol))
-		tbl.AppendPartitionColumn(partitionedCol)
-		const hashPart, rangePart, listPart = 0, 1, 2
-		randN := rand.Intn(6)
-		switch w.CreateTable_Partition_Type {
-		case "hash":
-			randN = hashPart
-		case "list":
-			randN = listPart
-		case "range":
-			randN = rangePart
-		}
-		switch randN {
-		case hashPart:
-			partitionNum := RandomNum(1, 6)
-			return And(
-				Str("partition by"),
-				Str("hash("),
-				Str(partitionedCol.Name),
-				Str(")"),
-				Str("partitions"),
-				Str(partitionNum),
-			)
-		case rangePart:
-			partitionCount := rand.Intn(5) + 1
-			vals := partitionedCol.RandomValuesAsc(partitionCount)
-			if rand.Intn(2) == 0 {
-				partitionCount++
-				vals = append(vals, "maxvalue")
-			}
-			return Strs(
-				"partition by range (",
-				partitionedCol.Name, ") (",
-				PrintRangePartitionDefs(vals),
-				")",
-			)
-		case listPart:
-			listVals := partitionedCol.RandomValuesAsc(20)
-			listGroups := RandomGroups(listVals, rand.Intn(3)+1)
-			return Strs(
-				"partition by",
-				"list(",
-				partitionedCol.Name,
-				") (",
-				PrintListPartitionDefs(listGroups),
-				")",
-			)
-		default:
-			return Empty()
-		}
-	})
+	state.Store(ScopeKeyCurrentTable, NewScopeObj(tbl))
 	if state.ctrl.EnableTestTiFlash {
 		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
-	indexOpt := 10
-	if w.Query_INDEX_MERGE {
-		indexOpt = 1000000
+	// The eval order matters because the dependency is colDefs <- partitionDef <- idxDefs.
+	eColDefs := colDefs.Eval(state)
+	state.Store(ScopeKeyCurrentPartitionColumn, NewScopeObj(tbl.GetRandColumnForPartition()))
+	ePartitionDef := partitionDef.Eval(state)
+	eIdxDefs := idxDefs.Eval(state)
+	return Strs("create table", tbl.Name, "(", eColDefs, eIdxDefs, ")", ePartitionDef)
+})
+
+var colDefs = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentTable).IsNil())
+	if !state.Initialized() {
+		return Repeat(colDef, state.ctrl.InitColCount, Str(","))
 	}
-	eColDefs := Str(colDefs.Eval(state))
-	ePartitionDef := Str(partitionDef.Eval(state))
-	eIdxDefs := Str(idxDefs.Eval(state))
+	return RepeatRange(1, 10, colDef, Str(","))
+})
+
+var colDef = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentTable).IsNil())
+	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+	col := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
+	tbl.AppendColumn(col)
+	return And(Str(col.Name), Str(PrintColumnType(col)))
+})
+
+var idxDefs = NewFn(func(state *State) Fn {
+	Assert(state.Exists(ScopeKeyCurrentTable))
+	if RandomBool() {
+		return Empty()
+	}
 	return And(
-		Str("create table"),
-		Str(tbl.Name),
-		Str("("),
-		eColDefs,
-		OptIf(rand.Intn(indexOpt) != 0,
-			And(
-				Str(","),
-				eIdxDefs,
-			),
+		Str(","),
+		RepeatRange(1, 4, idxDef, Str(",")),
+	)
+})
+
+var idxDef = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentTable).IsNil())
+	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+	idx := GenNewIndex(state, state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+	if idx.IsUnique() && state.Exists(ScopeKeyCurrentPartitionColumn) {
+		partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+		// all partitioned Columns should be contained in every unique/primary index.
+		idx.AppendColumnIfNotExists(partitionedCol)
+	}
+	tbl.AppendIndex(idx)
+	return And(
+		Str(PrintIndexType(idx)), Str("key"), Str(idx.Name),
+		Str("("), Str(PrintIndexColumnNames(idx)), Str(")"),
+		OptIf(idx.Tp == IndexTypePrimary && state.ExistsConfig(ConfigKeyUnitPKNeedClusteredHint),
+			Str("/*T![clustered_index] clustered */"),
 		),
+	)
+})
+
+var partitionDef = NewFn(func(state *State) Fn {
+	Assert(state.Exists(ScopeKeyCurrentTable))
+	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+	if !state.Exists(ScopeKeyCurrentPartitionColumn) {
+		return Empty()
+	}
+	partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+	tbl.AppendPartitionColumn(partitionedCol)
+	return Or(
+		Empty(),
+		partitionDefHash,
+		partitionDefRange,
+		partitionDefList,
+	)
+})
+
+var partitionDefHash = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentPartitionColumn).IsNil())
+	partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+	partitionNum := RandomNum(1, 6)
+	return And(
+		Str("partition by hash ("),
+		Str(partitionedCol.Name),
 		Str(")"),
-		ePartitionDef,
+		Str("partitions"),
+		Str(partitionNum),
+	)
+})
+
+var partitionDefRange = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentPartitionColumn).IsNil())
+	partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+	partitionCount := rand.Intn(5) + 1
+	vals := partitionedCol.RandomValuesAsc(partitionCount)
+	if rand.Intn(2) == 0 {
+		partitionCount++
+		vals = append(vals, "maxvalue")
+	}
+	return Strs(
+		"partition by range (",
+		partitionedCol.Name, ") (",
+		PrintRangePartitionDefs(vals),
+		")",
+	)
+})
+
+var partitionDefList = NewFn(func(state *State) Fn {
+	Assert(!state.Search(ScopeKeyCurrentPartitionColumn).IsNil())
+	partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+	listVals := partitionedCol.RandomValuesAsc(20)
+	listGroups := RandomGroups(listVals, rand.Intn(3)+1)
+	return Strs(
+		"partition by list (",
+		partitionedCol.Name, ") (",
+		PrintListPartitionDefs(listGroups),
+		")",
 	)
 })
 
@@ -750,9 +746,8 @@ var maybeLimit = NewFn(func(state *State) Fn {
 })
 
 var addIndex = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-	idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl, w)
+	idx := GenNewIndex(state, state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
 	tbl.AppendIndex(idx)
 
 	return Strs(
@@ -773,9 +768,8 @@ var dropIndex = NewFn(func(state *State) Fn {
 })
 
 var addColumn = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
-	col := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
+	col := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -794,10 +788,9 @@ var dropColumn = NewFn(func(state *State) Fn {
 })
 
 var alterColumn = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTable).ToTable()
 	col := tbl.GetRandColumn()
-	newCol := GenNewColumn(state.AllocGlobalID(ScopeKeyColumnUniqID), w)
+	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
 	tbl.ReplaceColumn(col, newCol)
 	const modify, change = false, true
 	switch RandomBool() {

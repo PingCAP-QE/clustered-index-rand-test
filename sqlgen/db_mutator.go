@@ -22,8 +22,18 @@ func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
 	fn(s.ctrl)
 }
 
-func (s *State) AddListener(listener ProductionListener) {
-	s.fnListeners = append(s.fnListeners, listener)
+func (s *State) AppendHook(hook FnEvaluateHook) {
+	s.hooks = append(s.hooks, hook)
+}
+
+func (s *State) ReplaceHook(hook FnEvaluateHook) {
+	for i, h := range s.hooks {
+		if h.Info() == hook.Info() {
+			s.hooks[i] = hook
+			return
+		}
+	}
+	s.AppendHook(hook)
 }
 
 func (s *State) SetInitialized() {

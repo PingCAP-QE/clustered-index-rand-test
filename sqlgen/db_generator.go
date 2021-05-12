@@ -31,15 +31,16 @@ retry:
 	}
 }
 
-func GenNewColumn(id int, w *Weight) *Column {
+func GenNewColumn(state *State, id int) *Column {
 	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
-	col.Tp = randColumnType(w)
+	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	if w.CreateTable_MustStrCol {
+	cfgColTp := state.SearchConfig(ConfigKeyUnitColumnType).ToStringOrDefault("")
+	if cfgColTp == "string" {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}
-	if w.CreateTable_MustIntCol {
+	if cfgColTp == "int" {
 		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
 	}
 	switch col.Tp {
@@ -80,53 +81,60 @@ func GenNewColumn(id int, w *Weight) *Column {
 	return col
 }
 
-func GenNewIndex(id int, tbl *Table, w *Weight) *Index {
+func GenNewIndex(state *State, id int, tbl *Table) *Index {
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	totalCols := tbl.cloneColumns()
-	try := 10
-	for {
-		chosenIdx := rand.Intn(len(totalCols))
-		chosenCol := totalCols[chosenIdx]
-		if w.Query_INDEX_MERGE {
-			// Make sure the first column is index-able.
-			if (chosenCol.Tp == ColumnTypeBit || chosenCol.Tp == ColumnTypeSet || chosenCol.Tp == ColumnTypeEnum) && len(idx.Columns) == 0 && try != 0 {
-				try--
-				continue
-			}
+	var totalCols []*Column
+	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
+		// Make sure the first column is not bit || enum || set.
+		firstColCandidates := tbl.FilterColumns(func(c *Column) bool {
+			return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
+		})
+		if len(firstColCandidates) == 0 {
+			totalCols = tbl.GetRandColumnsNonEmpty()
 		}
-		totalCols[0], totalCols[chosenIdx] = totalCols[chosenIdx], totalCols[0]
-		totalCols = totalCols[1:]
+		totalCols = append(totalCols, firstColCandidates[rand.Intn(len(firstColCandidates))])
+		totalCols = append(totalCols, tbl.GetRandColumns()...)
+	} else {
+		totalCols = tbl.GetRandColumnsNonEmpty()
+	}
+	idx.Columns = LimitIndexColumnSize(totalCols)
+	idx.ColumnPrefix = GenPrefixLen(state, totalCols)
+	idx.Tp = GenIndexType(tbl, idx)
+	return idx
+}
 
-		idx.Columns = append(idx.Columns, chosenCol)
-		prefixLen := 0
-		if chosenCol.Tp.NeedKeyLength() ||
-			(chosenCol.Tp.IsStringType() && (w.CreateTable_MustPrefixIndex || rand.Intn(4) == 0)) {
-			maxPrefix := mathutil.Min(chosenCol.arg1, 5)
-			prefixLen = 1 + rand.Intn(maxPrefix+1)
+func GenPrefixLen(state *State, cols []*Column) []int {
+	prefixLens := make([]int, len(cols))
+	for i, c := range cols {
+		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() &&
+			state.Roll(ConfigKeyProbabilityIndexPrefix, 20*Percent)) {
+			maxPrefix := mathutil.Min(c.arg1, 5)
+			prefixLens[i] = 1 + rand.Intn(maxPrefix+1)
 		}
-		idx.ColumnPrefix = append(idx.ColumnPrefix, prefixLen)
-		keySizeInBytes := 0
-		for _, c := range idx.Columns {
-			keySizeInBytes += c.EstimateSizeInBytes()
-		}
-		if keySizeInBytes > DefaultKeySize {
-			Assert(len(idx.Columns) > 1, keySizeInBytes, idx.Columns, "one column key size should not > 3072")
-			idx.Columns = idx.Columns[:len(idx.Columns)-1]
-			idx.ColumnPrefix = idx.ColumnPrefix[:len(idx.ColumnPrefix)-1]
-			break
-		}
-		if len(totalCols) == 0 || RandomBool() {
+	}
+	return prefixLens
+}
+
+func LimitIndexColumnSize(cols []*Column) []*Column {
+	maxIdx, keySize := len(cols), 0
+	for i, c := range cols {
+		keySize += c.EstimateSizeInBytes()
+		if keySize > DefaultKeySize {
+			maxIdx = i - 1
 			break
 		}
 	}
+	return cols[:maxIdx]
+}
+
+func GenIndexType(tbl *Table, idx *Index) IndexType {
 	if !tbl.containsPK && !idx.HasDefaultNullColumn() {
 		tbl.containsPK = true
-		idx.Tp = IndexTypePrimary
+		return IndexTypePrimary
 	} else {
 		// Exclude primary key type.
-		idx.Tp = IndexType(rand.Intn(int(IndexTypePrimary)))
+		return IndexType(rand.Intn(int(IndexTypePrimary)))
 	}
-	return idx
 }
 
 func GenNewPrepare(id int) *Prepare {

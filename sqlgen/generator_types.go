@@ -28,8 +28,6 @@ type Fn struct {
 	Weight int
 }
 
-var newFnUsagePattern = regexp.MustCompile("(?P<VAR>(var)?).*(?P<FN>(:?)=\\s*NewFn)")
-
 // NewFn can only be used for
 func NewFn(fn func(state *State) Fn) Fn {
 	_, filePath, line, _ := runtime.Caller(1)
@@ -59,6 +57,8 @@ func constructFnInfo(filePath string, line int) string {
 	}
 	return ""
 }
+
+var newFnUsagePattern = regexp.MustCompile("(?P<VAR>(var)?).*(?P<FN>(:?)=\\s*NewFn)")
 
 func extractVarName(source string) string {
 	locs := newFnUsagePattern.FindStringSubmatchIndex(source)
@@ -96,12 +96,12 @@ func (f Fn) SetW(weight int) Fn {
 
 func (f Fn) Eval(state *State) string {
 	newFn := f
-	for _, l := range state.fnListeners {
-		newFn = l.BeforeProductionGen(newFn)
+	for _, l := range state.hooks {
+		newFn = l.BeforeEvaluate(newFn)
 	}
 	res := newFn.Gen(state)
-	for _, l := range state.fnListeners {
-		res = l.AfterProductionGen(newFn, res)
+	for _, l := range state.hooks {
+		res = l.AfterEvaluate(newFn, res)
 	}
 	return res
 }

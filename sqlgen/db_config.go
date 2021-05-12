@@ -40,8 +40,8 @@ type Weight struct {
 	CreateTable_WithClusterHint bool
 	CreateTable_MoreCol         int // deprecated, use CreateTable_MaxColumnCnt instead.
 	CreateTable_WithoutLike     int
-	CreateTable_Partition_Type  string
-	CreateTable_IndexMoreCol    int
+	CreateTable_Partition_Type  string // deprecated, use self-defined replacer instead.
+	CreateTable_IndexMoreCol    int    // deprecated, use self-defined replacer instead.
 	CreateTable_MustPrefixIndex bool
 	CreateTable_MustStrCol      bool
 	CreateTable_MustIntCol      bool

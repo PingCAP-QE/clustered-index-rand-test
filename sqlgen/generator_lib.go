@@ -20,11 +20,6 @@ import (
 	"strings"
 )
 
-type ProductionListener interface {
-	BeforeProductionGen(fn Fn) Fn
-	AfterProductionGen(fn Fn, res string) string
-}
-
 func And(fn ...Fn) Fn {
 	return Fn{Weight: 1, Gen: func(state *State) string {
 		return collectResult(state, fn...)

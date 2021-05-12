@@ -2,7 +2,6 @@ package sqlgen
 
 import (
 	"fmt"
-
 	"github.com/cznic/mathutil"
 )
 
@@ -231,6 +230,19 @@ const (
 	ScopeUsePointGet
 )
 
+type ConfigKeyType int64
+
+const (
+	ConfigKeyNone ConfigKeyType = iota
+	ConfigKeyProbabilityIndexPrefix
+	ConfigKeyUnitFirstColumnIndexable
+	ConfigKeyUnitPKNeedClusteredHint
+	ConfigKeyUnitColumnType // value should be "int" or "string".
+)
+
 const DefaultKeySize = 3072
+
+const Percent = 1
+const ProbabilityMax = 100 * Percent
 
 const SelectOutFileDir = "/tmp/tidb_tp_test_outfile"

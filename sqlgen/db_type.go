@@ -1,12 +1,14 @@
 package sqlgen
 
-type State struct {
-	ctrl        *ControlOption
-	fnListeners []ProductionListener
+import "math/rand"
 
-	tables           []*Table
-	scope            []map[ScopeKeyType]ScopeObj
-	enabledClustered bool
+type State struct {
+	ctrl  *ControlOption
+	hooks []FnEvaluateHook
+
+	tables []*Table
+	scope  []map[ScopeKeyType]ScopeObj
+	config map[ConfigKeyType]ScopeObj
 
 	prepareStmts []*Prepare
 
@@ -68,12 +70,12 @@ func NewState(opts ...func(ctl *ControlOption)) *State {
 	for _, opt := range opts {
 		opt(s.ctrl)
 	}
-	s.enabledClustered = s.ctrl.EnableTestTiFlash
-	s.fnListeners = []ProductionListener{&ScopeListener{state: s}}
-	s.CreateScope()
+	s.CreateScope() // create a root scope.
+	s.AppendHook(NewFnHookScope(s))
 	if s.ctrl.AttachToTxn {
-		s.fnListeners = append(s.fnListeners, &TxnListener{ctl: s.ctrl})
+		s.AppendHook(NewFnHookTxnWrap(s.ctrl))
 	}
+	setupReplacer(s)
 	return s
 }
 
@@ -115,6 +117,24 @@ func (s ScopeObj) ToInt() int {
 	return s.obj.(int)
 }
 
+func (s ScopeObj) ToString() string {
+	return s.obj.(string)
+}
+
+func (s ScopeObj) ToIntOrDefault(defau1t int) int {
+	if s.obj == nil {
+		return defau1t
+	}
+	return s.ToInt()
+}
+
+func (s ScopeObj) ToStringOrDefault(defau1t string) string {
+	if s.obj == nil {
+		return defau1t
+	}
+	return s.ToString()
+}
+
 func (s ScopeObj) ToColumns() []*Column {
 	return s.obj.([]*Column)
 }
@@ -140,6 +160,11 @@ func (s *State) Store(key ScopeKeyType, val ScopeObj) {
 	current[key] = val
 }
 
+func (s *State) StoreConfig(key ConfigKeyType, val ScopeObj) {
+	Assert(!val.IsNil(), "storing a nil object")
+	s.config[key] = val
+}
+
 func (s *State) StoreInParent(key ScopeKeyType, val ScopeObj) {
 	Assert(len(s.scope) > 1, "cannot StoreInParent in the root scope")
 	Assert(!val.IsNil(), "storing a nil object")
@@ -161,6 +186,24 @@ func (s *State) Search(key ScopeKeyType) ScopeObj {
 	return ScopeObj{}
 }
 
+func (s *State) Roll(key ConfigKeyType, defaultVal int) bool {
+	baseline := s.config[key].ToIntOrDefault(defaultVal)
+	return rand.Intn(ProbabilityMax) < baseline
+}
+
+func (s *State) ExistsConfig(key ConfigKeyType) bool {
+	_, ok := s.config[key]
+	return ok
+}
+
+func (s *State) SearchConfig(key ConfigKeyType) ScopeObj {
+	return s.config[key]
+}
+
+func (s *State) Exists(key ScopeKeyType) bool {
+	return !s.Search(key).IsNil()
+}
+
 func (s *State) CreateScopeAndStore(key ScopeKeyType, val ScopeObj) {
 	s.CreateScope()
 	s.Store(key, val)
@@ -176,146 +219,4 @@ func (s *State) AllocGlobalID(key ScopeKeyType) int {
 	}
 	s.scope[0][key] = NewScopeObj(result + 1)
 	return result
-}
-
-var _ ProductionListener = (*ScopeListener)(nil)
-
-type ScopeListener struct {
-	state *State
-}
-
-func (s *ScopeListener) BeforeProductionGen(fn Fn) Fn {
-	s.state.CreateScope()
-	return fn
-}
-
-func (s *ScopeListener) AfterProductionGen(fn Fn, result string) string {
-	s.state.DestroyScope()
-	return result
-}
-
-var _ ProductionListener = (*PostListener)(nil)
-
-type PostListener struct {
-	callbacks map[string]func()
-}
-
-func (p *PostListener) BeforeProductionGen(fn Fn) Fn {
-	return fn
-}
-
-func (p *PostListener) AfterProductionGen(fn Fn, result string) string {
-	return result
-}
-
-func (p *PostListener) Register(fnName string, fn func()) {
-	p.callbacks[fnName] = fn
-}
-
-var _ ProductionListener = (*DebugListener)(nil)
-
-type DebugListener struct {
-	parentsFn      []string
-	obtainedResult []string
-}
-
-func (d *DebugListener) BeforeProductionGen(fn Fn) Fn {
-	d.parentsFn = append(d.parentsFn, fn.Info)
-	return fn
-}
-
-func (d *DebugListener) AfterProductionGen(fn Fn, result string) string {
-	d.parentsFn = d.parentsFn[:len(d.parentsFn)-1]
-	d.obtainedResult = append(d.obtainedResult, result)
-	return result
-}
-
-type TxnListener struct {
-	inTxn         bool
-	inflightStmts int
-	ctl           *ControlOption
-}
-
-const txnStartWrapName = "txnWrappedStart"
-
-func (s *TxnListener) BeforeProductionGen(fn Fn) Fn {
-	if fn.Info == start.Info {
-		return fn
-	}
-	return Fn{
-		Info: txnStartWrapName,
-		Gen: func(state *State) string {
-			startTxnRs := s.startTxn()
-			currRs := fn.Gen(state)
-			return startTxnRs + " ; " + currRs
-		},
-	}
-}
-
-func (s *TxnListener) startTxn() string {
-	fns := []Fn{
-		Empty().SetW(1),
-		And(
-			Str("begin"),
-			Or(
-				Str("pessimistic"),
-				Str("optimistic"),
-			),
-		).SetW(1),
-	}
-	var chosenFn Fn
-	if s.inTxn {
-		// inside txn, never begin again.
-		chosenFn = fns[0]
-	} else {
-		chosenFn = fns[randomSelectByFactor(fns, func(f Fn) int {
-			return f.Weight
-		})]
-		if chosenFn.Equal(Empty()) {
-			s.inTxn = true
-			s.inflightStmts = 0
-		}
-	}
-	return chosenFn.Eval(nil)
-}
-
-func (s *TxnListener) AfterProductionGen(fn Fn, result string) string {
-	if fn.Info != txnStartWrapName {
-		return result
-	}
-	endTxnRs := s.endTxn()
-	return result + " ; " + endTxnRs
-}
-
-func (s *TxnListener) endTxn() string {
-	fns := []Fn{
-		Empty(),
-		Or(
-			Str("commit"),
-			Str("rollback"),
-		),
-	}
-	var fnIdx int
-	if !s.inTxn {
-		fnIdx = 0
-	} else {
-		inTxnW := s.ctl.MaxTxnStmtCount - s.inflightStmts
-		if inTxnW < 0 {
-			inTxnW = 0
-		}
-		outTxnW := s.inflightStmts
-		fnIdx = randomSelectByFactor(fns, func(f Fn) int {
-			if f.Equal(Empty()) {
-				return inTxnW
-			}
-			return outTxnW
-		})
-	}
-	chosenFn := fns[fnIdx]
-	if chosenFn.Equal(Empty()) {
-		s.inTxn = false
-	} else if s.inTxn {
-		s.inflightStmts++
-	}
-	return chosenFn.Eval(nil)
 }
