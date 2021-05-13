@@ -36,7 +36,7 @@ func GenNewColumn(state *State, id int) *Column {
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	cfgColTp := state.SearchConfig(ConfigKeyUnitColumnType).ToStringOrDefault("")
+	cfgColTp := state.SearchConfig(ConfigKeyEnumColumnType).ToStringOrDefault("")
 	if cfgColTp == "string" {
 		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
 	}

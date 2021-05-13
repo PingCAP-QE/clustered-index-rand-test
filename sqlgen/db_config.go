@@ -38,7 +38,7 @@ type ControlOption struct {
 type Weight struct {
 	CreateTable                 int
 	CreateTable_WithClusterHint bool
-	CreateTable_MoreCol         int // deprecated, use CreateTable_MaxColumnCnt instead.
+	CreateTable_MoreCol         int    // deprecated, use CreateTable_MaxColumnCnt instead.
 	CreateTable_WithoutLike     int    // deprecated, it will be removed later.
 	CreateTable_Partition_Type  string // deprecated, use self-defined replacer instead.
 	CreateTable_IndexMoreCol    int    // deprecated, use self-defined replacer instead.
@@ -47,7 +47,7 @@ type Weight struct {
 	CreateTable_MustIntCol      bool
 	CreateTable_IgnoredTypeCols []ColumnType
 	CreateTable_MaxColumnCnt    int
-	Query                       int  // deprecated, it will be removed later.
+	Query                       int // deprecated, it will be removed later.
 	Query_DML                   int
 	Query_Select                int
 	Query_DML_DEL               int
@@ -65,8 +65,9 @@ type Weight struct {
 	Query_Split                 int
 	Query_Analyze               int
 	Query_Prepare               int
-	Query_HasLimit              int
-	Query_HasOrderby            int
+	Query_HasLimit              int // deprecated, use has_order_limit instead.
+	Query_HasOrderby            int // deprecated, use has_order_limit instead.
+	Query_OrderLimit            string
 	Query_INDEX_MERGE           bool
 	SetRowFormat                int
 	SetClustered                int
@@ -125,6 +126,7 @@ var DefaultWeight = Weight{
 	Query_Prepare:               2,
 	Query_HasLimit:              0,
 	Query_HasOrderby:            0,
+	Query_OrderLimit:            "none",
 	SetClustered:                1,
 	SetRowFormat:                1,
 	AdminCheck:                  1,

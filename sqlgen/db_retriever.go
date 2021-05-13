@@ -42,6 +42,19 @@ func (s *State) Valid() bool {
 	return s.invalid
 }
 
+type Tables []*Table
+
+func (ts Tables) PickOne() *Table {
+	return ts[rand.Intn(len(ts))]
+}
+
+func (ts Tables) One() *Table {
+	if len(ts) > 1 {
+		NeverReach()
+	}
+	return ts[0]
+}
+
 func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }

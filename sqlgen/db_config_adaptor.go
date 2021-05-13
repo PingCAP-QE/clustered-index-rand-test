@@ -18,7 +18,7 @@ func setPartitionType(repl *FnHookReplacer, tp string) {
 	}
 	Assert(tp == "hash" || tp == "range" || tp == "list")
 	repl.Replace(partitionDef, NewFn(func(state *State) Fn {
-		tbl := state.Search(ScopeKeyCurrentTable).ToTable()
+		tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 		partCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
 		tbl.AppendPartitionColumn(partCol)
 		switch tp {
@@ -36,7 +36,7 @@ func setPartitionType(repl *FnHookReplacer, tp string) {
 func setIndexColumnCountHint(repl *FnHookReplacer, more int, must bool) {
 	Assert(more >= 1)
 	repl.Replace(idxDefs, NewFn(func(state *State) Fn {
-		Assert(state.Exists(ScopeKeyCurrentTable))
+		Assert(state.Exists(ScopeKeyCurrentTables))
 		if !must {
 			if RandomBool() {
 				return Empty()
@@ -52,7 +52,7 @@ func setIndexColumnCountHint(repl *FnHookReplacer, more int, must bool) {
 func setColumnCountHint(repl *FnHookReplacer, countHint int) {
 	Assert(countHint >= 1)
 	repl.Replace(colDefs, NewFn(func(state *State) Fn {
-		Assert(!state.Search(ScopeKeyCurrentTable).IsNil())
+		Assert(state.Exists(ScopeKeyCurrentTables))
 		if !state.Initialized() {
 			return Repeat(colDef, state.ctrl.InitColCount, Str(","))
 		}
@@ -64,13 +64,24 @@ func mapConfigKey(s *State) {
 	w := s.ctrl.Weight
 	if w.Query_INDEX_MERGE {
 		s.StoreConfig(ConfigKeyUnitFirstColumnIndexable, NewScopeObj(struct{}{}))
+		s.StoreConfig(ConfigKeyUnitIndexMergeHint, NewScopeObj(struct{}{}))
 	}
 	if w.CreateTable_WithClusterHint {
 		s.StoreConfig(ConfigKeyUnitPKNeedClusteredHint, NewScopeObj(struct{}{}))
 	}
 	if w.CreateTable_MustStrCol {
-		s.StoreConfig(ConfigKeyUnitColumnType, NewScopeObj("string"))
+		s.StoreConfig(ConfigKeyEnumColumnType, NewScopeObj("string"))
 	} else if w.CreateTable_MustIntCol {
-		s.StoreConfig(ConfigKeyUnitColumnType, NewScopeObj("int"))
+		s.StoreConfig(ConfigKeyEnumColumnType, NewScopeObj("int"))
+	}
+	if w.Query_OrderLimit != ConfigKeyEnumLOBOrderBy && w.Query_OrderLimit != ConfigKeyEnumLOBLimitOrderBy {
+		if w.Query_HasOrderby > 0 {
+			s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(ConfigKeyEnumLOBOrderBy))
+		}
+		if w.Query_HasLimit > 0 {
+			s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(ConfigKeyEnumLOBLimitOrderBy))
+		}
+	} else {
+		s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(w.Query_OrderLimit))
 	}
 }

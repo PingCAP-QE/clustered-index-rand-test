@@ -7,6 +7,32 @@ import (
 	"strings"
 )
 
+func PrintTableNames(tbs []*Table) string {
+	var sb strings.Builder
+	for i, t := range tbs {
+		sb.WriteString(t.Name)
+		if i != len(tbs)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
+}
+
+func PrintQualifiedColumnNames(tbs []*Table) string {
+	var sb strings.Builder
+	for _, tb := range tbs {
+		for i, c := range tb.Columns {
+			sb.WriteString(tb.Name)
+			sb.WriteString(".")
+			sb.WriteString(c.Name)
+			if i != len(tb.Columns)-1 {
+				sb.WriteString(",")
+			}
+		}
+	}
+	return sb.String()
+}
+
 func PrintColumnNamesWithPar(cols []*Column, emptyMarker string) string {
 	result := PrintColumnNamesWithoutPar(cols, emptyMarker)
 	if result == emptyMarker {

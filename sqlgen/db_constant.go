@@ -215,10 +215,10 @@ const (
 type ScopeKeyType int8
 
 const (
-	ScopeKeyCurrentTable ScopeKeyType = iota
-	ScopeKeyCurrentMultiTable
+	ScopeKeyCurrentTables ScopeKeyType = iota
 	ScopeKeyCurrentPrepare
 	ScopeKeyCurrentPartitionColumn
+	ScopeKeyCurrentUniqueIndexForPointGet
 	ScopeKeyLastOutFileTable
 
 	ScopeKeyTableUniqID
@@ -236,7 +236,15 @@ const (
 	ConfigKeyProbabilityIndexPrefix
 	ConfigKeyUnitFirstColumnIndexable
 	ConfigKeyUnitPKNeedClusteredHint
-	ConfigKeyUnitColumnType // value should be "int" or "string".
+	ConfigKeyUnitIndexMergeHint
+	ConfigKeyEnumLimitOrderBy // value should be "none", "order-by", "limit-order-by"
+	ConfigKeyEnumColumnType   // value should be "int" or "string".
+)
+
+const (
+	ConfigKeyEnumLOBNone         = "none"
+	ConfigKeyEnumLOBOrderBy      = "order-by"
+	ConfigKeyEnumLOBLimitOrderBy = "limit-order-by"
 )
 
 const DefaultKeySize = 3072

@@ -61,13 +61,6 @@ func RandomBool() bool {
 	return rand.Intn(2) == 0
 }
 
-func If(condition bool, fn Fn) Fn {
-	if condition {
-		return fn
-	}
-	return None()
-}
-
 func OptIf(condition bool, fn Fn) Fn {
 	if condition {
 		return fn

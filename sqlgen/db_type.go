@@ -14,7 +14,7 @@ type State struct {
 
 	finishInit bool
 	todoSQLs   []string
-	invalid bool
+	invalid    bool
 }
 
 type Table struct {
@@ -102,7 +102,7 @@ func (s ScopeObj) ToTable() *Table {
 	return s.obj.(*Table)
 }
 
-func (s ScopeObj) ToTables() []*Table {
+func (s ScopeObj) ToTables() Tables {
 	return s.obj.([]*Table)
 }
 

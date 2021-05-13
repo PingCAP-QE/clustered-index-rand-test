@@ -18,6 +18,10 @@ var HasTables = func(s *State) bool {
 	return len(s.tables) >= 1
 }
 
+var HasAtLeast2Tables = func(s *State) bool {
+	return len(s.tables) >= 2
+}
+
 var HasPreparedStmts = func(s *State) bool {
 	return len(s.prepareStmts) >= 1
 }
@@ -35,11 +39,17 @@ var AlreadySelectOutfile = func(s *State) bool {
 }
 
 var MoreThan1Columns = func(s *State) bool {
-	tbl := s.Search(ScopeKeyCurrentTable).ToTable()
+	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	return len(tbl.Columns) > 1
 }
 
 var HasKey = func(key ScopeKeyType) func(s *State) bool {
+	return func(s *State) bool {
+		return s.Exists(key)
+	}
+}
+
+var MustHaveKey = func(key ScopeKeyType) func(s *State) bool {
 	return func(s *State) bool {
 		if !s.Exists(key) {
 			NeverReach()
@@ -49,7 +59,7 @@ var HasKey = func(key ScopeKeyType) func(s *State) bool {
 }
 
 var HasDroppableColumn = func(s *State) bool {
-	tbl := s.Search(ScopeKeyCurrentTable).ToTable()
+	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	for _, c := range tbl.Columns {
 		if c.IsDroppable() {
 			return true
@@ -59,7 +69,7 @@ var HasDroppableColumn = func(s *State) bool {
 }
 
 var HasIndices = func(s *State) bool {
-	tbl := s.Search(ScopeKeyCurrentTable).ToTable()
+	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	return len(tbl.Indices) > 0
 }
 
