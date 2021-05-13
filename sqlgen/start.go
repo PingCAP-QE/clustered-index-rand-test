@@ -17,94 +17,94 @@ import (
 func NewGenerator(state *State) func() string {
 	rand.Seed(time.Now().UnixNano())
 	return func() string {
-		return start.Eval(state)
+		return Start.Eval(state)
 	}
 }
 
-var start = NewFn(func(state *State) Fn {
+var Start = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	if s, ok := state.PopOneTodoSQL(); ok {
 		return Str(s)
 	}
 	if !state.Initialized() {
-		eInitStart := Str(initStart.Eval(state))
+		eInitStart := Str(InitStart.Eval(state))
 		if state.MeetInitializedDemand() {
 			state.SetInitialized()
 		}
 		return eInitStart
 	}
 	return Or(
-		switchRowFormatVer.SetW(w.SetRowFormat),
-		switchClustered.SetW(w.SetClustered),
-		adminCheck.SetW(w.AdminCheck),
-		createTable.SetW(w.CreateTable),
-		createTableLike.SetW(w.CreateTable),
-		dmlStmt.SetW(w.Query_DML),
-		ddlStmt.SetW(w.Query_DDL),
-		splitRegion.SetW(w.Query_Split),
-		commonAnalyze.SetW(w.Query_Analyze),
-		prepareStmt.SetW(w.Query_Prepare),
-		deallocPrepareStmt.SetW(1),
-		flashBackTable.SetW(1),
-		selectIntoOutFile.SetW(1),
-		loadTable.SetW(1),
-		dropTable.SetW(1),
+		SwitchRowFormatVer.SetW(w.SetRowFormat),
+		SwitchClustered.SetW(w.SetClustered),
+		AdminCheck.SetW(w.AdminCheck),
+		CreateTable.SetW(w.CreateTable),
+		CreateTableLike.SetW(w.CreateTable),
+		DMLStmt.SetW(w.Query_DML),
+		DDLStmt.SetW(w.Query_DDL),
+		SplitRegion.SetW(w.Query_Split),
+		AnalyzeTable.SetW(w.Query_Analyze),
+		PrepareStmt.SetW(w.Query_Prepare),
+		DeallocPrepareStmt.SetW(1),
+		FlashBackTable.SetW(1),
+		SelectIntoOutFile.SetW(1),
+		LoadTable.SetW(1),
+		DropTable.SetW(1),
 	)
 })
 
-var initStart = NewFn(func(state *State) Fn {
+var InitStart = NewFn(func(state *State) Fn {
 	Assert(!state.Initialized())
 	if len(state.tables) < state.ctrl.InitTableCount {
-		return createTable
+		return CreateTable
 	} else {
-		return insertInto
+		return InsertInto
 	}
 })
 
-var dmlStmt = NewFn(func(state *State) Fn {
+var DMLStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
 	w := state.ctrl.Weight
 	return Or(
-		query.SetW(w.Query_Select),
-		queryPrepare,
-		commonDelete.SetW(w.Query_DML_DEL),
-		commonInsert.SetW(w.Query_DML_INSERT),
-		commonUpdate.SetW(w.Query_DML_UPDATE),
+		Query.SetW(w.Query_Select),
+		QueryPrepare,
+		CommonDelete.SetW(w.Query_DML_DEL),
+		CommonInsert.SetW(w.Query_DML_INSERT),
+		CommonUpdate.SetW(w.Query_DML_UPDATE),
 	)
 })
 
-var ddlStmt = NewFn(func(state *State) Fn {
+var DDLStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
 	return Or(
-		addColumn,
-		addIndex,
-		dropColumn,
-		dropIndex,
-		alterColumn,
+		AddColumn,
+		AddIndex,
+		DropColumn,
+		DropIndex,
+		AlterColumn,
 	)
 })
 
-var switchRowFormatVer = NewFn(func(state *State) Fn {
+var SwitchRowFormatVer = NewFn(func(state *State) Fn {
 	if RandomBool() {
 		return Str("set @@global.tidb_row_format_version = 2")
 	}
 	return Str("set @@global.tidb_row_format_version = 1")
 })
 
-var switchClustered = NewFn(func(state *State) Fn {
+var SwitchClustered = NewFn(func(state *State) Fn {
 	if RandomBool() {
 		return Str("set @@global.tidb_enable_clustered_index = 0")
 	}
 	return Str("set @@global.tidb_enable_clustered_index = 1")
 })
 
-var dropTable = NewFn(func(state *State) Fn {
+var DropTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
@@ -112,7 +112,7 @@ var dropTable = NewFn(func(state *State) Fn {
 	return Strs("drop table", tbl.Name)
 })
 
-var flashBackTable = NewFn(func(state *State) Fn {
+var FlashBackTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables, CanReadGCSavePoint) {
 		return None()
 	}
@@ -124,7 +124,7 @@ var flashBackTable = NewFn(func(state *State) Fn {
 	)
 })
 
-var adminCheck = NewFn(func(state *State) Fn {
+var AdminCheck = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
@@ -145,7 +145,7 @@ var adminCheck = NewFn(func(state *State) Fn {
 	}
 })
 
-var createTable = NewFn(func(state *State) Fn {
+var CreateTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(NoTooMuchTables) {
 		return None()
 	}
@@ -156,28 +156,28 @@ var createTable = NewFn(func(state *State) Fn {
 		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
-	// The eval order matters because the dependency is colDefs <- partitionDef <- idxDefs.
-	eColDefs := colDefs.Eval(state)
+	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
+	eColDefs := ColumnDefinitions.Eval(state)
 	partCol := tbl.GetRandColumnForPartition()
 	if partCol != nil {
 		state.Store(ScopeKeyCurrentPartitionColumn, NewScopeObj(partCol))
 	}
-	ePartitionDef := partitionDef.Eval(state)
-	eIdxDefs := idxDefs.Eval(state)
+	ePartitionDef := PartitionDefinition.Eval(state)
+	eIdxDefs := IndexDefinitions.Eval(state)
 	return Strs("create table", tbl.Name, "(", eColDefs, eIdxDefs, ")", ePartitionDef)
 })
 
-var colDefs = NewFn(func(state *State) Fn {
+var ColumnDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
 	if !state.Initialized() {
-		return Repeat(colDef, state.ctrl.InitColCount, Str(","))
+		return Repeat(ColumnDefinition, state.ctrl.InitColCount, Str(","))
 	}
-	return RepeatRange(1, 10, colDef, Str(","))
+	return RepeatRange(1, 10, ColumnDefinition, Str(","))
 })
 
-var colDef = NewFn(func(state *State) Fn {
+var ColumnDefinition = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -187,7 +187,7 @@ var colDef = NewFn(func(state *State) Fn {
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
 
-var idxDefs = NewFn(func(state *State) Fn {
+var IndexDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -196,11 +196,11 @@ var idxDefs = NewFn(func(state *State) Fn {
 	}
 	return And(
 		Str(","),
-		RepeatRange(1, 4, idxDef, Str(",")),
+		RepeatRange(1, 4, IndexDefinition, Str(",")),
 	)
 })
 
-var idxDef = NewFn(func(state *State) Fn {
+var IndexDefinition = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -221,7 +221,7 @@ var idxDef = NewFn(func(state *State) Fn {
 	)
 })
 
-var partitionDef = NewFn(func(state *State) Fn {
+var PartitionDefinition = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -233,13 +233,13 @@ var partitionDef = NewFn(func(state *State) Fn {
 	tbl.AppendPartitionColumn(partitionedCol)
 	return Or(
 		Empty(),
-		partitionDefHash,
-		partitionDefRange,
-		partitionDefList,
+		PartitionDefinitionHash,
+		PartitionDefinitionRange,
+		PartitionDefinitionList,
 	)
 })
 
-var partitionDefHash = NewFn(func(state *State) Fn {
+var PartitionDefinitionHash = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentPartitionColumn)) {
 		return None()
 	}
@@ -254,7 +254,7 @@ var partitionDefHash = NewFn(func(state *State) Fn {
 	)
 })
 
-var partitionDefRange = NewFn(func(state *State) Fn {
+var PartitionDefinitionRange = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentPartitionColumn)) {
 		return None()
 	}
@@ -273,7 +273,7 @@ var partitionDefRange = NewFn(func(state *State) Fn {
 	)
 })
 
-var partitionDefList = NewFn(func(state *State) Fn {
+var PartitionDefinitionList = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentPartitionColumn)) {
 		return None()
 	}
@@ -288,7 +288,7 @@ var partitionDefList = NewFn(func(state *State) Fn {
 	)
 })
 
-var insertInto = NewFn(func(state *State) Fn {
+var InsertInto = NewFn(func(state *State) Fn {
 	Assert(!state.Initialized())
 	tbl := state.GetFirstNonFullTable()
 	vals := tbl.GenRandValues(tbl.Columns)
@@ -303,7 +303,7 @@ var insertInto = NewFn(func(state *State) Fn {
 	)
 })
 
-var query = NewFn(func(state *State) Fn {
+var Query = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
@@ -332,13 +332,13 @@ var query = NewFn(func(state *State) Fn {
 			Str(aggFunc),
 			Str("from"),
 			Str("(select"),
-			hintTiFlash,
-			hintIndexMerge,
+			HintTiFlash,
+			HintIndexMerge,
 			Str("*"),
 			Str("from"),
 			Str(tbl.Name),
 			Str("where"),
-			predicates,
+			Predicates,
 			Str("order by"),
 			OptIf(primaryKeyIdx != nil, Str(PrintColumnNamesWithoutPar(primaryKeyCols, ""))),
 			OptIf(primaryKeyIdx == nil, Str("_tidb_rowid")),
@@ -360,7 +360,7 @@ var query = NewFn(func(state *State) Fn {
 		windowFunc := PrintRandomWindowFunc(tbl)
 		window := PrintRandomWindow(tbl)
 		return And(
-			Str("select"), hintTiFlash, hintIndexMerge,
+			Str("select"), HintTiFlash, HintIndexMerge,
 			Str(windowFunc),
 			Str("over w"),
 			Str("from"),
@@ -384,11 +384,11 @@ var query = NewFn(func(state *State) Fn {
 		)
 	})
 	return Or(
-		commonSelect,
+		CommonSelect,
 		And(
-			Str("("), commonSelect, Str(")"),
-			setOperator,
-			Str("("), commonSelect, Str(")"),
+			Str("("), CommonSelect, Str(")"),
+			SetOperator,
+			Str("("), CommonSelect, Str(")"),
 			OptIf(w.Query_HasOrderby > 0,
 				And(
 					Str("order by"),
@@ -402,12 +402,12 @@ var query = NewFn(func(state *State) Fn {
 				),
 			),
 		).SetW(w.Query_Union),
-		And(aggSelect, forUpdateOpt),
-		And(windowSelect, forUpdateOpt).SetW(w.Query_Window),
+		And(aggSelect, ForUpdateOpt),
+		And(windowSelect, ForUpdateOpt).SetW(w.Query_Window),
 		And(
-			Str("("), aggSelect, forUpdateOpt, Str(")"),
-			setOperator,
-			Str("("), aggSelect, forUpdateOpt, Str(")"),
+			Str("("), aggSelect, ForUpdateOpt, Str(")"),
+			SetOperator,
+			Str("("), aggSelect, ForUpdateOpt, Str(")"),
 			OptIf(w.Query_HasOrderby > 0,
 				Str("order by aggCol"),
 			),
@@ -419,9 +419,9 @@ var query = NewFn(func(state *State) Fn {
 			),
 		).SetW(w.Query_Union),
 		And(
-			Str("("), windowSelect, forUpdateOpt, Str(")"),
-			setOperator,
-			Str("("), windowSelect, forUpdateOpt, Str(")"),
+			Str("("), windowSelect, ForUpdateOpt, Str(")"),
+			SetOperator,
+			Str("("), windowSelect, ForUpdateOpt, Str(")"),
 			OptIf(w.Query_HasOrderby > 0,
 				And(
 					Str("order by 1"),
@@ -434,11 +434,11 @@ var query = NewFn(func(state *State) Fn {
 				),
 			),
 		).SetW(w.Query_Window+w.Query_Union),
-		multiTableQuery,
+		MultiTableQuery,
 	)
 })
 
-var commonSelect = NewFn(func(state *State) Fn {
+var CommonSelect = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -449,22 +449,22 @@ var commonSelect = NewFn(func(state *State) Fn {
 		prepare := state.Search(ScopeKeyCurrentPrepare).ToPrepare()
 		prepare.AppendColumns(paramCols...)
 	}
-	return And(Str("select"), hintTiFlash, hintIndexMerge,
+	return And(Str("select"), HintTiFlash, HintIndexMerge,
 		Str(PrintColumnNamesWithoutPar(cols, "*")),
 		Str("from"),
 		Str(tbl.Name),
 		Str("where"),
-		predicates,
-		orderByLimit,
-		forUpdateOpt,
+		Predicates,
+		OrderByLimit,
+		ForUpdateOpt,
 	)
 })
 
-var forUpdateOpt = NewFn(func(state *State) Fn {
+var ForUpdateOpt = NewFn(func(state *State) Fn {
 	return Opt(Str("for update"))
 })
 
-var hintTiFlash = NewFn(func(state *State) Fn {
+var HintTiFlash = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -474,7 +474,7 @@ var hintTiFlash = NewFn(func(state *State) Fn {
 	)
 })
 
-var hintIndexMerge = NewFn(func(state *State) Fn {
+var HintIndexMerge = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -484,7 +484,7 @@ var hintIndexMerge = NewFn(func(state *State) Fn {
 	)
 })
 
-var setOperator = NewFn(func(state *State) Fn {
+var SetOperator = NewFn(func(state *State) Fn {
 	return Or(
 		Str("union"),
 		Str("union all"),
@@ -493,7 +493,7 @@ var setOperator = NewFn(func(state *State) Fn {
 	)
 })
 
-var orderByLimit = NewFn(func(state *State) Fn {
+var OrderByLimit = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
 	}
@@ -511,7 +511,7 @@ var orderByLimit = NewFn(func(state *State) Fn {
 	}
 })
 
-var commonInsert = NewFn(func(state *State) Fn {
+var CommonInsert = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	tbl := state.GetRandTable()
 	var cols []*Column
@@ -579,13 +579,13 @@ var commonInsert = NewFn(func(state *State) Fn {
 		//	Str("into"),
 		//	Str(tbl.Name),
 		//	Str(PrintColumnNamesWithPar(cols, "")),
-		//	commonSelect,
+		//	CommonSelect,
 		//	OptIf(insertOrReplace == "insert", onDuplicateUpdate),
 		//),
 	)
 })
 
-var commonUpdate = NewFn(func(state *State) Fn {
+var CommonUpdate = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
 	orderByCols := tbl.GetRandColumns()
@@ -607,18 +607,18 @@ var commonUpdate = NewFn(func(state *State) Fn {
 		Str("set"),
 		updateAssignments,
 		Str("where"),
-		predicates,
+		Predicates,
 		OptIf(len(orderByCols) > 0,
 			And(
 				Str("order by"),
 				Str(PrintColumnNamesWithoutPar(orderByCols, "")),
-				maybeLimit,
+				MaybeLimit,
 			),
 		),
 	)
 })
 
-var commonAnalyze = NewFn(func(state *State) Fn {
+var AnalyzeTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
@@ -626,7 +626,7 @@ var commonAnalyze = NewFn(func(state *State) Fn {
 	return And(Str("analyze table"), Str(tbl.Name))
 })
 
-var commonDelete = NewFn(func(state *State) Fn {
+var CommonDelete = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	tbl := state.GetRandTable()
 	var col *Column
@@ -650,14 +650,14 @@ var commonDelete = NewFn(func(state *State) Fn {
 		Str(tbl.Name),
 		Str("where"),
 		Or(
-			And(predicates, maybeLimit),
-			And(Str(col.Name), Str("in"), Str("("), multipleRowVal, Str(")"), maybeLimit),
-			And(Str(col.Name), Str("is null"), maybeLimit),
+			And(Predicates, MaybeLimit),
+			And(Str(col.Name), Str("in"), Str("("), multipleRowVal, Str(")"), MaybeLimit),
+			And(Str(col.Name), Str("is null"), MaybeLimit),
 		),
 	)
 })
 
-var predicates = NewFn(func(state *State) Fn {
+var Predicates = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	uniqueIdx := tbl.GetRandUniqueIndexForPointGet()
@@ -675,7 +675,7 @@ var predicates = NewFn(func(state *State) Fn {
 			if rand.Intn(5) == 0 {
 				repeatCnt += rand.Intn(2) + 1
 			}
-			return Repeat(predicate, repeatCnt, Str("and"))
+			return Repeat(Predicate, repeatCnt, Str("and"))
 		})
 
 		// Give some chances to common predicate.
@@ -685,12 +685,12 @@ var predicates = NewFn(func(state *State) Fn {
 	}
 
 	return Or(
-		RepeatRange(1, 5, predicate, Or(Str("and"), Str("or"))).SetW(3),
-		predicatesPointGet.SetW(1),
+		RepeatRange(1, 5, Predicate, Or(Str("and"), Str("or"))).SetW(3),
+		PredicatesPointGet.SetW(1),
 	)
 })
 
-var predicatesPointGet = NewFn(func(state *State) Fn {
+var PredicatesPointGet = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
 		HasKey(ScopeKeyCurrentUniqueIndexForPointGet)) {
 		return None()
@@ -713,7 +713,7 @@ var predicatesPointGet = NewFn(func(state *State) Fn {
 	)
 })
 
-var predicate = NewFn(func(state *State) Fn {
+var Predicate = NewFn(func(state *State) Fn {
 	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	randCol := tbl.GetRandColumn()
@@ -741,12 +741,12 @@ var predicate = NewFn(func(state *State) Fn {
 	})
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
 	return Or(
-		And(Str(colName), cmpSymbol, randVal),
+		And(Str(colName), CompareSymbol, randVal),
 		And(Str(colName), Str("in"), Str("("), randColVals, Str(")")),
 	)
 })
 
-var cmpSymbol = NewFn(func(state *State) Fn {
+var CompareSymbol = NewFn(func(state *State) Fn {
 	return Or(
 		Str("="),
 		Str("<"),
@@ -758,12 +758,12 @@ var cmpSymbol = NewFn(func(state *State) Fn {
 	)
 })
 
-var maybeLimit = NewFn(func(state *State) Fn {
+var MaybeLimit = NewFn(func(state *State) Fn {
 	// Return empty because the limit is not friendly to clustered index AB test.
 	return Empty()
 })
 
-var addIndex = NewFn(func(state *State) Fn {
+var AddIndex = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
 		MustHaveKey(ScopeKeyCurrentTables)) {
 		return None()
@@ -779,7 +779,7 @@ var addIndex = NewFn(func(state *State) Fn {
 	)
 })
 
-var dropIndex = NewFn(func(state *State) Fn {
+var DropIndex = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
 		MustHaveKey(ScopeKeyCurrentTables),
 		HasIndices) {
@@ -794,7 +794,7 @@ var dropIndex = NewFn(func(state *State) Fn {
 	)
 })
 
-var addColumn = NewFn(func(state *State) Fn {
+var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
 	tbl.AppendColumn(col)
@@ -804,7 +804,7 @@ var addColumn = NewFn(func(state *State) Fn {
 	)
 })
 
-var dropColumn = NewFn(func(state *State) Fn {
+var DropColumn = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
 		MustHaveKey(ScopeKeyCurrentTables),
 		MoreThan1Columns,
@@ -820,33 +820,7 @@ var dropColumn = NewFn(func(state *State) Fn {
 	)
 })
 
-var alterColumn = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(
-		MustHaveKey(ScopeKeyCurrentTables),
-		EnableColumnTypeChange) {
-		return None()
-	}
-	return Or(
-		alterColumnModify,
-		alterColumnChange,
-	)
-})
-
-var alterColumnModify = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(
-		MustHaveKey(ScopeKeyCurrentTables),
-		EnableColumnTypeChange) {
-		return None()
-	}
-	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := tbl.GetRandColumn()
-	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
-	newCol.Name = col.Name
-	tbl.ReplaceColumn(col, newCol)
-	return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
-})
-
-var alterColumnChange = NewFn(func(state *State) Fn {
+var AlterColumn = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
 		MustHaveKey(ScopeKeyCurrentTables),
 		EnableColumnTypeChange) {
@@ -856,10 +830,14 @@ var alterColumnChange = NewFn(func(state *State) Fn {
 	col := tbl.GetRandColumn()
 	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
 	tbl.ReplaceColumn(col, newCol)
+	if RandomBool() {
+		newCol.Name = col.Name
+		return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
+	}
 	return Strs("alter table", tbl.Name, "change column", col.Name, newCol.Name, PrintColumnType(newCol))
 })
 
-var multiTableQuery = NewFn(func(state *State) Fn {
+var MultiTableQuery = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasAtLeast2Tables) {
 		return None()
 	}
@@ -882,7 +860,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 		}
 		return And(
 			Str(col1.Name),
-			cmpSymbol,
+			CompareSymbol,
 			Str(col2.Name),
 		)
 	})
@@ -977,7 +955,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 
 		// TODO: Support exists subquery.
 		return And(
-			Str("select"), hintTiFlash,
+			Str("select"), HintTiFlash,
 			And(
 				Str("/*+ "),
 				joinHint,
@@ -995,7 +973,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 			Str("from"),
 			Str(tbl2.Name),
 			Str("where"),
-			predicates,
+			Predicates,
 			Str(")"),
 			OptIf(w.Query_HasOrderby > 0,
 				And(
@@ -1014,7 +992,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 
 	return Or(
 		And(
-			Str("select"), hintTiFlash,
+			Str("select"), HintTiFlash,
 			And(
 				Str("/*+ "),
 				joinHint,
@@ -1029,7 +1007,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 			Str(tbl2.Name),
 			And(Str("on"), joinPredicates),
 			And(Str("where")),
-			predicates,
+			Predicates,
 			OptIf(w.Query_HasOrderby > 0,
 				And(
 					Str("order by"),
@@ -1046,7 +1024,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 			),
 		),
 		And(
-			Str("select"), hintTiFlash, hintIndexMerge,
+			Str("select"), HintTiFlash, HintIndexMerge,
 			Str(PrintFullQualifiedColName(tbl1, cols1)),
 			Str(","),
 			Str(PrintFullQualifiedColName(tbl2, cols2)),
@@ -1073,7 +1051,7 @@ var multiTableQuery = NewFn(func(state *State) Fn {
 	)
 })
 
-var createTableLike = NewFn(func(state *State) Fn {
+var CreateTableLike = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(NoTooMuchTables) {
 		return None()
 	}
@@ -1089,7 +1067,7 @@ var createTableLike = NewFn(func(state *State) Fn {
 	return Strs("create table", newTbl.Name, "like", tbl.Name)
 })
 
-var selectIntoOutFile = NewFn(func(state *State) Fn {
+var SelectIntoOutFile = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad) {
 		return None()
 	}
@@ -1099,7 +1077,7 @@ var selectIntoOutFile = NewFn(func(state *State) Fn {
 	return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 })
 
-var loadTable = NewFn(func(state *State) Fn {
+var LoadTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad, AlreadySelectOutfile) {
 		return None()
 	}
@@ -1110,7 +1088,7 @@ var loadTable = NewFn(func(state *State) Fn {
 	return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.Name)
 })
 
-var splitRegion = NewFn(func(state *State) Fn {
+var SplitRegion = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
@@ -1161,7 +1139,7 @@ var splitRegion = NewFn(func(state *State) Fn {
 	return Or(splitTableRegionBetween, splitTableRegionBy)
 })
 
-var prepareStmt = NewFn(func(state *State) Fn {
+var PrepareStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None()
 	}
@@ -1173,11 +1151,11 @@ var prepareStmt = NewFn(func(state *State) Fn {
 		Str(prepare.Name),
 		Str("from"),
 		Str(`"`),
-		query,
+		Query,
 		Str(`"`))
 })
 
-var deallocPrepareStmt = NewFn(func(state *State) Fn {
+var DeallocPrepareStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables, HasPreparedStmts) {
 		return None()
 	}
@@ -1186,7 +1164,7 @@ var deallocPrepareStmt = NewFn(func(state *State) Fn {
 	return Strs("deallocate prepare", prepare.Name)
 })
 
-var queryPrepare = NewFn(func(state *State) Fn {
+var QueryPrepare = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables, HasPreparedStmts) {
 		return None()
 	}

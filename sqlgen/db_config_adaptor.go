@@ -17,17 +17,17 @@ func setPartitionType(repl *FnHookReplacer, tp string) {
 		return
 	}
 	Assert(tp == "hash" || tp == "range" || tp == "list")
-	repl.Replace(partitionDef, NewFn(func(state *State) Fn {
+	repl.Replace(PartitionDefinition, NewFn(func(state *State) Fn {
 		tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 		partCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
 		tbl.AppendPartitionColumn(partCol)
 		switch tp {
 		case "hash":
-			return partitionDefHash
+			return PartitionDefinitionHash
 		case "range":
-			return partitionDefRange
+			return PartitionDefinitionRange
 		case "list":
-			return partitionDefList
+			return PartitionDefinitionList
 		}
 		return Empty()
 	}))
@@ -35,7 +35,7 @@ func setPartitionType(repl *FnHookReplacer, tp string) {
 
 func setIndexColumnCountHint(repl *FnHookReplacer, more int, must bool) {
 	Assert(more >= 1)
-	repl.Replace(idxDefs, NewFn(func(state *State) Fn {
+	repl.Replace(IndexDefinitions, NewFn(func(state *State) Fn {
 		Assert(state.Exists(ScopeKeyCurrentTables))
 		if !must {
 			if RandomBool() {
@@ -44,19 +44,19 @@ func setIndexColumnCountHint(repl *FnHookReplacer, more int, must bool) {
 		}
 		return And(
 			Str(","),
-			RepeatRange(1, more, idxDef, Str(",")),
+			RepeatRange(1, more, IndexDefinition, Str(",")),
 		)
 	}))
 }
 
 func setColumnCountHint(repl *FnHookReplacer, countHint int) {
 	Assert(countHint >= 1)
-	repl.Replace(colDefs, NewFn(func(state *State) Fn {
+	repl.Replace(ColumnDefinitions, NewFn(func(state *State) Fn {
 		Assert(state.Exists(ScopeKeyCurrentTables))
 		if !state.Initialized() {
-			return Repeat(colDef, state.ctrl.InitColCount, Str(","))
+			return Repeat(ColumnDefinition, state.ctrl.InitColCount, Str(","))
 		}
-		return RepeatRange(1, countHint, colDef, Str(","))
+		return RepeatRange(1, countHint, ColumnDefinition, Str(","))
 	}))
 }
 

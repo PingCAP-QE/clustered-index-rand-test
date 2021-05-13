@@ -12,7 +12,7 @@ type FnHookTxnWrap struct {
 const txnStartWrapName = "txnWrappedStart"
 
 func (s *FnHookTxnWrap) BeforeEvaluate(fn Fn) Fn {
-	if fn.Info == start.Info {
+	if fn.Info == Start.Info {
 		return fn
 	}
 	return Fn{
