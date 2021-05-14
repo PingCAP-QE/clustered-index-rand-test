@@ -28,7 +28,6 @@ type Fn struct {
 	Weight int
 }
 
-// NewFn can only be used for
 func NewFn(fn func(state *State) Fn) Fn {
 	_, filePath, line, _ := runtime.Caller(1)
 	return Fn{

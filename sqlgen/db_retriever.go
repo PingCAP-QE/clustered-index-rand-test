@@ -21,6 +21,13 @@ func (s *State) MeetInitializedDemand() bool {
 	return true
 }
 
+func (s *State) GetWeight(fn Fn) int {
+	if w, ok := s.weight[fn.Info]; ok {
+		return w
+	}
+	return fn.Weight
+}
+
 func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
@@ -305,20 +312,16 @@ func (t *Table) GetRandColumns() []*Column {
 }
 
 func (t *Table) GetRandColumnsNonEmpty() []*Column {
-	totalCols := t.cloneColumns()
-	var selectedCols []*Column
-	for {
-		chosenIdx := rand.Intn(len(totalCols))
-		chosenCol := totalCols[chosenIdx]
-		totalCols[0], totalCols[chosenIdx] = totalCols[chosenIdx], totalCols[0]
-		totalCols = totalCols[1:]
+	count := 1 + rand.Intn(len(t.Columns))
+	return t.GetRandNColumns(count)
+}
 
-		selectedCols = append(selectedCols, chosenCol)
-		if len(totalCols) == 0 || RandomBool() {
-			break
-		}
-	}
-	return selectedCols
+func (t *Table) GetRandNColumns(n int) []*Column {
+	cols := t.cloneColumns()
+	rand.Shuffle(len(cols), func(i, j int) {
+		cols[i], cols[j] = cols[j], cols[i]
+	})
+	return cols[:n]
 }
 
 // GetRandUniqueIndexForPointGet gets a random unique index.

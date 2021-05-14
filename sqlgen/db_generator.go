@@ -91,9 +91,10 @@ func GenNewIndex(state *State, id int, tbl *Table) *Index {
 		})
 		if len(firstColCandidates) == 0 {
 			totalCols = tbl.GetRandColumnsNonEmpty()
+		} else {
+			totalCols = append(totalCols, firstColCandidates[rand.Intn(len(firstColCandidates))])
+			totalCols = append(totalCols, tbl.GetRandColumns()...)
 		}
-		totalCols = append(totalCols, firstColCandidates[rand.Intn(len(firstColCandidates))])
-		totalCols = append(totalCols, tbl.GetRandColumns()...)
 	} else {
 		totalCols = tbl.GetRandColumnsNonEmpty()
 	}

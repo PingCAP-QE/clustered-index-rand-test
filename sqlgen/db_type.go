@@ -3,8 +3,9 @@ package sqlgen
 import "math/rand"
 
 type State struct {
-	ctrl  *ControlOption
-	hooks []FnEvaluateHook
+	ctrl   *ControlOption
+	hooks  []FnEvaluateHook
+	weight map[string]int
 
 	tables []*Table
 	scope  []map[ScopeKeyType]ScopeObj

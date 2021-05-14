@@ -18,6 +18,10 @@ func (s *State) InjectTodoSQL(sqls ...string) {
 	s.todoSQLs = append(s.todoSQLs, sqls...)
 }
 
+func (s *State) SetWeight(prod Fn, weight int) {
+	s.weight[prod.Info] = weight
+}
+
 func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
 	fn(s.ctrl)
 }

@@ -27,10 +27,11 @@ func And(fn ...Fn) Fn {
 }
 
 func Opt(fn Fn) Fn {
-	if RandomBool() {
-		return fn
+	total := 1 + fn.Weight
+	if rand.Intn(total) == 0 {
+		return Empty()
 	}
-	return Empty()
+	return fn
 }
 
 func RandomNum(low, high int64) string {
@@ -71,16 +72,14 @@ func OptIf(condition bool, fn Fn) Fn {
 func Or(fns ...Fn) Fn {
 	return Fn{Weight: 1, Gen: func(state *State) string {
 		for len(fns) > 0 {
-			randNum := randomSelectByFactor(fns, func(f Fn) int {
-				return f.Weight
-			})
-			chosenFn := fns[randNum]
+			chosenFnIdx := randSelectByWeight(state, fns)
+			chosenFn := fns[chosenFnIdx]
 			result := chosenFn.Eval(state)
 			if state.Valid() {
 				return result
 			}
 			state.Recover()
-			fns = append(fns[:randNum], fns[randNum+1:]...)
+			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
 		}
 		// Need backtracking.
 		state.Invalidate()
@@ -129,6 +128,22 @@ func collectResult(state *State, fns ...Fn) string {
 		}
 	}
 	return resStr.String()
+}
+
+func randSelectByWeight(state *State, fns []Fn) int {
+	totalWeight := 0
+	for _, f := range fns {
+		totalWeight += state.GetWeight(f)
+	}
+	num := rand.Intn(totalWeight)
+	acc := 0
+	for i, f := range fns {
+		acc += f.Weight
+		if acc > num {
+			return i
+		}
+	}
+	return len(fns) - 1
 }
 
 func randomSelectByFactor(fns []Fn, weightFn func(f Fn) int) int {

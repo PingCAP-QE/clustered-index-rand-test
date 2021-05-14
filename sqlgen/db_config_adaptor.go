@@ -7,6 +7,7 @@ func setupReplacer(s *State) {
 	repl := NewFnHookReplacer()
 	setPartitionType(repl, w.CreateTable_Partition_Type)
 	setIndexColumnCountHint(repl, w.CreateTable_IndexMoreCol, w.Query_INDEX_MERGE)
+	setWeight(s)
 	setColumnCountHint(repl, w.CreateTable_MaxColumnCnt)
 	mapConfigKey(s)
 	s.AppendHook(repl)
@@ -60,6 +61,11 @@ func setColumnCountHint(repl *FnHookReplacer, countHint int) {
 	}))
 }
 
+func setWeight(s *State) {
+	w := s.ctrl.Weight
+	s.SetWeight(OnDuplicateUpdate, w.Query_DML_INSERT_ON_DUP)
+}
+
 func mapConfigKey(s *State) {
 	w := s.ctrl.Weight
 	if w.Query_INDEX_MERGE {
@@ -83,5 +89,8 @@ func mapConfigKey(s *State) {
 		}
 	} else {
 		s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(w.Query_OrderLimit))
+	}
+	if !w.Query_DML_Can_Be_Replace {
+		s.StoreConfig(ConfigKeyEnumInsertOrReplace, NewScopeObj(ConfigKeyEnumIORInsert))
 	}
 }
