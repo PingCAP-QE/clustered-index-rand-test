@@ -221,6 +221,7 @@ const (
 	ScopeKeyCurrentPartitionColumn
 	ScopeKeyCurrentUniqueIndexForPointGet
 	ScopeKeyCurrentSelectedColumns
+	ScopeKeyCurrentOrderByColumns
 	ScopeKeyLastOutFileTable
 
 	ScopeKeyTableUniqID
@@ -228,7 +229,6 @@ const (
 	ScopeKeyIndexUniqID
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
-	ScopeUsePointGet
 )
 
 type ConfigKeyType int64

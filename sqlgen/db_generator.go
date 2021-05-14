@@ -13,7 +13,7 @@ import (
 
 func GenNewTable(id int) *Table {
 	tblName := fmt.Sprintf("tbl_%d", id)
-	newTbl := &Table{Id: id, Name: tblName}
+	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -32,7 +32,7 @@ retry:
 }
 
 func GenNewColumn(state *State, id int) *Column {
-	col := &Column{Id: id, Name: fmt.Sprintf("col_%d", id)}
+	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)

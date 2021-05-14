@@ -3,67 +3,38 @@ package sqlgen
 // setupReplacer is set for backward compatibility.
 // New users should define their own replacer for different scenarios.
 func setupReplacer(s *State) {
-	w := s.ctrl.Weight
 	repl := NewFnHookReplacer()
-	setPartitionType(repl, w.CreateTable_Partition_Type)
-	setIndexColumnCountHint(repl, w.CreateTable_IndexMoreCol, w.Query_INDEX_MERGE)
 	setWeight(s)
-	setColumnCountHint(repl, w.CreateTable_MaxColumnCnt)
+	setRepeat(s)
 	mapConfigKey(s)
 	s.AppendHook(repl)
-}
-
-func setPartitionType(repl *FnHookReplacer, tp string) {
-	if tp == "" {
-		return
-	}
-	Assert(tp == "hash" || tp == "range" || tp == "list")
-	repl.Replace(PartitionDefinition, NewFn(func(state *State) Fn {
-		tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-		partCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
-		tbl.AppendPartitionColumn(partCol)
-		switch tp {
-		case "hash":
-			return PartitionDefinitionHash
-		case "range":
-			return PartitionDefinitionRange
-		case "list":
-			return PartitionDefinitionList
-		}
-		return Empty()
-	}))
-}
-
-func setIndexColumnCountHint(repl *FnHookReplacer, more int, must bool) {
-	Assert(more >= 1)
-	repl.Replace(IndexDefinitions, NewFn(func(state *State) Fn {
-		Assert(state.Exists(ScopeKeyCurrentTables))
-		if !must {
-			if RandomBool() {
-				return Empty()
-			}
-		}
-		return And(
-			Str(","),
-			RepeatRange(1, more, IndexDefinition, Str(",")),
-		)
-	}))
-}
-
-func setColumnCountHint(repl *FnHookReplacer, countHint int) {
-	Assert(countHint >= 1)
-	repl.Replace(ColumnDefinitions, NewFn(func(state *State) Fn {
-		Assert(state.Exists(ScopeKeyCurrentTables))
-		if !state.Initialized() {
-			return Repeat(ColumnDefinition, state.ctrl.InitColCount, Str(","))
-		}
-		return RepeatRange(1, countHint, ColumnDefinition, Str(","))
-	}))
 }
 
 func setWeight(s *State) {
 	w := s.ctrl.Weight
 	s.SetWeight(OnDuplicateUpdate, w.Query_DML_INSERT_ON_DUP)
+	if tp := w.CreateTable_Partition_Type; tp != "" {
+		Assert(tp == "hash" || tp == "range" || tp == "list")
+		const hash, rangE, list = 0, 1, 2
+		weight := []int{0, 0, 0}
+		switch tp {
+		case "hash":
+			weight[hash] = 1
+		case "range":
+			weight[rangE] = 1
+		case "list":
+			weight[list] = 1
+		}
+		s.SetWeight(PartitionDefinitionHash, weight[hash])
+		s.SetWeight(PartitionDefinitionRange, weight[rangE])
+		s.SetWeight(PartitionDefinitionList, weight[list])
+	}
+}
+
+func setRepeat(s *State) {
+	w := s.ctrl.Weight
+	s.SetRepeat(ColumnDefinition, 1, w.CreateTable_MaxColumnCnt)
+	s.SetRepeat(IndexDefinition, 1, w.CreateTable_IndexMoreCol)
 }
 
 func mapConfigKey(s *State) {

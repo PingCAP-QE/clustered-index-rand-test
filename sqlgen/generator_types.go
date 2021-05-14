@@ -14,70 +14,31 @@
 package sqlgen
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"regexp"
 	"runtime"
-	"strings"
 )
 
 type Fn struct {
 	Gen    func(state *State) string
 	Info   string
 	Weight int
+	Repeat Interval
+}
+
+func defaultFn() Fn {
+	return Fn{
+		Weight: 1,
+		Repeat: Interval{1, 3},
+	}
 }
 
 func NewFn(fn func(state *State) Fn) Fn {
 	_, filePath, line, _ := runtime.Caller(1)
-	return Fn{
-		Info: constructFnInfo(filePath, line),
-		Gen: func(state *State) string {
-			return fn(state).Eval(state)
-		},
-		Weight: 1,
+	ret := defaultFn()
+	ret.Info = constructFnInfo(filePath, line)
+	ret.Gen = func(state *State) string {
+		return fn(state).Eval(state)
 	}
-}
-
-func constructFnInfo(filePath string, line int) string {
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0600)
-	Assert(err == nil)
-	sc := bufio.NewScanner(file)
-	currentLine := 0
-	for sc.Scan() {
-		currentLine++
-		if currentLine != line {
-			continue
-		}
-		result := extractVarName(sc.Text())
-		if result == "" {
-			return fmt.Sprintf("%s-%d", filePath, line)
-		}
-	}
-	return ""
-}
-
-var newFnUsagePattern = regexp.MustCompile("(?P<VAR>(var)?).*(?P<FN>(:?)=\\s*NewFn)")
-
-func extractVarName(source string) string {
-	locs := newFnUsagePattern.FindStringSubmatchIndex(source)
-	ns := newFnUsagePattern.SubexpNames()
-	var varSymEnd, assignSymBegin int
-	if len(locs) > 0 {
-		for i, n := range ns {
-			if n == "VAR" {
-				varSymEnd = locs[i*2+1]
-			}
-			if n == "FN" {
-				assignSymBegin = locs[i*2]
-			}
-		}
-	}
-	if assignSymBegin != 0 {
-		ret := strings.Trim(source[varSymEnd:assignSymBegin], " ")
-		return ret
-	}
-	return ""
+	return ret
 }
 
 func (f Fn) Equal(other Fn) bool {
@@ -93,6 +54,18 @@ func (f Fn) SetW(weight int) Fn {
 	return newFn
 }
 
+func (f Fn) SetR(low, high int) Fn {
+	newFn := f
+	newFn.Repeat = Interval{lower: low, upper: high}
+	return newFn
+}
+
+func (f Fn) SetRI(fixed int) Fn {
+	newFn := f
+	newFn.Repeat = Interval{lower: fixed, upper: fixed}
+	return newFn
+}
+
 func (f Fn) Eval(state *State) string {
 	newFn := f
 	for _, l := range state.hooks {
@@ -104,58 +77,3 @@ func (f Fn) Eval(state *State) string {
 	}
 	return res
 }
-
-// Str is a Fn which simply returns str.
-func Str(str string) Fn {
-	return Fn{
-		Weight: 1,
-		Gen: func(_ *State) string {
-			return str
-		}}
-}
-
-func Strf(str string, fns ...Fn) Fn {
-	if len(fns) == 0 {
-		return Str(str)
-	}
-	ss := strings.Split(str, "[%fn]")
-	if len(ss) != len(fns)+1 {
-		panic(fmt.Sprintf("[param count mismatched] str: %s", str))
-	}
-	strs := make([]Fn, 0, 2*len(ss)-1)
-	for i := 0; i < len(fns); i++ {
-		strs = append(strs, Str(ss[i]))
-		strs = append(strs, fns[i])
-		if i == len(fns)-1 {
-			strs = append(strs, Str(ss[i+1]))
-		}
-	}
-	return And(strs...)
-}
-
-func Strs(strs ...string) Fn {
-	return Fn{
-		Weight: 1,
-		Gen: func(state *State) string {
-			return strings.Join(strs, " ")
-		},
-	}
-}
-
-// Empty is a Fn which simply returns empty string.
-func Empty() Fn {
-	return innerEmptyFn
-}
-
-var innerEmptyFn = Fn{
-	Weight: 1,
-	Gen: func(state *State) string {
-		return ""
-	},
-}
-
-func None() Fn {
-	return innerNoneFn
-}
-
-var innerNoneFn = Str("")

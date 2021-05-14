@@ -6,6 +6,7 @@ type State struct {
 	ctrl   *ControlOption
 	hooks  []FnEvaluateHook
 	weight map[string]int
+	repeat map[string]Interval
 
 	tables []*Table
 	scope  []map[ScopeKeyType]ScopeObj
@@ -18,14 +19,18 @@ type State struct {
 	invalid    bool
 }
 
+type Interval struct {
+	lower int
+	upper int
+}
+
 type Table struct {
-	Id      int
+	ID      int
 	Name    string
 	Columns []*Column
 	Indices []*Index
 
 	containsPK        bool // to ensure at most 1 pk in each table
-	PartitionColumns  []*Column
 	values            [][]string
 	colForPrefixIndex []*Column
 
@@ -36,7 +41,7 @@ type Table struct {
 }
 
 type Column struct {
-	Id   int
+	ID   int
 	Name string
 	Tp   ColumnType
 
@@ -48,6 +53,7 @@ type Column struct {
 	defaultVal     string
 	isNotNull      bool
 	relatedIndices map[int]struct{}
+	relatedTableID int
 	collate        CollationType
 }
 

@@ -3,7 +3,6 @@ package sqlgen
 func (s *State) CheckAssumptions(fs ...func(*State) bool) bool {
 	for _, f := range fs {
 		if !f(s) {
-			s.Invalidate()
 			return false
 		}
 	}
@@ -51,9 +50,7 @@ var HasKey = func(key ScopeKeyType) func(s *State) bool {
 
 var MustHaveKey = func(key ScopeKeyType) func(s *State) bool {
 	return func(s *State) bool {
-		if !s.Exists(key) {
-			NeverReach()
-		}
+		Assert(s.Exists(key))
 		return true
 	}
 }

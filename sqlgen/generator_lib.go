@@ -14,22 +14,140 @@
 package sqlgen
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-func And(fn ...Fn) Fn {
-	return Fn{Weight: 1, Gen: func(state *State) string {
-		return collectResult(state, fn...)
-	}}
+func And(fns ...Fn) Fn {
+	ret := defaultFn()
+	ret.Gen = func(state *State) string {
+		var resStr strings.Builder
+		for i, f := range fns {
+			if i != 0 {
+				resStr.WriteString(" ")
+			}
+			res := f.Eval(state)
+			Assert(!state.invalid)
+			resStr.WriteString(strings.Trim(res, " "))
+		}
+		return resStr.String()
+	}
+	return ret
 }
+
+func Or(fns ...Fn) Fn {
+	ret := defaultFn()
+	ret.Gen = func(state *State) string {
+		for len(fns) > 0 {
+			chosenFnIdx := randSelectByWeight(state, fns)
+			chosenFn := fns[chosenFnIdx]
+			result := chosenFn.Eval(state)
+			if state.Valid() {
+				return result
+			}
+			state.Recover()
+			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
+		}
+		// Need backtracking.
+		state.Invalidate()
+		return ""
+	}
+	return ret
+}
+
+// Str is a Fn which simply returns str.
+func Str(str string) Fn {
+	ret := defaultFn()
+	ret.Gen = func(_ *State) string {
+		return str
+	}
+	return ret
+}
+
+func Strf(str string, fns ...Fn) Fn {
+	if len(fns) == 0 {
+		return Str(str)
+	}
+	ss := strings.Split(str, "[%fn]")
+	if len(ss) != len(fns)+1 {
+		panic(fmt.Sprintf("[param count mismatched] str: %s", str))
+	}
+	strs := make([]Fn, 0, 2*len(ss)-1)
+	for i := 0; i < len(fns); i++ {
+		strs = append(strs, Str(ss[i]))
+		strs = append(strs, fns[i])
+		if i == len(fns)-1 {
+			strs = append(strs, Str(ss[i+1]))
+		}
+	}
+	return And(strs...)
+}
+
+func Strs(strs ...string) Fn {
+	ret := defaultFn()
+	ret.Gen = func(state *State) string {
+		return strings.Join(strs, " ")
+	}
+	return ret
+}
+
+func If(condition bool, fn Fn) Fn {
+	if condition {
+		return fn
+	}
+	return Empty
+}
+
+func Repeat(fn Fn, sep Fn) Fn {
+	ret := defaultFn()
+	ret.Gen = func(state *State) string {
+		var resStr strings.Builder
+		count := randGenRepeatCount(state, fn)
+		for i := 0; i < count; i++ {
+			if i != 0 {
+				sepRes := sep.Eval(state)
+				Assert(!state.invalid)
+				resStr.WriteString(sepRes)
+			}
+			res := fn.Eval(state)
+			Assert(!state.invalid)
+			resStr.WriteString(strings.Trim(res, " "))
+		}
+		return resStr.String()
+	}
+	return ret
+}
+
+func RepeatCount(fn Fn, cnt int, sep Fn) Fn {
+	if cnt == 0 {
+		return Empty
+	}
+	fns := make([]Fn, 0, 2*cnt-1)
+	for i := 0; i < cnt; i++ {
+		fns = append(fns, fn)
+		if i != cnt-1 {
+			fns = append(fns, sep)
+		}
+	}
+	return And(fns...)
+}
+
+var Empty = NewFn(func(state *State) Fn {
+	return Str("")
+})
+
+var None = NewFn(func(state *State) Fn {
+	state.Invalidate()
+	return Str("")
+})
 
 func Opt(fn Fn) Fn {
 	total := 1 + fn.Weight
 	if rand.Intn(total) == 0 {
-		return Empty()
+		return Empty
 	}
 	return fn
 }
@@ -62,49 +180,6 @@ func RandomBool() bool {
 	return rand.Intn(2) == 0
 }
 
-func OptIf(condition bool, fn Fn) Fn {
-	if condition {
-		return fn
-	}
-	return Empty()
-}
-
-func Or(fns ...Fn) Fn {
-	return Fn{Weight: 1, Gen: func(state *State) string {
-		for len(fns) > 0 {
-			chosenFnIdx := randSelectByWeight(state, fns)
-			chosenFn := fns[chosenFnIdx]
-			result := chosenFn.Eval(state)
-			if state.Valid() {
-				return result
-			}
-			state.Recover()
-			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
-		}
-		// Need backtracking.
-		state.Invalidate()
-		return ""
-	}}
-}
-
-func Repeat(fn Fn, cnt int, sep Fn) Fn {
-	if cnt == 0 {
-		return Empty()
-	}
-	fns := make([]Fn, 0, 2*cnt-1)
-	for i := 0; i < cnt; i++ {
-		fns = append(fns, fn)
-		if i != cnt-1 {
-			fns = append(fns, sep)
-		}
-	}
-	return And(fns...)
-}
-
-func RepeatRange(low, high int, fn Fn, sep Fn) Fn {
-	return Repeat(fn, low+rand.Intn(high+1-low), sep)
-}
-
 func Join(sep Fn, fns ...Fn) Fn {
 	newFns := make([]Fn, 0, len(fns)*2-1)
 	for i, f := range fns {
@@ -114,54 +189,4 @@ func Join(sep Fn, fns ...Fn) Fn {
 		}
 	}
 	return And(newFns...)
-}
-
-func collectResult(state *State, fns ...Fn) string {
-	var doneF []Fn
-	var resStr strings.Builder
-	for i, f := range fns {
-		res := f.Eval(state)
-		doneF = append(doneF, f)
-		resStr.WriteString(strings.Trim(res, " "))
-		if i != len(fns) {
-			resStr.WriteString(" ")
-		}
-	}
-	return resStr.String()
-}
-
-func randSelectByWeight(state *State, fns []Fn) int {
-	totalWeight := 0
-	for _, f := range fns {
-		totalWeight += state.GetWeight(f)
-	}
-	num := rand.Intn(totalWeight)
-	acc := 0
-	for i, f := range fns {
-		acc += f.Weight
-		if acc > num {
-			return i
-		}
-	}
-	return len(fns) - 1
-}
-
-func randomSelectByFactor(fns []Fn, weightFn func(f Fn) int) int {
-	num := rand.Intn(sumRandFactor(fns, weightFn))
-	acc := 0
-	for i, f := range fns {
-		acc += weightFn(f)
-		if acc > num {
-			return i
-		}
-	}
-	return len(fns) - 1
-}
-
-func sumRandFactor(fs []Fn, weightFn func(f Fn) int) int {
-	total := 0
-	for _, f := range fs {
-		total += weightFn(f)
-	}
-	return total
 }

@@ -27,7 +27,7 @@ func (s *FnHookTxnWrap) BeforeEvaluate(fn Fn) Fn {
 
 func (s *FnHookTxnWrap) startTxn() string {
 	fns := []Fn{
-		Empty().SetW(1),
+		Empty.SetW(1),
 		And(
 			Str("begin"),
 			Or(
@@ -44,7 +44,7 @@ func (s *FnHookTxnWrap) startTxn() string {
 		chosenFn = fns[randomSelectByFactor(fns, func(f Fn) int {
 			return f.Weight
 		})]
-		if chosenFn.Equal(Empty()) {
+		if chosenFn.Equal(Empty) {
 			s.inTxn = true
 			s.inflightStmts = 0
 		}
@@ -62,7 +62,7 @@ func (s *FnHookTxnWrap) AfterEvaluate(fn Fn, result string) string {
 
 func (s *FnHookTxnWrap) endTxn() string {
 	fns := []Fn{
-		Empty(),
+		Empty,
 		Or(
 			Str("commit"),
 			Str("rollback"),
@@ -78,14 +78,14 @@ func (s *FnHookTxnWrap) endTxn() string {
 		}
 		outTxnW := s.inflightStmts
 		fnIdx = randomSelectByFactor(fns, func(f Fn) int {
-			if f.Equal(Empty()) {
+			if f.Equal(Empty) {
 				return inTxnW
 			}
 			return outTxnW
 		})
 	}
 	chosenFn := fns[fnIdx]
-	if chosenFn.Equal(Empty()) {
+	if chosenFn.Equal(Empty) {
 		s.inTxn = false
 	} else if s.inTxn {
 		s.inflightStmts++

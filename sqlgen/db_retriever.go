@@ -28,6 +28,13 @@ func (s *State) GetWeight(fn Fn) int {
 	return fn.Weight
 }
 
+func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
+	if w, ok := s.repeat[fn.Info]; ok {
+		return w.lower, w.upper, true
+	}
+	return 0, 0, false
+}
+
 func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
@@ -39,6 +46,24 @@ func (s *State) GetFirstNonFullTable() *Table {
 		}
 	}
 	return nil
+}
+
+func (s State) GetTableByID(id int) *Table {
+	for _, t := range s.tables {
+		if t.ID == id {
+			return t
+		}
+	}
+	return nil
+}
+
+func (s *State) GetRelatedTables(cols []*Column) []*Table {
+	tbs := make([]*Table, len(cols))
+	for i, c := range cols {
+		tbs[i] = s.GetTableByID(c.relatedTableID)
+		Assert(tbs[i] != nil)
+	}
+	return tbs
 }
 
 func (s *State) GetRandPrepare() *Prepare {
@@ -66,34 +91,14 @@ func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
-// GetRandIndexFirstColumnWithWeight returns a random index's first columns.
-// It will choose PK according to the probability of pkW / (pkW + npkW).
+// GetRandIndexFirstColumn returns a random index's first columns.
 // If there is no index, return GetRandColumn().
-func (t *Table) GetRandIndexFirstColumnWithWeight(pkW, npkW int) *Column {
+func (t *Table) GetRandIndexFirstColumn() *Column {
 	if len(t.Indices) == 0 {
 		return t.GetRandColumn()
 	}
-	var pk *Index
-	npks := make([]*Index, 0, len(t.Indices))
-	for _, idx := range t.Indices {
-		if idx.Tp == IndexTypePrimary {
-			pk = idx
-		} else {
-			npks = append(npks, idx)
-		}
-	}
-
-	if rand.Intn(pkW+npkW) < pkW {
-		if pk == nil {
-			return t.GetRandColumn()
-		}
-		return pk.Columns[0]
-	} else {
-		if len(npks) == 0 {
-			return t.GetRandColumn()
-		}
-		return npks[rand.Intn(len(npks))].Columns[0]
-	}
+	idx := t.Indices[rand.Intn(len(t.Indices))]
+	return idx.Columns[0]
 }
 
 // GetRandIndexPrefixColumn returns a random index's random prefix columns.
@@ -202,7 +207,7 @@ func (t *Table) GetRandRow(cols []*Column) []string {
 	randRow := t.values[rand.Intn(len(t.values))]
 	for _, targetCol := range cols {
 		for i, tableCol := range t.Columns {
-			if tableCol.Id == targetCol.Id {
+			if tableCol.ID == targetCol.ID {
 				vals = append(vals, randRow[i])
 				break
 			}
@@ -228,7 +233,7 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	}
 	randRow := t.values[rand.Intn(len(t.values))]
 	for i, c := range t.Columns {
-		if c.Id == col.Id {
+		if c.ID == col.ID {
 			return randRow[i]
 		}
 	}
@@ -252,7 +257,7 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	for _, c := range t.Columns {
 		colID := colIDFn()
 		newCol := &Column{
-			Id:             colID,
+			ID:             colID,
 			Name:           c.Name,
 			Tp:             c.Tp,
 			isUnsigned:     c.isUnsigned,
@@ -263,7 +268,7 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 			isNotNull:      c.isNotNull,
 			relatedIndices: map[int]struct{}{},
 		}
-		oldID2NewCol[c.Id] = newCol
+		oldID2NewCol[c.ID] = newCol
 		newCols = append(newCols, newCol)
 	}
 	newIdxs := make([]*Index, 0, len(t.Indices))
@@ -277,24 +282,19 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
 		for _, ic := range idx.Columns {
-			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.Id])
+			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.ID])
 			ic.relatedIndices[idxID] = struct{}{}
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-	newPartitionCols := make([]*Column, 0, len(t.PartitionColumns))
-	for _, oldPartCol := range t.PartitionColumns {
-		newPartitionCols = append(newPartitionCols, oldID2NewCol[oldPartCol.Id])
-	}
 
 	newTable := &Table{
-		Id:               tblID,
-		Name:             name,
-		Columns:          newCols,
-		Indices:          newIdxs,
-		containsPK:       t.containsPK,
-		PartitionColumns: newPartitionCols,
-		values:           nil,
+		ID:         tblID,
+		Name:       name,
+		Columns:    newCols,
+		Indices:    newIdxs,
+		containsPK: t.containsPK,
+		values:     nil,
 	}
 	newTable.childTables = []*Table{newTable}
 	// TODO: DROP TABLE need to remove itself from children tables.
@@ -338,7 +338,7 @@ func (t *Table) GetRandUniqueIndexForPointGet() *Index {
 // GetColumnOffset gets the offset for a column.
 func (t *Table) GetColumnOffset(column *Column) int {
 	for i, col := range t.Columns {
-		if col.Id == column.Id {
+		if col.ID == column.ID {
 			return i
 		}
 	}
@@ -367,9 +367,14 @@ func (t *Table) GetPrimaryKeyIndex() *Index {
 	return nil
 }
 
-// GetRandColumnsSimple gets a random column.
-func (t *Table) GetRandColumnsSimple() *Column {
-	return t.Columns[rand.Intn(len(t.Columns))]
+func (t *Table) GetUniqueKeyColumns() []*Column {
+	indexes := t.FilterIndexes(func(idx *Index) bool {
+		return idx.Tp == IndexTypePrimary || idx.Tp == IndexTypeUnique
+	})
+	if len(indexes) == 0 {
+		return nil
+	}
+	return indexes[rand.Intn(len(indexes))].Columns
 }
 
 func (i *Index) IsUnique() bool {
