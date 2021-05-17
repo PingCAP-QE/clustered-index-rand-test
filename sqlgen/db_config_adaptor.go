@@ -29,11 +29,16 @@ func setWeight(s *State) {
 		s.SetWeight(PartitionDefinitionRange, weight[rangE])
 		s.SetWeight(PartitionDefinitionList, weight[list])
 	}
+	if w.CreateTable_WithoutLike > 0 {
+		s.SetWeight(CreateTableLike, 0)
+	}
 }
 
 func setRepeat(s *State) {
 	w := s.ctrl.Weight
-	s.SetRepeat(ColumnDefinition, 1, w.CreateTable_MaxColumnCnt)
+	if w.CreateTable_MoreCol > 0 {
+		s.SetRepeat(ColumnDefinition, 1, w.CreateTable_MoreCol)
+	}
 	s.SetRepeat(IndexDefinition, 1, w.CreateTable_IndexMoreCol)
 }
 
@@ -42,14 +47,30 @@ func mapConfigKey(s *State) {
 	if w.Query_INDEX_MERGE {
 		s.StoreConfig(ConfigKeyUnitFirstColumnIndexable, NewScopeObj(struct{}{}))
 		s.StoreConfig(ConfigKeyUnitIndexMergeHint, NewScopeObj(struct{}{}))
+		s.StoreConfig(ConfigKeyUnitIndexMergePredicate, NewScopeObj(struct{}{}))
 	}
 	if w.CreateTable_WithClusterHint {
 		s.StoreConfig(ConfigKeyUnitPKNeedClusteredHint, NewScopeObj(struct{}{}))
 	}
 	if w.CreateTable_MustStrCol {
-		s.StoreConfig(ConfigKeyEnumColumnType, NewScopeObj("string"))
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeChar}))
 	} else if w.CreateTable_MustIntCol {
-		s.StoreConfig(ConfigKeyEnumColumnType, NewScopeObj("int"))
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeInt}))
+	} else if len(w.CreateTable_IgnoredTypeCols) > 0 {
+		allowTypes := make([]ColumnType, 0, len(ColumnTypeAllTypes))
+		for _, c := range ColumnTypeAllTypes {
+			needIgnore := false
+			for _, ignoreCol := range w.CreateTable_IgnoredTypeCols {
+				if c == ignoreCol {
+					needIgnore = true
+					break
+				}
+			}
+			if !needIgnore {
+				allowTypes = append(allowTypes, c)
+			}
+		}
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj(allowTypes))
 	}
 	if w.Query_OrderLimit != ConfigKeyEnumLOBOrderBy && w.Query_OrderLimit != ConfigKeyEnumLOBLimitOrderBy {
 		if w.Query_HasOrderby > 0 {
@@ -63,5 +84,8 @@ func mapConfigKey(s *State) {
 	}
 	if !w.Query_DML_Can_Be_Replace {
 		s.StoreConfig(ConfigKeyEnumInsertOrReplace, NewScopeObj(ConfigKeyEnumIORInsert))
+	}
+	if w.CreateTable_MustPrefixIndex {
+		s.StoreConfig(ConfigKeyProbabilityIndexPrefix, NewScopeObj(100*Percent))
 	}
 }

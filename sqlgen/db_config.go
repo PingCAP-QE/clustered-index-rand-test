@@ -32,42 +32,41 @@ type ControlOption struct {
 }
 
 type Weight struct {
-	CreateTable                 int
-	CreateTable_WithClusterHint bool
-	CreateTable_MoreCol         int    // deprecated, use CreateTable_MaxColumnCnt instead.
-	CreateTable_WithoutLike     int    // deprecated, it will be removed later.
-	CreateTable_Partition_Type  string // deprecated, use self-defined replacer instead.
-	CreateTable_IndexMoreCol    int    // deprecated, use self-defined replacer instead.
-	CreateTable_MustPrefixIndex bool
-	CreateTable_MustStrCol      bool
-	CreateTable_MustIntCol      bool
-	CreateTable_IgnoredTypeCols []ColumnType
-	CreateTable_MaxColumnCnt    int
-	Query                       int // deprecated, it will be removed later.
-	Query_DML                   int
-	Query_Select                int
-	Query_DML_DEL               int
-	Query_DML_DEL_INDEX         int
-	Query_DML_DEL_COMMON        int
-	Query_DML_DEL_INDEX_PK      int
-	Query_DML_DEL_INDEX_COMMON  int
-	Query_DML_INSERT            int
-	Query_DML_INSERT_ON_DUP     int // deprecated
-	Query_DML_Can_Be_Replace    bool
-	Query_DML_UPDATE            int
-	Query_DDL                   int
-	Query_Window                int
-	Query_Union                 int
-	Query_Split                 int
-	Query_Analyze               int
-	Query_Prepare               int
-	Query_HasLimit              int // deprecated, use has_order_limit instead.
-	Query_HasOrderby            int // deprecated, use has_order_limit instead.
-	Query_OrderLimit            string
+	CreateTable                 int          // deprecated, use setWeight instead.
+	CreateTable_WithClusterHint bool         // deprecated, use state.StoreConfig(ConfigKeyUnitPKNeedClusteredHint, struct{}{}) instead.
+	CreateTable_MoreCol         int          // deprecated, use state.SetRepeat(ColumnDefinition, 1, w.CreateTable_MaxColumnCnt) instead.
+	CreateTable_WithoutLike     int          // deprecated, use state.SetWeight(CreateTableLike, 0) instead.
+	CreateTable_Partition_Type  string       // deprecated, use state.SetWeight(PartitionDefinitionHash, 100) instead.
+	CreateTable_IndexMoreCol    int          // deprecated, use state.SetRepeat(IndexDefinition, 1, n) instead.
+	CreateTable_MustPrefixIndex bool         // deprecated, use state.StoreConfig(ConfigKeyProbabilityIndexPrefix, NewScopeObj(100 * Percent)) instead.
+	CreateTable_MustStrCol      bool         // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
+	CreateTable_MustIntCol      bool         // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
+	CreateTable_IgnoredTypeCols []ColumnType // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
+	Query                       int          // deprecated, use setWeight instead.
+	Query_DML                   int          // deprecated, use setWeight instead.
+	Query_Select                int          // deprecated, use setWeight instead.
+	Query_DML_DEL               int          // deprecated, use setWeight instead.
+	Query_DML_DEL_INDEX         int          // deprecated, use setWeight instead.
+	Query_DML_DEL_COMMON        int          // deprecated, use setWeight instead.
+	Query_DML_DEL_INDEX_PK      int          // deprecated, use setWeight instead.
+	Query_DML_DEL_INDEX_COMMON  int          // deprecated, use setWeight instead.
+	Query_DML_INSERT            int          // deprecated, use setWeight instead.
+	Query_DML_INSERT_ON_DUP     int          // deprecated, use setWeight instead.
+	Query_DML_Can_Be_Replace    bool         // deprecated, use state.StoreConfig(ConfigKeyEnumInsertOrReplace) instead.
+	Query_DML_UPDATE            int          // deprecated, use setWeight instead.
+	Query_DDL                   int          // deprecated, use setWeight instead.
+	Query_Window                int          // deprecated, use setWeight instead.
+	Query_Union                 int          // deprecated, use setWeight instead.
+	Query_Split                 int          // deprecated, use setWeight instead.
+	Query_Analyze               int          // deprecated, use setWeight instead.
+	Query_Prepare               int          // deprecated, use setWeight instead.
+	Query_HasLimit              int          // deprecated, use state.StoreConfig(ConfigKeyEnumLimitOrderBy) instead.
+	Query_HasOrderby            int          // deprecated, use state.StoreConfig(ConfigKeyEnumLimitOrderBy) instead.
+	Query_OrderLimit            string       // deprecated, use state.StoreConfig(ConfigKeyEnumLimitOrderBy) instead.
 	Query_INDEX_MERGE           bool
-	SetRowFormat                int
-	SetClustered                int
-	AdminCheck                  int
+	SetRowFormat                int // deprecated, use setWeight instead.
+	SetClustered                int // deprecated, use setWeight instead.
+	AdminCheck                  int // deprecated, use setWeight instead.
 	MustCTE                     bool
 	CTEMultiRatio               int
 	CTESimpleSeed               int
@@ -104,7 +103,6 @@ var DefaultWeight = Weight{
 	CreateTable_Partition_Type:  "",
 	CreateTable_MustStrCol:      false,
 	CreateTable_MustIntCol:      false,
-	CreateTable_MaxColumnCnt:    10,
 	Query:                       15,
 	Query_DML:                   20,
 	Query_Select:                1,

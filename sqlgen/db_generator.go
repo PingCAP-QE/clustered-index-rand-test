@@ -11,7 +11,8 @@ import (
 	"github.com/cznic/mathutil"
 )
 
-func GenNewTable(id int) *Table {
+func (s *State) GenNewTable() *Table {
+	id := s.AllocGlobalID(ScopeKeyTableUniqID)
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.childTables = []*Table{newTbl}
@@ -24,40 +25,13 @@ func GenNewCTE(id int) *CTE {
 	}
 }
 
-func randColumnType(w *Weight) (ctp ColumnType) {
-retry:
-	for {
-		ctp = ColumnType(rand.Intn(int(ColumnTypeMax)))
-		for _, ignoredType := range w.CreateTable_IgnoredTypeCols {
-			if ignoredType == ctp {
-				continue retry
-			}
-		}
-		return ctp
-	}
-}
-
-func GenNewColumn(state *State, id int) *Column {
+func (s *State) GenNewColumn() *Column {
+	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
-	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
+	col.Tp = tps[rand.Intn(len(tps))]
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	cfgColTp := state.SearchConfig(ConfigKeyEnumColumnType).ToStringOrDefault("")
-	if cfgColTp == "string" {
-		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
-	}
-	if cfgColTp == "int" {
-		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
-	}
-	w := state.ctrl.Weight
-	if w.MustCTE {
-		if RandomBool() {
-			col.Tp = ColumnTypeInt
-		} else {
-			col.Tp = ColumnTypeChar
-		}
-
-	}
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
@@ -89,17 +63,18 @@ func GenNewColumn(state *State, id int) *Column {
 		col.isUnsigned = RandomBool()
 	}
 	col.isNotNull = RandomBool()
-	if !col.Tp.DisallowDefaultValue() && RandomBool() && !w.MustCTE {
+	if !col.Tp.DisallowDefaultValue() && RandomBool() {
 		col.defaultVal = col.RandomValue()
 	}
 	col.relatedIndices = map[int]struct{}{}
 	return col
 }
 
-func GenNewIndex(state *State, id int, tbl *Table) *Index {
+func (s *State) GenNewIndex(tbl *Table) *Index {
+	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
 	var totalCols []*Column
-	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
+	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
 		// Make sure the first column is not bit || enum || set.
 		firstColCandidates := tbl.FilterColumns(func(c *Column) bool {
 			return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
@@ -114,7 +89,7 @@ func GenNewIndex(state *State, id int, tbl *Table) *Index {
 		totalCols = tbl.GetRandColumnsNonEmpty()
 	}
 	idx.Columns = LimitIndexColumnSize(totalCols)
-	idx.ColumnPrefix = GenPrefixLen(state, totalCols)
+	idx.ColumnPrefix = GenPrefixLen(s, totalCols)
 	idx.Tp = GenIndexType(tbl, idx)
 	return idx
 }
@@ -168,24 +143,6 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	row := make([]string, len(cols))
 	for i, c := range cols {
 		row[i] = c.RandomValue()
-	}
-	return row
-}
-
-func (t *Table) GenRandValuesForCTE(cols []*Column) []string {
-	if len(cols) == 0 {
-		cols = t.Columns
-	}
-	row := make([]string, len(cols))
-	for i, c := range cols {
-		if !c.isNotNull && rand.Intn(30) == 0 {
-			row[i] = "null"
-		} else {
-			row[i] = RandomNums(0, 1, 1)[0]
-			if c.Tp != ColumnTypeInt {
-				row[i] = fmt.Sprintf("\"%s\"", row[i])
-			}
-		}
 	}
 	return row
 }

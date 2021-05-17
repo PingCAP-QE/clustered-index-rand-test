@@ -35,6 +35,7 @@ var Start = NewFn(func(state *State) Fn {
 	}
 
 	if state.ctrl.Weight.MustCTE {
+		state.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeChar, ColumnTypeInt}))
 		return cteStartWrapper
 	}
 	return Or(
@@ -152,7 +153,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(NoTooMuchTables) {
 		return None
 	}
-	tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID))
+	tbl := state.GenNewTable()
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
 	if state.ctrl.EnableTestTiFlash {
@@ -185,7 +186,7 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
+	col := state.GenNewColumn()
 	tbl.AppendColumn(col)
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
@@ -208,7 +209,7 @@ var IndexDefinition = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	idx := GenNewIndex(state, state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+	idx := state.GenNewIndex(tbl)
 	if idx.IsUnique() && state.Exists(ScopeKeyCurrentPartitionColumn) {
 		partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
 		// all partitioned Columns should be contained in every unique/primary index.
@@ -651,37 +652,32 @@ var CommonDelete = NewFn(func(state *State) Fn {
 })
 
 var Predicates = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	uniqueIdx := tbl.GetRandUniqueIndexForPointGet()
 	if uniqueIdx != nil {
 		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, NewScopeObj(uniqueIdx))
 	}
-
-	if w.Query_INDEX_MERGE {
-		andPredicates := NewFn(func(state *State) Fn {
-			tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
-			tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
-			repeatCnt := len(tbl.colForPrefixIndex)
-			if repeatCnt == 0 {
-				repeatCnt = 1
-			}
-			if rand.Intn(5) == 0 {
-				repeatCnt += rand.Intn(2) + 1
-			}
-			return RepeatCount(Predicate, repeatCnt, Str("and"))
-		})
-
-		// Give some chances to common predicate.
-		if rand.Intn(5) != 0 {
-			return Repeat(andPredicates.SetR(2, 5), Str("or"))
-		}
-	}
-
 	return Or(
 		Repeat(Predicate.SetR(1, 5), Or(Str("and"), Str("or"))).SetW(3),
 		PredicatesPointGet.SetW(1),
+		PredicatesIndexMerge.SetW(4),
 	)
+})
+
+var PredicatesIndexMerge = NewFn(func(state *State) Fn {
+	if !state.ExistsConfig(ConfigKeyUnitIndexMergePredicate) {
+		return None
+	}
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	tbl.colForPrefixIndex = tbl.GetRandIndexPrefixColumn()
+	repeatCnt := len(tbl.colForPrefixIndex)
+	if repeatCnt == 0 {
+		repeatCnt = 1
+	}
+	if rand.Intn(5) == 0 {
+		repeatCnt += rand.Intn(2) + 1
+	}
+	return RepeatCount(Predicate, repeatCnt, Str("and"))
 })
 
 var PredicatesPointGet = NewFn(func(state *State) Fn {
@@ -707,10 +703,9 @@ var PredicatesPointGet = NewFn(func(state *State) Fn {
 })
 
 var Predicate = NewFn(func(state *State) Fn {
-	w := state.ctrl.Weight
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	randCol := tbl.GetRandColumn()
-	if w.Query_INDEX_MERGE {
+	if state.ExistsConfig(ConfigKeyUnitIndexMergePredicate) {
 		if len(tbl.colForPrefixIndex) > 0 {
 			randCol = tbl.colForPrefixIndex[0]
 			tbl.colForPrefixIndex = tbl.colForPrefixIndex[1:]
@@ -757,7 +752,7 @@ var AddIndex = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	idx := GenNewIndex(state, state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
+	idx := state.GenNewIndex(tbl)
 	tbl.AppendIndex(idx)
 
 	return Strs(
@@ -784,7 +779,7 @@ var DropIndex = NewFn(func(state *State) Fn {
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
+	col := state.GenNewColumn()
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -816,7 +811,7 @@ var AlterColumn = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := tbl.GetRandColumn()
-	newCol := GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID))
+	newCol := state.GenNewColumn()
 	tbl.ReplaceColumn(col, newCol)
 	if RandomBool() {
 		newCol.Name = col.Name
@@ -1218,7 +1213,7 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 			colCnt = 2
 		}
 		for i := 0; i < colCnt+rand.Intn(5); i++ {
-			cte.AppendColumn(GenNewColumn(state, state.AllocGlobalID(ScopeKeyColumnUniqID)))
+			cte.AppendColumn(state.GenNewColumn())
 		}
 		if !ShouldValid(w.CTEValidSQL) {
 			if RandomBool() && state.GetCTECount() != 0 {
