@@ -27,13 +27,3 @@ func TestB(t *testing.T) {
 	}
 }
 
-func TestC(t *testing.T) {
-	state := NewState(func(ctl *ControlOption) {
-		ctl.Weight.CTEJustSyntax = true
-	})
-	gen := NewGenerator(state)
-	for i := 0; i < 200; i++ {
-		s := gen()
-		fmt.Printf("\"%s;\",\n", s)
-	}
-}

@@ -54,3 +54,10 @@ func RandomGroups(ss []string, groupCount int) [][]string {
 	}
 	return groups
 }
+
+func ConcatColumns(col1, col2 []*Column) []*Column {
+	ret := make([]*Column, 0, len(col1)+len(col2))
+	ret = append(ret, col1...)
+	ret = append(ret, col2...)
+	return ret
+}

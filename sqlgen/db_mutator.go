@@ -1,6 +1,7 @@
 package sqlgen
 
 import (
+	"os"
 	"sort"
 )
 
@@ -17,8 +18,39 @@ func (s *State) InjectTodoSQL(sqls ...string) {
 	s.todoSQLs = append(s.todoSQLs, sqls...)
 }
 
+func (s *State) SetWeight(prod Fn, weight int) {
+	Assert(weight >= 0)
+	s.weight[prod.Info] = weight
+}
+
+func (s *State) SetRepeat(prod Fn, lower int, upper int) {
+	Assert(lower > 0)
+	Assert(lower < upper)
+	s.repeat[prod.Info] = Interval{lower, upper}
+}
+
 func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
 	fn(s.ctrl)
+}
+
+func (s *State) AppendHook(hook FnEvaluateHook) {
+	s.hooks = append(s.hooks, hook)
+}
+
+func (s *State) ReplaceHook(hook FnEvaluateHook) {
+	for i, h := range s.hooks {
+		if h.Info() == hook.Info() {
+			s.hooks[i] = hook
+			return
+		}
+	}
+	s.AppendHook(hook)
+}
+
+func (s *State) SetInitialized() {
+	_ = os.RemoveAll(SelectOutFileDir)
+	_ = os.Mkdir(SelectOutFileDir, 0644)
+	s.finishInit = true
 }
 
 func (s *State) AppendTable(tbl *Table) {
@@ -76,21 +108,26 @@ func (s *State) RemovePrepare(p *Prepare) {
 	s.prepareStmts = append(s.prepareStmts[:pos], s.prepareStmts[pos+1:]...)
 }
 
+func (s *State) Invalidate() {
+	s.invalid = true
+}
+
+func (s *State) Recover() {
+	s.invalid = false
+}
+
 func (t *Table) AppendColumn(c *Column) {
+	c.relatedTableID = t.ID
 	t.Columns = append(t.Columns, c)
 	for i := range t.values {
 		t.values[i] = append(t.values[i], c.ZeroValue())
 	}
 }
 
-func (t *Table) AppendPartitionColumn(c *Column) {
-	t.PartitionColumns = append(t.PartitionColumns, c)
-}
-
 func (t *Table) RemoveColumn(c *Column) {
 	var pos int
 	for i := range t.Columns {
-		if t.Columns[i].Id == c.Id {
+		if t.Columns[i].ID == c.ID {
 			pos = i
 			break
 		}
@@ -102,8 +139,9 @@ func (t *Table) RemoveColumn(c *Column) {
 }
 
 func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
+	newCol.relatedTableID = t.ID
 	for colIdx := range t.Columns {
-		if t.Columns[colIdx].Id != oldCol.Id {
+		if t.Columns[colIdx].ID != oldCol.ID {
 			continue
 		}
 		t.Columns[colIdx] = newCol
@@ -119,7 +157,7 @@ func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
 func (t *Table) ReorderColumns() {
 	Assert(len(t.values) == 0, "ReorderColumns should only be used when there is no table data")
 	sort.Slice(t.Columns, func(i, j int) bool {
-		return t.Columns[i].Id < t.Columns[j].Id
+		return t.Columns[i].ID < t.Columns[j].ID
 	})
 }
 
@@ -152,7 +190,7 @@ func (i *Index) AppendColumnIfNotExists(cols ...*Column) {
 	for _, c := range cols {
 		found := false
 		for _, idxCol := range i.Columns {
-			if idxCol.Id == c.Id {
+			if idxCol.ID == c.ID {
 				found = true
 				break
 			}

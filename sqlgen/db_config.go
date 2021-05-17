@@ -21,12 +21,8 @@ type ControlOption struct {
 	EnableSelectOutFileAndLoadData bool
 	// Test TiFlash
 	EnableTestTiFlash bool
-	// Test aggregation push down
-	EnableAggPushDown bool
 	// Test column type change
 	EnableColumnTypeChange bool
-	// AggType specify aggregation executor type.
-	AggType string
 	// indicate whether attach stmt inside txn
 	AttachToTxn bool
 	// max stmt count in a txn
@@ -38,14 +34,16 @@ type ControlOption struct {
 type Weight struct {
 	CreateTable                 int
 	CreateTable_WithClusterHint bool
-	CreateTable_MoreCol         int
-	CreateTable_WithoutLike     int
-	CreateTable_Partition_Type  string
-	CreateTable_IndexMoreCol    int
+	CreateTable_MoreCol         int    // deprecated, use CreateTable_MaxColumnCnt instead.
+	CreateTable_WithoutLike     int    // deprecated, it will be removed later.
+	CreateTable_Partition_Type  string // deprecated, use self-defined replacer instead.
+	CreateTable_IndexMoreCol    int    // deprecated, use self-defined replacer instead.
 	CreateTable_MustPrefixIndex bool
 	CreateTable_MustStrCol      bool
 	CreateTable_MustIntCol      bool
-	Query                       int
+	CreateTable_IgnoredTypeCols []ColumnType
+	CreateTable_MaxColumnCnt    int
+	Query                       int // deprecated, it will be removed later.
 	Query_DML                   int
 	Query_Select                int
 	Query_DML_DEL               int
@@ -54,7 +52,7 @@ type Weight struct {
 	Query_DML_DEL_INDEX_PK      int
 	Query_DML_DEL_INDEX_COMMON  int
 	Query_DML_INSERT            int
-	Query_DML_INSERT_ON_DUP     int
+	Query_DML_INSERT_ON_DUP     int // deprecated
 	Query_DML_Can_Be_Replace    bool
 	Query_DML_UPDATE            int
 	Query_DDL                   int
@@ -63,8 +61,9 @@ type Weight struct {
 	Query_Split                 int
 	Query_Analyze               int
 	Query_Prepare               int
-	Query_HasLimit              int
-	Query_HasOrderby            int
+	Query_HasLimit              int // deprecated, use has_order_limit instead.
+	Query_HasOrderby            int // deprecated, use has_order_limit instead.
+	Query_OrderLimit            string
 	Query_INDEX_MERGE           bool
 	SetRowFormat                int
 	SetClustered                int
@@ -88,9 +87,7 @@ func DefaultControlOption() *ControlOption {
 		CanReadGCSavePoint:             false,
 		EnableSelectOutFileAndLoadData: false,
 		EnableTestTiFlash:              false,
-		EnableAggPushDown:              false,
 		EnableColumnTypeChange:         true,
-		AggType:                        "",
 		AttachToTxn:                    false,
 		MaxTxnStmtCount:                20,
 		Weight:                         &cloneWeight,
@@ -107,6 +104,7 @@ var DefaultWeight = Weight{
 	CreateTable_Partition_Type:  "",
 	CreateTable_MustStrCol:      false,
 	CreateTable_MustIntCol:      false,
+	CreateTable_MaxColumnCnt:    10,
 	Query:                       15,
 	Query_DML:                   20,
 	Query_Select:                1,
@@ -127,6 +125,7 @@ var DefaultWeight = Weight{
 	Query_Prepare:               2,
 	Query_HasLimit:              0,
 	Query_HasOrderby:            0,
+	Query_OrderLimit:            "none",
 	SetClustered:                1,
 	SetRowFormat:                1,
 	AdminCheck:                  1,

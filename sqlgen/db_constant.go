@@ -2,7 +2,6 @@ package sqlgen
 
 import (
 	"fmt"
-
 	"github.com/cznic/mathutil"
 )
 
@@ -216,11 +215,14 @@ const (
 type ScopeKeyType int8
 
 const (
-	ScopeKeyCurrentTable ScopeKeyType = iota
-	ScopeKeyCurrentMultiTable
+	ScopeKeyCurrentFn ScopeKeyType = iota
+	ScopeKeyCurrentTables
+	ScopeKeyCurrentSelectedColNum
 	ScopeKeyCurrentPrepare
-	ScopeKeyLastDropTable
 	ScopeKeyCurrentPartitionColumn
+	ScopeKeyCurrentUniqueIndexForPointGet
+	ScopeKeyCurrentSelectedColumns
+	ScopeKeyCurrentOrderByColumns
 	ScopeKeyLastOutFileTable
 	ScopeKeyCTESeedPartInit
 
@@ -229,7 +231,6 @@ const (
 	ScopeKeyIndexUniqID
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
-	ScopeUsePointGet
 	ScopeKeyCTEUniqID
 	ScopeKeyCTEAsNameID
 	ScopeKeyCTEValid
@@ -237,6 +238,30 @@ const (
 	ScopeKeyCTESyntaxBodyDeep
 )
 
+type ConfigKeyType int64
+
+const (
+	ConfigKeyNone ConfigKeyType = iota
+	ConfigKeyProbabilityIndexPrefix
+	ConfigKeyUnitFirstColumnIndexable
+	ConfigKeyUnitPKNeedClusteredHint
+	ConfigKeyUnitIndexMergeHint
+	ConfigKeyEnumLimitOrderBy    // value should be "none", "order-by", "limit-order-by"
+	ConfigKeyEnumColumnType      // value should be "int" or "string".
+	ConfigKeyEnumInsertOrReplace // value should be "insert" or "replace"
+)
+
+const (
+	ConfigKeyEnumLOBNone         = "none"
+	ConfigKeyEnumLOBOrderBy      = "order-by"
+	ConfigKeyEnumLOBLimitOrderBy = "limit-order-by"
+	ConfigKeyEnumIORInsert       = "insert"
+	ConfigKeyEnumIORReplace      = "replace"
+)
+
 const DefaultKeySize = 3072
+
+const Percent = 1
+const ProbabilityMax = 100 * Percent
 
 const SelectOutFileDir = "/tmp/tidb_tp_test_outfile"

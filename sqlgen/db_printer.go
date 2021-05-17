@@ -7,6 +7,31 @@ import (
 	"strings"
 )
 
+func PrintTableNames(tbs []*Table) string {
+	var sb strings.Builder
+	for i, t := range tbs {
+		sb.WriteString(t.Name)
+		if i != len(tbs)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
+}
+
+func PrintQualifiedColumnNames(tbs []*Table, cols []*Column) string {
+	Assert(len(tbs) == len(cols))
+	var sb strings.Builder
+	for i, c := range cols {
+		sb.WriteString(tbs[i].Name)
+		sb.WriteString(".")
+		sb.WriteString(c.Name)
+		if i != len(cols)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
+}
+
 func PrintColumnNamesWithPar(cols []*Column, emptyMarker string) string {
 	result := PrintColumnNamesWithoutPar(cols, emptyMarker)
 	if result == emptyMarker {
@@ -149,90 +174,6 @@ func PrintFullQualifiedColName(tbl *Table, cols []*Column) string {
 		}
 	}
 	return sb.String()
-}
-
-type aggArg struct {
-	name        string
-	minArg      int
-	maxArg      int
-	canDistinct bool
-}
-
-var aggFunctions = []aggArg{
-	{"count", 1, 1, true},
-	{"sum", 1, 1, true},
-	{"avg", 1, 1, true},
-	{"max", 1, 1, true},
-	{"min", 1, 1, true},
-	{"group_concat", 1, 1, true},
-	{"bit_or", 1, 1, false},
-	{"bit_xor", 1, 1, false},
-	{"bit_and", 1, 1, false},
-	{"var_pop", 1, 1, true},
-	{"var_samp", 1, 1, true},
-	{"stddev_pop", 1, 1, true},
-	{"stddev_samp", 1, 1, true},
-	{"json_objectagg", 2, 2, false},
-	{"approx_count_distinct", 1, 1, false},
-	{"approx_percentile", 1, 2, false},
-}
-
-func PrintRandomAggFunc(tbl *Table, cols []*Column) string {
-	arg := aggFunctions[rand.Intn(len(aggFunctions))]
-	str := arg.name + "("
-	if arg.canDistinct && rand.Intn(3) == 0 {
-		str += "distinct "
-	}
-	var col *Column
-	for i := 0; i < arg.minArg; i++ {
-		col = cols[rand.Intn(len(cols))]
-		if i > 0 {
-			str += ","
-		}
-		str += col.Name
-	}
-	if arg.name == "approx_percentile" {
-		str += ", " + strconv.FormatInt(rand.Int63n(100), 10)
-	}
-
-	// make result of group_concat not affected by ordering of data
-	if arg.name == "group_concat" {
-		str += " order by " + col.Name
-	}
-
-	str += ") aggCol"
-	return str
-}
-
-var windowFunctions = []string{
-	"row_number",
-	"rank",
-	"dense_rank",
-	"cume_dist",
-	"percent_rank",
-	"ntile",
-	"lead",
-	"lag",
-	"first_value",
-	"last_value",
-	"nth_value",
-}
-
-func PrintRandomWindowFunc(tbl *Table) string {
-	f := windowFunctions[rand.Intn(len(windowFunctions))]
-	switch f {
-	case "ntile":
-		f = f + fmt.Sprintf("(%d)", rand.Intn(5)+1)
-	case "lead", "lag":
-		f = f + fmt.Sprintf("(%s,%d,NULL)", tbl.GetRandColumn().Name, rand.Intn(5)+1)
-	case "first_value", "last_value":
-		f = f + "(" + tbl.GetRandColumn().Name + ")"
-	case "nth_value":
-		f = f + fmt.Sprintf("(%s,%d)", tbl.GetRandColumn().Name, rand.Intn(5)+1)
-	default:
-		f = f + "()"
-	}
-	return f
 }
 
 func PrintRandomWindow(tbl *Table) string {
