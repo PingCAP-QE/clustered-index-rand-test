@@ -74,14 +74,4 @@ var (
 	tableValueConstructor    Fn
 	explicitTable            Fn
 	cteStart                 Fn
-	synQueryExpression       Fn
-	synQueryExpressionBody   Fn
-	synQueryExpressionParens Fn
-	synQueryPrimary          Fn
-	synQuerySpecification    Fn
-	synWithClause            Fn
-	synWithList              Fn
-	synCommonTableExpr       Fn
-	synWithListClause        Fn
-	synCTE                   Fn
 )

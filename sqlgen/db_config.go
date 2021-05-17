@@ -64,17 +64,16 @@ type Weight struct {
 	Query_Analyze               int
 	Query_Prepare               int
 	Query_HasLimit              int
-	Query_HasOrderby  int
-	Query_INDEX_MERGE bool
-	SetRowFormat      int
-	SetClustered      int
-	AdminCheck        int
-	MustCTE           bool
-	CTEMultiRatio     int
-	CTESimpleSeed     int
-	CTEValidSQL       int
-	CTERecursiveDeep  int
-	CTEJustSyntax     bool
+	Query_HasOrderby            int
+	Query_INDEX_MERGE           bool
+	SetRowFormat                int
+	SetClustered                int
+	AdminCheck                  int
+	MustCTE                     bool
+	CTEMultiRatio               int
+	CTESimpleSeed               int
+	CTEValidSQL                 int
+	CTERecursiveDeep            int
 }
 
 func DefaultControlOption() *ControlOption {
@@ -126,15 +125,14 @@ var DefaultWeight = Weight{
 	Query_Split:                 1,
 	Query_Analyze:               0,
 	Query_Prepare:               2,
-	Query_HasLimit:   0,
-	Query_HasOrderby: 0,
-	SetClustered:     1,
-	SetRowFormat:     1,
-	AdminCheck:       1,
-	MustCTE:          false,
-	CTEMultiRatio:    25,
-	CTESimpleSeed:    4,
-	CTEValidSQL:      100,
-	CTERecursiveDeep: 5,
-	CTEJustSyntax:    false,
+	Query_HasLimit:              0,
+	Query_HasOrderby:            0,
+	SetClustered:                1,
+	SetRowFormat:                1,
+	AdminCheck:                  1,
+	MustCTE:                     false,
+	CTEMultiRatio:               25,
+	CTESimpleSeed:               4,
+	CTEValidSQL:                 100,
+	CTERecursiveDeep:            5,
 }

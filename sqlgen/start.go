@@ -48,12 +48,6 @@ func newGenerator(state *State) func() string {
 			return Str(s)
 		}
 
-		if w.CTEJustSyntax {
-			state.Store(ScopeKeyCTESyntaxExprDeep, NewScopeObj(0))
-			state.Store(ScopeKeyCTESyntaxBodyDeep, NewScopeObj(0))
-			return synQueryExpression
-		}
-
 		if state.IsInitializing() {
 			return initStart
 		}
@@ -1394,69 +1388,6 @@ func newGenerator(state *State) func() string {
 			Empty(),
 			Str("DISTINCT"),
 			Str("ALL"),
-		)
-	})
-
-	synQueryExpression = NewFn("synQueryExpression", func() Fn {
-		weight := state.Search(ScopeKeyCTESyntaxExprDeep).ToInt()
-		state.Store(ScopeKeyCTESyntaxExprDeep, NewScopeObj(weight+1))
-		return Or(
-			synQueryExpressionBody.SetW(weight*3),
-			And(synWithClause, synQueryExpressionBody),
-			synQueryExpressionParens,
-			And(synWithClause, synQueryExpressionParens),
-		)
-	})
-
-	synQueryExpressionBody = NewFn("synQueryExpressionBody", func() Fn {
-		weight := state.Search(ScopeKeyCTESyntaxBodyDeep).ToInt()
-		state.Store(ScopeKeyCTESyntaxBodyDeep, NewScopeObj(weight+1))
-		return Or(
-			synQueryPrimary.SetW(weight*3),
-			And(synQueryExpressionBody, Str("union"), unionOption, synQueryPrimary),
-			And(synQueryExpressionParens, Str("union"), unionOption, synQueryPrimary),
-			And(synQueryExpressionBody, Str("union"), unionOption, synQueryExpressionParens),
-			And(synQueryExpressionParens, Str("union"), unionOption, synQueryExpressionParens),
-		)
-	})
-
-	synQueryPrimary = NewFn("synQueryPrimary", func() Fn {
-		return Or(
-			Str("select 1"),
-			Str("select 1 as a group by a"),
-			Str("select 1 as a order by a"),
-		)
-	})
-
-	synWithListClause = NewFn("synWithListClause", func() Fn {
-		return Or(
-			And(synWithListClause, Str(","), synCTE),
-			synCTE,
-		)
-	})
-
-	synCTE = NewFn("synCTE", func() Fn {
-		return And(
-			Or(
-				Str("cte as "),
-				Str("cte (c1,c2) as "),
-			),
-			synQueryExpressionParens,
-		)
-	})
-
-	synWithClause = NewFn("synWithClause", func() Fn {
-		return And(
-			Str("with"),
-			Opt(Str("recursive")),
-			synWithListClause,
-		)
-	})
-
-	synQueryExpressionParens = NewFn("synQueryExpressionParens", func() Fn {
-		return Or(
-			And(Str("("), synQueryExpressionParens, Str(")")),
-			And(Str("("), synQueryExpression, Str(")")).SetW(4),
 		)
 	})
 
