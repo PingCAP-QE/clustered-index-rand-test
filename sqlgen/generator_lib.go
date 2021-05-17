@@ -84,13 +84,6 @@ func If(condition bool, fn Fn) Fn {
 	return NoneFn()
 }
 
-func IfElse(condition bool, t, f Fn) Fn {
-	if condition {
-		return t
-	}
-	return f
-}
-
 func OptIf(condition bool, fn Fn) Fn {
 	if condition {
 		return fn

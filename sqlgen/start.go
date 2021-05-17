@@ -1244,22 +1244,35 @@ func newGenerator(state *State) func() string {
 			Str(field),
 			Str("from"),
 			Str(strings.Join(cteNames, ",")),
+			OptIf(rand.Intn(10) == 0,
+				And(
+					Str("where"),
+					Str("exists"),
+					Str("("),
+					Str("select * from"),
+					Str(cteNames[0]),
+					Str("where"),
+					Str(colNames[0]),
+					Str("<3"),
+					Str(")"),
+				),
+			),
 			OptIf(parentCTEColCount == 0,
 				And(
 					Str("order by"),
 					Str(strings.Join(colNames, ",")),
 				),
 			),
+			Opt(And(Str("limit"), Str(RandomNum(0, 100)))),
 		)
 	})
 
 	withClause = NewFn("with clause", func() Fn {
 		return And(
 			Str("with"),
-			IfElse(
-				rand.Intn(100) < w.CTEValidSQL,
+			Or(
+				OptIf(ShouldValid(w.CTEValidSQL), Str("recursive")),
 				Str("recursive"),
-				Opt(Str("recursive")),
 			),
 			withList,
 		)
@@ -1307,21 +1320,16 @@ func newGenerator(state *State) func() string {
 				fields = append(fields, make([]string, rand.Intn(3))...)
 			}
 			for i := range fields {
-				if rand.Intn(3) == 0 {
+				switch rand.Intn(3) {
+				case 0:
 					fields[i] = tbl.GetRandColumn().Name
-				} else {
-					if RandomBool() {
-						fields[i] = fmt.Sprintf("%d", i+2)
+				case 1:
+					fields[i] = fmt.Sprintf("%d", i+2)
+				case 2:
+					if ShouldValid(w.CTEValidSQL) {
+						fields[i] = fmt.Sprintf("cast(\"%d\" as char(20))", i+2)
 					} else {
-						if ShouldValid(w.CTEValidSQL) {
-							fields[i] = fmt.Sprintf("cast(\"%d\" as char(20))", i+2)
-						} else {
-							if rand.Intn(3) == 0 {
-								fields[i] = fmt.Sprintf("a")
-							} else {
-								fields[i] = fmt.Sprintf("\"%d\"", i+2)
-							}
-						}
+						fields[i] = fmt.Sprintf("a")
 					}
 				}
 			}
@@ -1359,8 +1367,8 @@ func newGenerator(state *State) func() string {
 					Str(lastCTE.Name), // todo: it also can be a cte
 					Str("where"),
 					Str(fmt.Sprintf("%s < %d", lastCTE.Cols[0].Name, w.CTERecursiveDeep)),
+					Opt(And(Str("limit"), Str(RandomNum(0, 20)))),
 				),
-				//Str("select 3, 4"),
 			)
 		})
 

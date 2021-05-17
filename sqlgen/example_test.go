@@ -18,7 +18,7 @@ func TestB(t *testing.T) {
 	state := NewState(func(ctl *ControlOption) {
 		ctl.Weight.MustCTE = true
 		ctl.Weight.CreateTable_MustIntCol = true
-		ctl.InitTableCount = 2
+		ctl.InitTableCount = 1
 		ctl.Weight.CTEValidSQL = 100
 	})
 	gen := NewGenerator(state)
