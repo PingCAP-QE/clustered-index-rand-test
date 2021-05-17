@@ -25,7 +25,7 @@ func (s *State) SetWeight(prod Fn, weight int) {
 
 func (s *State) SetRepeat(prod Fn, lower int, upper int) {
 	Assert(lower > 0)
-	Assert(lower < upper)
+	Assert(lower <= upper)
 	s.repeat[prod.Info] = Interval{lower, upper}
 }
 

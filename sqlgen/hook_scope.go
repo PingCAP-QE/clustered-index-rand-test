@@ -10,7 +10,7 @@ type FnHookScope struct {
 func (s *FnHookScope) BeforeEvaluate(fn Fn) Fn {
 	s.state.CreateScope()
 	s.state.Store(ScopeKeyCurrentFn, NewScopeObj(fn.Info))
-	s.state.stack = s.state.GetCurrentStack()
+	s.state.fnStack = s.state.GetCurrentStack()
 	return fn
 }
 

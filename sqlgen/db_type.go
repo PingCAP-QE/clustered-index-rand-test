@@ -17,10 +17,11 @@ type State struct {
 
 	prepareStmts []*Prepare
 
-	finishInit bool
-	todoSQLs   []string
-	invalid    bool
-	stack      string
+	finishInit           bool
+	todoSQLs             []string
+	invalid              bool
+	fnStack              string
+	lastBrokenAssumption string
 }
 
 type Table struct {
@@ -227,6 +228,10 @@ func (s *State) GetCurrentStack() string {
 		sb.WriteString("'")
 	}
 	return sb.String()
+}
+
+func (s *State) LastBrokenAssumption() string {
+	return s.lastBrokenAssumption
 }
 
 func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
