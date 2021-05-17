@@ -68,7 +68,6 @@ type Weight struct {
 	SetClustered                int // deprecated, use setWeight instead.
 	AdminCheck                  int // deprecated, use setWeight instead.
 	MustCTE                     bool
-	CTEMultiRatio               int
 	CTESimpleSeed               int
 	CTEValidSQL                 int
 	CTERecursiveDeep            int
@@ -128,7 +127,6 @@ var DefaultWeight = Weight{
 	SetRowFormat:                1,
 	AdminCheck:                  1,
 	MustCTE:                     false,
-	CTEMultiRatio:               25,
 	CTESimpleSeed:               4,
 	CTEValidSQL:                 100,
 	CTERecursiveDeep:            5,

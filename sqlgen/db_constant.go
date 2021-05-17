@@ -267,7 +267,6 @@ const (
 	ScopeKeyCurrentSelectedColumns
 	ScopeKeyCurrentOrderByColumns
 	ScopeKeyLastOutFileTable
-	ScopeKeyCTESeedPartInit
 
 	ScopeKeyTableUniqID
 	ScopeKeyColumnUniqID
@@ -276,9 +275,6 @@ const (
 	ScopeKeyPrepareID
 	ScopeKeyCTEUniqID
 	ScopeKeyCTEAsNameID
-	ScopeKeyCTEValid
-	ScopeKeyCTESyntaxExprDeep
-	ScopeKeyCTESyntaxBodyDeep
 )
 
 type ConfigKeyType int64
