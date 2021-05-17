@@ -6,6 +6,11 @@ import (
 	"runtime/debug"
 )
 
+type Interval struct {
+	lower int
+	upper int
+}
+
 func Assert(cond bool, targets ...interface{}) {
 	if !cond {
 		spew.Dump(targets...)

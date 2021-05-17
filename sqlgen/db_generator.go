@@ -11,38 +11,21 @@ import (
 	"github.com/cznic/mathutil"
 )
 
-func GenNewTable(id int) *Table {
+func (s *State) GenNewTable() *Table {
+	id := s.AllocGlobalID(ScopeKeyTableUniqID)
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
 
-func randColumnType(w *Weight) (ctp ColumnType) {
-retry:
-	for {
-		ctp = ColumnType(rand.Intn(int(ColumnTypeMax)))
-		for _, ignoredType := range w.CreateTable_IgnoredTypeCols {
-			if ignoredType == ctp {
-				continue retry
-			}
-		}
-		return ctp
-	}
-}
-
-func GenNewColumn(state *State, id int) *Column {
+func (s *State) GenNewColumn() *Column {
+	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
-	col.Tp = ColumnType(rand.Intn(int(ColumnTypeMax)))
+	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
+	col.Tp = tps[rand.Intn(len(tps))]
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	cfgColTp := state.SearchConfig(ConfigKeyEnumColumnType).ToStringOrDefault("")
-	if cfgColTp == "string" {
-		col.Tp = ColumnTypeChar + ColumnType(rand.Intn(int(3)))
-	}
-	if cfgColTp == "int" {
-		col.Tp = ColumnTypeInt + ColumnType(rand.Intn(int(5)))
-	}
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
@@ -81,10 +64,11 @@ func GenNewColumn(state *State, id int) *Column {
 	return col
 }
 
-func GenNewIndex(state *State, id int, tbl *Table) *Index {
+func (s *State) GenNewIndex(tbl *Table) *Index {
+	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
 	var totalCols []*Column
-	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
+	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
 		// Make sure the first column is not bit || enum || set.
 		firstColCandidates := tbl.FilterColumns(func(c *Column) bool {
 			return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
@@ -99,7 +83,7 @@ func GenNewIndex(state *State, id int, tbl *Table) *Index {
 		totalCols = tbl.GetRandColumnsNonEmpty()
 	}
 	idx.Columns = LimitIndexColumnSize(totalCols)
-	idx.ColumnPrefix = GenPrefixLen(state, totalCols)
+	idx.ColumnPrefix = GenPrefixLen(s, totalCols)
 	idx.Tp = GenIndexType(tbl, idx)
 	return idx
 }

@@ -70,9 +70,52 @@ const (
 	ColumnTypeTime
 	ColumnTypeDatetime
 	ColumnTypeTimestamp
-
-	ColumnTypeMax
 )
+
+var ColumnTypeAllTypes = []ColumnType{
+	ColumnTypeInt,
+	ColumnTypeTinyInt,
+	ColumnTypeSmallInt,
+	ColumnTypeMediumInt,
+	ColumnTypeBigInt,
+	ColumnTypeBoolean,
+	ColumnTypeFloat,
+	ColumnTypeDouble,
+	ColumnTypeDecimal,
+	ColumnTypeBit,
+
+	ColumnTypeChar,
+	ColumnTypeVarchar,
+	ColumnTypeText,
+	ColumnTypeBlob,
+	ColumnTypeBinary,
+	ColumnTypeVarBinary,
+	ColumnTypeEnum,
+	ColumnTypeSet,
+
+	ColumnTypeDate,
+	ColumnTypeTime,
+	ColumnTypeDatetime,
+	ColumnTypeTimestamp,
+}
+
+var ColumnTypeIntegerTypes = []ColumnType{
+	ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt,
+	ColumnTypeMediumInt, ColumnTypeBigInt, ColumnTypeBoolean,
+}
+
+var ColumnTypeFloatingTypes = []ColumnType{
+	ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal,
+}
+
+var ColumnTypeStringTypes = []ColumnType{
+	ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary,
+	ColumnTypeVarBinary, ColumnTypeEnum, ColumnTypeSet,
+}
+
+var ColumnTypeTimeTypes = []ColumnType{
+	ColumnTypeDate, ColumnTypeTime, ColumnTypeDatetime, ColumnTypeTimestamp,
+}
 
 type CollationType int64
 
@@ -235,14 +278,15 @@ const (
 type ConfigKeyType int64
 
 const (
-	ConfigKeyNone ConfigKeyType = iota
-	ConfigKeyProbabilityIndexPrefix
-	ConfigKeyUnitFirstColumnIndexable
-	ConfigKeyUnitPKNeedClusteredHint
-	ConfigKeyUnitIndexMergeHint
-	ConfigKeyEnumLimitOrderBy    // value should be "none", "order-by", "limit-order-by"
-	ConfigKeyEnumColumnType      // value should be "int" or "string".
-	ConfigKeyEnumInsertOrReplace // value should be "insert" or "replace"
+	ConfigKeyNone                     ConfigKeyType = iota
+	ConfigKeyProbabilityIndexPrefix                 // value example: 50*Percent
+	ConfigKeyUnitFirstColumnIndexable               // value example: struct{}{}
+	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
+	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
+	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
+	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
+	ConfigKeyArrayAllowColumnTypes                  // value example: []ColumnType{ColumnTypeInt, ColumnTypeTinyInt}
+	ConfigKeyEnumInsertOrReplace                    // value should be "insert" or "replace"
 )
 
 const (

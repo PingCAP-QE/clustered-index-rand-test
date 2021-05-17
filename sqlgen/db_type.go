@@ -1,6 +1,9 @@
 package sqlgen
 
-import "math/rand"
+import (
+	"math/rand"
+	"strings"
+)
 
 type State struct {
 	ctrl   *ControlOption
@@ -18,11 +21,6 @@ type State struct {
 	todoSQLs   []string
 	invalid    bool
 	stack      string
-}
-
-type Interval struct {
-	lower int
-	upper int
 }
 
 type Table struct {
@@ -72,6 +70,10 @@ type Prepare struct {
 	Args []func() string
 }
 
+type ScopeObj struct {
+	obj interface{}
+}
+
 func NewState(opts ...func(ctl *ControlOption)) *State {
 	s := &State{
 		ctrl:   DefaultControlOption(),
@@ -97,10 +99,6 @@ func NewState2(EnableTestTiFlash bool) *State {
 	})
 }
 
-type ScopeObj struct {
-	obj interface{}
-}
-
 func NewScopeObj(obj interface{}) ScopeObj {
 	return ScopeObj{obj}
 }
@@ -119,6 +117,17 @@ func (s ScopeObj) ToTables() Tables {
 
 func (s ScopeObj) ToColumn() *Column {
 	return s.obj.(*Column)
+}
+
+func (s ScopeObj) ToColumnTypes() []ColumnType {
+	return s.obj.([]ColumnType)
+}
+
+func (s ScopeObj) ToColumnTypesOrDefault(defau1t []ColumnType) []ColumnType {
+	if s.obj == nil {
+		return defau1t
+	}
+	return s.ToColumnTypes()
 }
 
 func (s ScopeObj) ToIndex() *Index {
@@ -194,6 +203,37 @@ func (s *State) Search(key ScopeKeyType) ScopeObj {
 func (s *State) Roll(key ConfigKeyType, defaultVal int) bool {
 	baseline := s.config[key].ToIntOrDefault(defaultVal)
 	return rand.Intn(ProbabilityMax) < baseline
+}
+
+func (s *State) GetWeight(fn Fn) int {
+	if w, ok := s.weight[fn.Info]; ok {
+		return w
+	}
+	return fn.Weight
+}
+
+func (s *State) GetCurrentStack() string {
+	var sb strings.Builder
+	for i := 0; i < len(s.scope); i++ {
+		if i > 0 {
+			sb.WriteString("-")
+		}
+		sb.WriteString("'")
+		if currentFn, ok := s.scope[i][ScopeKeyCurrentFn]; ok {
+			sb.WriteString(currentFn.ToString())
+		} else {
+			sb.WriteString("root")
+		}
+		sb.WriteString("'")
+	}
+	return sb.String()
+}
+
+func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
+	if w, ok := s.repeat[fn.Info]; ok {
+		return w.lower, w.upper, true
+	}
+	return 0, 0, false
 }
 
 func (s *State) ExistsConfig(key ConfigKeyType) bool {
