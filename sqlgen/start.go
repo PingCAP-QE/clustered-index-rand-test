@@ -280,7 +280,12 @@ var PartitionDefinitionList = NewFn(func(state *State) Fn {
 var InsertInto = NewFn(func(state *State) Fn {
 	Assert(!state.Initialized())
 	tbl := state.GetFirstNonFullTable()
-	vals := tbl.GenRandValues(tbl.Columns)
+	var vals []string
+	if state.ctrl.Weight.MustCTE {
+		vals = tbl.GenRandValuesForCTE(tbl.Columns)
+	} else {
+		vals = tbl.GenRandValues(tbl.Columns)
+	}
 	tbl.AppendRow(vals)
 	return And(
 		Str("insert into"),

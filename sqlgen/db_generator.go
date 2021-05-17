@@ -147,6 +147,24 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	return row
 }
 
+func (t *Table) GenRandValuesForCTE(cols []*Column) []string {
+	if len(cols) == 0 {
+		cols = t.Columns
+	}
+	row := make([]string, len(cols))
+	for i, c := range cols {
+		if !c.isNotNull && rand.Intn(30) == 0 {
+			row[i] = "null"
+		} else {
+			row[i] = RandomNums(0, 1, 1)[0]
+			if c.Tp != ColumnTypeInt {
+				row[i] = fmt.Sprintf("\"%s\"", row[i])
+			}
+		}
+	}
+	return row
+}
+
 // GenMultipleRowsAscForHandleCols generates random values for *possible* handle columns.
 // It may be a random int64 or primary key columns' random values, because
 // the generator have no idea about whether the primary key is clustered or not.
