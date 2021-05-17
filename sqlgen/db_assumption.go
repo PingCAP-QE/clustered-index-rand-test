@@ -16,7 +16,8 @@ func (s *State) CheckAssumptions(fs ...func(*State) bool) bool {
 }
 
 func NoTooMuchTables(s *State) bool {
-	return len(s.tables) < s.ctrl.MaxTableNum
+	maxTableCnt := s.SearchConfig(ConfigKeyIntMaxTableCount).ToIntOrDefault(20)
+	return len(s.tables) < maxTableCnt
 }
 
 func HasTables(s *State) bool {

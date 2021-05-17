@@ -306,3 +306,10 @@ func PrintColumnWithFunction(col *Column) string {
 	}
 	return fmt.Sprintf("concat(%s, 1)", col.Name)
 }
+
+func PrintConstantWithFunction(ColumnType) string {
+	if RandomBool() {
+		return fmt.Sprintf("1 + 1")
+	}
+	return fmt.Sprintf("concat('a', 1)")
+}

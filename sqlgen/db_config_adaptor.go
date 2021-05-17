@@ -45,17 +45,17 @@ func setRepeat(s *State) {
 func mapConfigKey(s *State) {
 	w := s.ctrl.Weight
 	if w.Query_INDEX_MERGE {
-		s.StoreConfig(ConfigKeyUnitFirstColumnIndexable, NewScopeObj(struct{}{}))
-		s.StoreConfig(ConfigKeyUnitIndexMergeHint, NewScopeObj(struct{}{}))
-		s.StoreConfig(ConfigKeyUnitIndexMergePredicate, NewScopeObj(struct{}{}))
+		s.StoreConfig(ConfigKeyUnitFirstColumnIndexable, struct{}{})
+		s.StoreConfig(ConfigKeyUnitIndexMergeHint, struct{}{})
+		s.StoreConfig(ConfigKeyUnitIndexMergePredicate, struct{}{})
 	}
 	if w.CreateTable_WithClusterHint {
-		s.StoreConfig(ConfigKeyUnitPKNeedClusteredHint, NewScopeObj(struct{}{}))
+		s.StoreConfig(ConfigKeyUnitPKNeedClusteredHint, struct{}{})
 	}
 	if w.CreateTable_MustStrCol {
-		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeChar}))
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, []ColumnType{ColumnTypeChar})
 	} else if w.CreateTable_MustIntCol {
-		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeInt}))
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, []ColumnType{ColumnTypeInt})
 	} else if len(w.CreateTable_IgnoredTypeCols) > 0 {
 		allowTypes := make([]ColumnType, 0, len(ColumnTypeAllTypes))
 		for _, c := range ColumnTypeAllTypes {
@@ -70,22 +70,28 @@ func mapConfigKey(s *State) {
 				allowTypes = append(allowTypes, c)
 			}
 		}
-		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj(allowTypes))
+		s.StoreConfig(ConfigKeyArrayAllowColumnTypes, allowTypes)
 	}
 	if w.Query_OrderLimit != ConfigKeyEnumLOBOrderBy && w.Query_OrderLimit != ConfigKeyEnumLOBLimitOrderBy {
 		if w.Query_HasOrderby > 0 {
-			s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(ConfigKeyEnumLOBOrderBy))
+			s.StoreConfig(ConfigKeyEnumLimitOrderBy, ConfigKeyEnumLOBOrderBy)
 		}
 		if w.Query_HasLimit > 0 {
-			s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(ConfigKeyEnumLOBLimitOrderBy))
+			s.StoreConfig(ConfigKeyEnumLimitOrderBy, ConfigKeyEnumLOBLimitOrderBy)
 		}
 	} else {
-		s.StoreConfig(ConfigKeyEnumLimitOrderBy, NewScopeObj(w.Query_OrderLimit))
+		s.StoreConfig(ConfigKeyEnumLimitOrderBy, w.Query_OrderLimit)
 	}
 	if !w.Query_DML_Can_Be_Replace {
-		s.StoreConfig(ConfigKeyEnumInsertOrReplace, NewScopeObj(ConfigKeyEnumIORInsert))
+		s.StoreConfig(ConfigKeyEnumInsertOrReplace, ConfigKeyEnumIORInsert)
 	}
 	if w.CreateTable_MustPrefixIndex {
-		s.StoreConfig(ConfigKeyProbabilityIndexPrefix, NewScopeObj(100*Percent))
+		s.StoreConfig(ConfigKeyProbabilityIndexPrefix, 100*Percent)
+	}
+	if s.ctrl.MaxTableNum > 0 {
+		s.StoreConfig(ConfigKeyIntMaxTableCount, s.ctrl.MaxTableNum)
+	}
+	if s.ctrl.StrictTransTable {
+		s.StoreConfig(ConfigKeyUnitStrictTransTable, struct{}{})
 	}
 }

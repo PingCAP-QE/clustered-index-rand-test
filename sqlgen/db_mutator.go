@@ -1,7 +1,6 @@
 package sqlgen
 
 import (
-	"os"
 	"sort"
 )
 
@@ -45,12 +44,6 @@ func (s *State) ReplaceHook(hook FnEvaluateHook) {
 		}
 	}
 	s.AppendHook(hook)
-}
-
-func (s *State) SetInitialized() {
-	_ = os.RemoveAll(SelectOutFileDir)
-	_ = os.Mkdir(SelectOutFileDir, 0644)
-	s.finishInit = true
 }
 
 func (s *State) AppendTable(tbl *Table) {

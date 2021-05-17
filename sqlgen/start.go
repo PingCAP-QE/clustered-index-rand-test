@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -25,18 +26,6 @@ func NewGenerator(state *State) func() string {
 var Start = NewFn(func(state *State) Fn {
 	if s, ok := state.PopOneTodoSQL(); ok {
 		return Str(s)
-	}
-	if !state.Initialized() {
-		eInitStart := Str(InitStart.Eval(state))
-		if state.MeetInitializedDemand() {
-			state.SetInitialized()
-		}
-		return eInitStart
-	}
-
-	if state.ctrl.Weight.MustCTE {
-		state.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeChar, ColumnTypeInt}))
-		return cteStartWrapper
 	}
 	return Or(
 		SwitchRowFormatVer.SetW(1),
@@ -58,15 +47,6 @@ var Start = NewFn(func(state *State) Fn {
 	)
 })
 
-var InitStart = NewFn(func(state *State) Fn {
-	Assert(!state.Initialized())
-	if len(state.tables) < state.ctrl.InitTableCount {
-		return CreateTable
-	} else {
-		return InsertInto
-	}
-})
-
 var DMLStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None
@@ -84,7 +64,7 @@ var DDLStmt = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return Or(
 		AddColumn,
 		AddIndex,
@@ -155,7 +135,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	}
 	tbl := state.GenNewTable()
 	state.AppendTable(tbl)
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	if state.ctrl.EnableTestTiFlash {
 		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
@@ -164,7 +144,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	eColDefs := ColumnDefinitions.Eval(state)
 	partCol := tbl.GetRandColumnForPartition()
 	if partCol != nil {
-		state.Store(ScopeKeyCurrentPartitionColumn, NewScopeObj(partCol))
+		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
@@ -174,9 +154,6 @@ var CreateTable = NewFn(func(state *State) Fn {
 var ColumnDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
-	}
-	if !state.Initialized() {
-		return RepeatCount(ColumnDefinition, state.ctrl.InitColCount, Str(","))
 	}
 	return Repeat(ColumnDefinition.SetR(1, 10), Str(","))
 })
@@ -278,14 +255,8 @@ var PartitionDefinitionList = NewFn(func(state *State) Fn {
 })
 
 var InsertInto = NewFn(func(state *State) Fn {
-	Assert(!state.Initialized())
-	tbl := state.GetFirstNonFullTable()
-	var vals []string
-	if state.ctrl.Weight.MustCTE {
-		vals = tbl.GenRandValuesForCTE(tbl.Columns)
-	} else {
-		vals = tbl.GenRandValues(tbl.Columns)
-	}
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	vals := tbl.GenRandValues(tbl.Columns)
 	tbl.AppendRow(vals)
 	return And(
 		Str("insert into"),
@@ -313,8 +284,8 @@ var SingleSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentSelectedColNum, NewScopeObj(1+rand.Intn(len(tbl.Columns))))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentSelectedColNum, 1+rand.Intn(len(tbl.Columns)))
 	return Or(
 		CommonSelect,
 		AggregationSelect,
@@ -327,9 +298,9 @@ var UnionSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl1, tbl2 := state.GetRandTable(), state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl1, tbl2}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
 	colLen := mathutil.Min(len(tbl1.Columns), len(tbl2.Columns))
-	state.Store(ScopeKeyCurrentSelectedColNum, NewScopeObj(1+rand.Intn(colLen)))
+	state.Store(ScopeKeyCurrentSelectedColNum, 1+rand.Intn(colLen))
 	return Or(
 		And(Str("("), CommonSelect, Str(")"), SetOperator, Str("("), CommonSelect, Str(")")),
 		And(
@@ -351,7 +322,7 @@ var CommonSelect = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	cols := tbl.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
 		prepare := state.Search(ScopeKeyCurrentPrepare).ToPrepare()
@@ -369,7 +340,7 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	pkCols := tbl.GetUniqueKeyColumns()
 	groupByCols := tbl.GetRandColumns()
 	return And(
@@ -416,7 +387,7 @@ var WindowSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return And(
 		Str("select"), HintTiFlash, HintIndexMerge, WindowFunction, Str("over w"),
 		Str("from"), Str(tbl.Name), Str("window w as"), Str(PrintRandomWindow(tbl)),
@@ -513,14 +484,14 @@ var OrderByLimit = NewFn(func(state *State) Fn {
 
 var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	var cols []*Column
-	if state.ctrl.StrictTransTable {
+	if state.ExistsConfig(ConfigKeyUnitStrictTransTable) {
 		cols = tbl.GetRandColumnsIncludedDefaultValue()
 	} else {
 		cols = tbl.GetRandColumns()
 	}
-	state.Store(ScopeKeyCurrentSelectedColumns, NewScopeObj(cols))
+	state.Store(ScopeKeyCurrentSelectedColumns, cols)
 	// TODO: insert into t partition(p1) values(xxx)
 	// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
 	return Or(
@@ -606,8 +577,8 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 
 var CommonUpdate = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 	return And(
 		Str("update"), Str(tbl.Name), Str("set"),
 		Repeat(AssignClause.SetR(1, 3), Str(",")),
@@ -633,8 +604,8 @@ var CommonDelete = NewFn(func(state *State) Fn {
 	} else {
 		col = tbl.GetRandColumn()
 	}
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
@@ -660,7 +631,7 @@ var Predicates = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	uniqueIdx := tbl.GetRandUniqueIndexForPointGet()
 	if uniqueIdx != nil {
-		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, NewScopeObj(uniqueIdx))
+		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, uniqueIdx)
 	}
 	return Or(
 		Repeat(Predicate.SetR(1, 5), Or(Str("and"), Str("or"))).SetW(3),
@@ -833,7 +804,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	tbl2 := state.GetRandTable()
 	cols1 := tbl1.GetRandColumns()
 	cols2 := tbl2.GetRandColumns()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl1, tbl2}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
 	preferIndex := RandomBool()
 
 	var joinPredicate = NewFn(func(state *State) Fn {
@@ -934,7 +905,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 				col2 = tbl2.GetRandColumn()
 			}
 		}
-		state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl1.Columns))
+		state.Store(ScopeKeyCurrentOrderByColumns, tbl1.Columns)
 		// TODO: Support exists subquery.
 		return And(
 			Str("select"), HintTiFlash,
@@ -962,7 +933,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	})
 
 	orderByCols := ConcatColumns(tbl1.Columns, tbl2.Columns)
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(orderByCols))
+	state.Store(ScopeKeyCurrentOrderByColumns, orderByCols)
 	return Or(
 		And(
 			Str("select"), HintTiFlash,
@@ -1026,7 +997,9 @@ var SelectIntoOutFile = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.StoreInRoot(ScopeKeyLastOutFileTable, NewScopeObj(tbl))
+	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
+	_ = os.RemoveAll(SelectOutFileDir)
+	_ = os.Mkdir(SelectOutFileDir, 0644)
 	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
 	return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 })
@@ -1099,7 +1072,7 @@ var PrepareStmt = NewFn(func(state *State) Fn {
 	}
 	prepare := GenNewPrepare(state.AllocGlobalID(ScopeKeyPrepareID))
 	state.AppendPrepare(prepare)
-	state.Store(ScopeKeyCurrentPrepare, NewScopeObj(prepare))
+	state.Store(ScopeKeyCurrentPrepare, prepare)
 	return And(
 		Str("prepare"),
 		Str(prepare.Name),
@@ -1136,9 +1109,17 @@ var QueryPrepare = NewFn(func(state *State) Fn {
 	return Str(assignments[0])
 })
 
-var cteStartWrapper = NewFn(func (state *State) Fn {
-	var cteStart, simpleCTEQuery, withClause, cte, queryExpressionParens,unionOption Fn
-	w := state.ctrl.Weight
+var UnionOption = NewFn(func(state *State) Fn {
+	return Or(
+		Empty,
+		Str("DISTINCT"),
+		Str("ALL"),
+	)
+})
+
+var CTEStartWrapper = NewFn(func(state *State) Fn {
+	var cteStart, simpleCTEQuery, withClause, cte, queryExpressionParens Fn
+	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
 	cteStart = NewFn(func(state *State) Fn {
 		state.IncCTEDeep()
 		return And(withClause, simpleCTEQuery)
@@ -1204,7 +1185,7 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 		return And(
 			Str("with"),
 			Or(
-				If(ShouldValid(w.CTEValidSQL), Str("recursive")),
+				If(ShouldValid(validSQLPercent), Str("recursive")),
 				Str("recursive"),
 			),
 			Repeat(cte.SetR(1, 3), Str(",")),
@@ -1217,10 +1198,11 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 		if colCnt == 0 {
 			colCnt = 2
 		}
-		for i := 0; i < colCnt+rand.Intn(5); i++ {
+		cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt))
+		for i := 0; i < colCnt+rand.Intn(4); i++ {
 			cte.AppendColumn(state.GenNewColumn())
 		}
-		if !ShouldValid(w.CTEValidSQL) {
+		if !ShouldValid(validSQLPercent) {
 			if RandomBool() && state.GetCTECount() != 0 {
 				cte.Name = state.GetRandomCTE().Name
 			} else {
@@ -1242,22 +1224,23 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 			tbl := state.GetRandTable()
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
-			if !ShouldValid(w.CTEValidSQL) {
-				fields = append(fields, make([]string, rand.Intn(3))...)
-			}
 			for i := range fields {
 				switch rand.Intn(3) {
 				case 0:
 					fields[i] = tbl.GetRandColumn().Name
 				case 1:
-					fields[i] = fmt.Sprintf("%d", i+2)
+					fields[i] = currentCTE.Cols[i+1].RandomValue()
 				case 2:
-					if ShouldValid(w.CTEValidSQL) {
-						fields[i] = fmt.Sprintf("cast(\"%d\" as char(20))", i+2)
+					if ShouldValid(validSQLPercent) {
+						fields[i] = PrintConstantWithFunction(currentCTE.Cols[i+1].Tp)
 					} else {
-						fields[i] = fmt.Sprintf("a")
+						fields[i] = fmt.Sprintf("a") // for unknown column
 					}
 				}
+			}
+
+			if !ShouldValid(validSQLPercent) {
+				fields = append(fields, "1")
 			}
 
 			return Or(
@@ -1266,21 +1249,21 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 					Str(strings.Join(fields, ",")),
 					Str("from"),
 					Str(tbl.Name), // todo: it can refer the exist cte and the common table
-				).SetW(w.CTESimpleSeed),
+				).SetW(5),
 				cteStart,
 			)
 		})
 
 		cteRecursivePart := NewFn(func(state *State) Fn {
 			lastCTE := state.CurrentCTE()
-			if !ShouldValid(w.CTEValidSQL) {
+			if !ShouldValid(validSQLPercent) {
 				lastCTE = state.GetRandomCTE()
 			}
 			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
 			for _, col := range lastCTE.Cols[1:] {
 				fields = append(fields, PrintColumnWithFunction(col))
 			}
-			if !ShouldValid(w.CTEValidSQL) && rand.Intn(20) == 0 {
+			if !ShouldValid(validSQLPercent) && rand.Intn(20) == 0 {
 				fields = append(fields, "1")
 			}
 
@@ -1292,7 +1275,7 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 					Str("from"),
 					Str(lastCTE.Name), // todo: it also can be a cte
 					Str("where"),
-					Str(fmt.Sprintf("%s < %d", lastCTE.Cols[0].Name, w.CTERecursiveDeep)),
+					Str(fmt.Sprintf("%s < %d", lastCTE.Cols[0].Name, 5)),
 					Opt(And(Str("limit"), Str(RandomNum(0, 20)))),
 				),
 			)
@@ -1304,7 +1287,7 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 				Opt(
 					And(
 						Str("UNION"),
-						unionOption,
+						UnionOption,
 						cteRecursivePart,
 					),
 				),
@@ -1315,17 +1298,8 @@ var cteStartWrapper = NewFn(func (state *State) Fn {
 		)
 	})
 
-	unionOption = NewFn(func(state *State) Fn {
-		return Or(
-			Empty,
-			Str("DISTINCT"),
-			Str("ALL"),
-		)
-	})
-
 	return cteStart
 })
-
 
 func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
 	return runInteractTest(ctx, db1, db2, state, sql, true)

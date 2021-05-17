@@ -25,10 +25,9 @@ func GenNewCTE(id int) *CTE {
 	}
 }
 
-func (s *State) GenNewColumn() *Column {
+func (s *State) GenNewColumnWithType(tps... ColumnType) *Column {
 	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
-	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
 	col.Tp = tps[rand.Intn(len(tps))]
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
@@ -68,6 +67,11 @@ func (s *State) GenNewColumn() *Column {
 	}
 	col.relatedIndices = map[int]struct{}{}
 	return col
+}
+
+func (s *State) GenNewColumn() *Column {
+	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
+	return s.GenNewColumnWithType(tps...)
 }
 
 func (s *State) GenNewIndex(tbl *Table) *Index {
@@ -143,24 +147,6 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 	row := make([]string, len(cols))
 	for i, c := range cols {
 		row[i] = c.RandomValue()
-	}
-	return row
-}
-
-func (t *Table) GenRandValuesForCTE(cols []*Column) []string {
-	if len(cols) == 0 {
-		cols = t.Columns
-	}
-	row := make([]string, len(cols))
-	for i, c := range cols {
-		if !c.isNotNull && rand.Intn(30) == 0 {
-			row[i] = "null"
-		} else {
-			row[i] = RandomNums(0, 1, 1)[0]
-			if c.Tp != ColumnTypeInt {
-				row[i] = fmt.Sprintf("\"%s\"", row[i])
-			}
-		}
 	}
 	return row
 }

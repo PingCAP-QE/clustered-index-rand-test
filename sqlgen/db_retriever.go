@@ -5,40 +5,19 @@ import (
 	"math/rand"
 )
 
-func (s *State) Initialized() bool {
-	return s.finishInit
-}
-
-func (s *State) MeetInitializedDemand() bool {
-	if len(s.tables) < s.ctrl.InitTableCount {
-		return false
-	}
-	for _, t := range s.tables {
-		if len(t.values) < s.ctrl.InitRowCount {
-			return false
-		}
-	}
-	return true
-}
-
 func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
 
-func (s *State) GetFirstNonFullTable() *Table {
-	for _, t := range s.tables {
-		if len(t.values) < s.ctrl.InitRowCount {
-			return t
-		}
-	}
-	return nil
+func (s *State) GetAllTables() []*Table {
+	return s.tables
 }
 
 func (s *State) IncCTEDeep() {
 	s.ctes = append(s.ctes, make([]*CTE, 0))
 }
 
-func (s State) GetTableByID(id int) *Table {
+func (s *State) GetTableByID(id int) *Table {
 	for _, t := range s.tables {
 		if t.ID == id {
 			return t

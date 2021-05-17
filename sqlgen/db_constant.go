@@ -286,9 +286,12 @@ const (
 	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
 	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
 	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
+	ConfigKeyUnitStrictTransTable                   // value example: struct{}{}
 	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
 	ConfigKeyArrayAllowColumnTypes                  // value example: []ColumnType{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyEnumInsertOrReplace                    // value should be "insert" or "replace"
+	ConfigKeyIntMaxTableCount                       // value example: 10
+	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
 )
 
 const (

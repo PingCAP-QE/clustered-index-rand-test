@@ -150,11 +150,15 @@ var None = NewFn(func(state *State) Fn {
 })
 
 func Opt(fn Fn) Fn {
-	total := 1 + fn.Weight
-	if rand.Intn(total) == 0 {
-		return Empty
+	ret := defaultFn()
+	ret.Gen = func(state *State) string {
+		total := 1 + state.GetWeight(fn)
+		if rand.Intn(total) == 0 {
+			return ""
+		}
+		return fn.Eval(state)
 	}
-	return fn
+	return ret
 }
 
 func RandomNum(low, high int64) string {

@@ -1,35 +1,45 @@
-package sqlgen
+package sqlgen_test
 
 import (
-	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
+
+	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
+	. "github.com/pingcap/check"
 )
 
-func TestStart(t *testing.T) {
-	state := NewState()
+func TestT(t *testing.T) {
+	CustomVerboseFlag = true
+	TestingT(t)
+}
+
+var _ = Suite(&testSuite{})
+
+type testSuite struct{}
+
+func (s *testSuite) SetUpSuite(c *C) {
 	rand.Seed(10086)
+}
+
+func (s *testSuite) TestStart(c *C) {
+	state := sqlgen.NewState()
 	for i := 0; i < 300; i++ {
-		fmt.Println(Start.Eval(state))
+		sqlgen.Start.Eval(state)
+		c.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
 	}
 }
 
-func TestCreateColumnTypes(t *testing.T) {
-	state := NewState()
-	state.ctrl.MaxTableNum = 100
-	state.StoreConfig(ConfigKeyArrayAllowColumnTypes, NewScopeObj([]ColumnType{ColumnTypeInt}))
-	state.SetRepeat(ColumnDefinition, 5, 5)
-	rand.Seed(10086)
+func (s *testSuite) TestCreateColumnTypes(c *C) {
+	state := sqlgen.NewState()
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 100)
+	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, []sqlgen.ColumnType{sqlgen.ColumnTypeInt})
+	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
 	intColCount := 0
 	for i := 0; i < 100; i++ {
-		res := CreateTable.Eval(state)
-		if !state.Valid() {
-			t.Fatal(state.LastBrokenAssumption())
-		}
+		res := sqlgen.CreateTable.Eval(state)
+		c.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
 		intColCount += strings.Count(res, "int")
 	}
-	if intColCount != 100*5 {
-		t.Fatal()
-	}
+	c.Assert(intColCount, Equals, 100*5)
 }

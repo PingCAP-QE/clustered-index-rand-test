@@ -18,7 +18,6 @@ type State struct {
 
 	prepareStmts []*Prepare
 
-	finishInit           bool
 	todoSQLs             []string
 	invalid              bool
 	fnStack              string
@@ -107,10 +106,6 @@ func NewState2(EnableTestTiFlash bool) *State {
 	})
 }
 
-func NewScopeObj(obj interface{}) ScopeObj {
-	return ScopeObj{obj}
-}
-
 func (s ScopeObj) IsNil() bool {
 	return s.obj == nil
 }
@@ -147,6 +142,13 @@ func (s ScopeObj) ToInt() int {
 }
 
 func (s ScopeObj) ToBool() bool {
+	return s.obj.(bool)
+}
+
+func (s ScopeObj) ToBoolOrDefault(d bool) bool {
+	if s.obj == nil {
+		return d
+	}
 	return s.obj.(bool)
 }
 
@@ -187,19 +189,21 @@ func (s *State) DestroyScope() {
 	s.scope = s.scope[:len(s.scope)-1]
 }
 
-func (s *State) Store(key ScopeKeyType, val ScopeObj) {
-	Assert(!val.IsNil(), "storing a nil object")
+func (s *State) Store(key ScopeKeyType, val interface{}) {
+	obj := ScopeObj{val}
+	Assert(!obj.IsNil(), "storing a nil object")
 	current := s.scope[len(s.scope)-1]
-	current[key] = val
+	current[key] = obj
 }
 
-func (s *State) StoreConfig(key ConfigKeyType, val ScopeObj) {
-	Assert(!val.IsNil(), "storing a nil object")
-	s.config[key] = val
+func (s *State) StoreConfig(key ConfigKeyType, val interface{}) {
+	obj := ScopeObj{val}
+	Assert(!obj.IsNil(), "storing a nil object")
+	s.config[key] = obj
 }
 
-func (s *State) StoreInRoot(key ScopeKeyType, val ScopeObj) {
-	s.scope[0][key] = val
+func (s *State) StoreInRoot(key ScopeKeyType, val interface{}) {
+	s.scope[0][key] = ScopeObj{val}
 }
 
 func (s *State) Search(key ScopeKeyType) ScopeObj {
@@ -273,7 +277,7 @@ func (s *State) AllocGlobalID(key ScopeKeyType) int {
 	} else {
 		result = 0
 	}
-	s.scope[0][key] = NewScopeObj(result + 1)
+	s.scope[0][key] = ScopeObj{result + 1}
 	return result
 }
 
