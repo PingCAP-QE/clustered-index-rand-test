@@ -3,6 +3,7 @@ package sqlgen
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 )
 
 func (s *State) Initialized() bool {
@@ -26,6 +27,23 @@ func (s *State) GetWeight(fn Fn) int {
 		return w
 	}
 	return fn.Weight
+}
+
+func (s *State) GetCurrentStack() string {
+	var sb strings.Builder
+	for i := 0; i < len(s.scope); i++ {
+		if i > 0 {
+			sb.WriteString("-")
+		}
+		sb.WriteString("'")
+		if currentFn, ok := s.scope[i][ScopeKeyCurrentFn]; ok {
+			sb.WriteString(currentFn.ToString())
+		} else {
+			sb.WriteString("root")
+		}
+		sb.WriteString("'")
+	}
+	return sb.String()
 }
 
 func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
@@ -71,7 +89,7 @@ func (s *State) GetRandPrepare() *Prepare {
 }
 
 func (s *State) Valid() bool {
-	return s.invalid
+	return !s.invalid
 }
 
 type Tables []*Table

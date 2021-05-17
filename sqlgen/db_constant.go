@@ -215,7 +215,8 @@ const (
 type ScopeKeyType int8
 
 const (
-	ScopeKeyCurrentTables ScopeKeyType = iota
+	ScopeKeyCurrentFn ScopeKeyType = iota
+	ScopeKeyCurrentTables
 	ScopeKeyCurrentSelectedColNum
 	ScopeKeyCurrentPrepare
 	ScopeKeyCurrentPartitionColumn

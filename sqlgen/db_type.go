@@ -17,6 +17,7 @@ type State struct {
 	finishInit bool
 	todoSQLs   []string
 	invalid    bool
+	stack      string
 }
 
 type Interval struct {
@@ -73,7 +74,10 @@ type Prepare struct {
 
 func NewState(opts ...func(ctl *ControlOption)) *State {
 	s := &State{
-		ctrl: DefaultControlOption(),
+		ctrl:   DefaultControlOption(),
+		weight: make(map[string]int),
+		repeat: make(map[string]Interval),
+		config: make(map[ConfigKeyType]ScopeObj),
 	}
 	for _, opt := range opts {
 		opt(s.ctrl)
@@ -110,7 +114,7 @@ func (s ScopeObj) ToTable() *Table {
 }
 
 func (s ScopeObj) ToTables() Tables {
-	return s.obj.([]*Table)
+	return s.obj.(Tables)
 }
 
 func (s ScopeObj) ToColumn() *Column {

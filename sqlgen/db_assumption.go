@@ -42,12 +42,6 @@ var MoreThan1Columns = func(s *State) bool {
 	return len(tbl.Columns) > 1
 }
 
-var HasKey = func(key ScopeKeyType) func(s *State) bool {
-	return func(s *State) bool {
-		return s.Exists(key)
-	}
-}
-
 var MustHaveKey = func(key ScopeKeyType) func(s *State) bool {
 	return func(s *State) bool {
 		Assert(s.Exists(key))

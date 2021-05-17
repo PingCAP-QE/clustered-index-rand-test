@@ -22,6 +22,8 @@ func constructFnInfo(filePath string, line int) string {
 		result := extractVarName(sc.Text())
 		if result == "" {
 			return fmt.Sprintf("%s-%d", filePath, line)
+		} else {
+			return result
 		}
 	}
 	return ""

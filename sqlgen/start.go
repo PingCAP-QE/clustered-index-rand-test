@@ -221,8 +221,8 @@ var IndexDefinition = NewFn(func(state *State) Fn {
 })
 
 var PartitionDefinition = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(HasKey(ScopeKeyCurrentPartitionColumn)) {
-		return None
+	if !state.Exists(ScopeKeyCurrentPartitionColumn) {
+		return Empty
 	}
 	return Or(
 		Empty,
@@ -484,7 +484,7 @@ var SetOperator = NewFn(func(state *State) Fn {
 })
 
 var OrderByLimit = NewFn(func(state *State) Fn {
-	lobCfg := state.SearchConfig(ConfigKeyEnumLimitOrderBy).ToString()
+	lobCfg := state.SearchConfig(ConfigKeyEnumLimitOrderBy).ToStringOrDefault(ConfigKeyEnumLOBNone)
 	if lobCfg == ConfigKeyEnumLOBNone {
 		return Empty
 	}
@@ -681,8 +681,7 @@ var Predicates = NewFn(func(state *State) Fn {
 })
 
 var PredicatesPointGet = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(
-		HasKey(ScopeKeyCurrentUniqueIndexForPointGet)) {
+	if !state.Exists(ScopeKeyCurrentUniqueIndexForPointGet) {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()

@@ -23,6 +23,7 @@ import (
 
 func And(fns ...Fn) Fn {
 	ret := defaultFn()
+	ret.Info = "And"
 	ret.Gen = func(state *State) string {
 		var resStr strings.Builder
 		for i, f := range fns {
@@ -40,6 +41,7 @@ func And(fns ...Fn) Fn {
 
 func Or(fns ...Fn) Fn {
 	ret := defaultFn()
+	ret.Info = "Or"
 	ret.Gen = func(state *State) string {
 		for len(fns) > 0 {
 			chosenFnIdx := randSelectByWeight(state, fns)
@@ -61,6 +63,7 @@ func Or(fns ...Fn) Fn {
 // Str is a Fn which simply returns str.
 func Str(str string) Fn {
 	ret := defaultFn()
+	ret.Info = "Str"
 	ret.Gen = func(_ *State) string {
 		return str
 	}
@@ -88,6 +91,7 @@ func Strf(str string, fns ...Fn) Fn {
 
 func Strs(strs ...string) Fn {
 	ret := defaultFn()
+	ret.Info = "Strs"
 	ret.Gen = func(state *State) string {
 		return strings.Join(strs, " ")
 	}
@@ -103,6 +107,7 @@ func If(condition bool, fn Fn) Fn {
 
 func Repeat(fn Fn, sep Fn) Fn {
 	ret := defaultFn()
+	ret.Info = "Repeat"
 	ret.Gen = func(state *State) string {
 		var resStr strings.Builder
 		count := randGenRepeatCount(state, fn)
