@@ -12,17 +12,17 @@ type State struct {
 	repeat map[string]Interval
 
 	tables []*Table
+	ctes   [][]*CTE
 	scope  []map[ScopeKeyType]ScopeObj
 	config map[ConfigKeyType]ScopeObj
 
 	prepareStmts []*Prepare
 
-	finishInit bool
-	todoSQLs   []string
-	invalid    bool
-	stack      string
-
-	ctes [][]*CTE
+	finishInit           bool
+	todoSQLs             []string
+	invalid              bool
+	fnStack              string
+	lastBrokenAssumption string
 }
 
 type Table struct {
@@ -239,6 +239,10 @@ func (s *State) GetCurrentStack() string {
 		sb.WriteString("'")
 	}
 	return sb.String()
+}
+
+func (s *State) LastBrokenAssumption() string {
+	return s.lastBrokenAssumption
 }
 
 func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
