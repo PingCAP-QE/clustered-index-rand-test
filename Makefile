@@ -10,7 +10,7 @@ fmt:
 	@echo "go fmt..."
 	@go fmt ./...
 
-test:
+test: build
 	@go test ./...
 
 abtest: bins build

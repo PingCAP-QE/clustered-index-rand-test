@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -25,13 +26,6 @@ func NewGenerator(state *State) func() string {
 var Start = NewFn(func(state *State) Fn {
 	if s, ok := state.PopOneTodoSQL(); ok {
 		return Str(s)
-	}
-	if !state.Initialized() {
-		eInitStart := Str(InitStart.Eval(state))
-		if state.MeetInitializedDemand() {
-			state.SetInitialized()
-		}
-		return eInitStart
 	}
 	return Or(
 		SwitchRowFormatVer.SetW(1),
@@ -53,15 +47,6 @@ var Start = NewFn(func(state *State) Fn {
 	)
 })
 
-var InitStart = NewFn(func(state *State) Fn {
-	Assert(!state.Initialized())
-	if len(state.tables) < state.ctrl.InitTableCount {
-		return CreateTable
-	} else {
-		return InsertInto
-	}
-})
-
 var DMLStmt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasTables) {
 		return None
@@ -79,7 +64,7 @@ var DDLStmt = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return Or(
 		AddColumn,
 		AddIndex,
@@ -150,7 +135,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	}
 	tbl := state.GenNewTable()
 	state.AppendTable(tbl)
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	if state.ctrl.EnableTestTiFlash {
 		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
@@ -159,7 +144,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	eColDefs := ColumnDefinitions.Eval(state)
 	partCol := tbl.GetRandColumnForPartition()
 	if partCol != nil {
-		state.Store(ScopeKeyCurrentPartitionColumn, NewScopeObj(partCol))
+		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
@@ -169,9 +154,6 @@ var CreateTable = NewFn(func(state *State) Fn {
 var ColumnDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
-	}
-	if !state.Initialized() {
-		return RepeatCount(ColumnDefinition, state.ctrl.InitColCount, Str(","))
 	}
 	return Repeat(ColumnDefinition.SetR(1, 10), Str(","))
 })
@@ -273,8 +255,7 @@ var PartitionDefinitionList = NewFn(func(state *State) Fn {
 })
 
 var InsertInto = NewFn(func(state *State) Fn {
-	Assert(!state.Initialized())
-	tbl := state.GetFirstNonFullTable()
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	vals := tbl.GenRandValues(tbl.Columns)
 	tbl.AppendRow(vals)
 	return And(
@@ -303,8 +284,8 @@ var SingleSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentSelectedColNum, NewScopeObj(1+rand.Intn(len(tbl.Columns))))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentSelectedColNum, 1+rand.Intn(len(tbl.Columns)))
 	return Or(
 		CommonSelect,
 		AggregationSelect,
@@ -317,9 +298,9 @@ var UnionSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl1, tbl2 := state.GetRandTable(), state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl1, tbl2}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
 	colLen := mathutil.Min(len(tbl1.Columns), len(tbl2.Columns))
-	state.Store(ScopeKeyCurrentSelectedColNum, NewScopeObj(1+rand.Intn(colLen)))
+	state.Store(ScopeKeyCurrentSelectedColNum, 1+rand.Intn(colLen))
 	return Or(
 		And(Str("("), CommonSelect, Str(")"), SetOperator, Str("("), CommonSelect, Str(")")),
 		And(
@@ -341,7 +322,7 @@ var CommonSelect = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	cols := tbl.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
 		prepare := state.Search(ScopeKeyCurrentPrepare).ToPrepare()
@@ -359,7 +340,7 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	pkCols := tbl.GetUniqueKeyColumns()
 	groupByCols := tbl.GetRandColumns()
 	return And(
@@ -406,7 +387,7 @@ var WindowSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return And(
 		Str("select"), HintTiFlash, HintIndexMerge, WindowFunction, Str("over w"),
 		Str("from"), Str(tbl.Name), Str("window w as"), Str(PrintRandomWindow(tbl)),
@@ -503,14 +484,14 @@ var OrderByLimit = NewFn(func(state *State) Fn {
 
 var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	var cols []*Column
-	if state.ctrl.StrictTransTable {
+	if state.ExistsConfig(ConfigKeyUnitStrictTransTable) {
 		cols = tbl.GetRandColumnsIncludedDefaultValue()
 	} else {
 		cols = tbl.GetRandColumns()
 	}
-	state.Store(ScopeKeyCurrentSelectedColumns, NewScopeObj(cols))
+	state.Store(ScopeKeyCurrentSelectedColumns, cols)
 	// TODO: insert into t partition(p1) values(xxx)
 	// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
 	return Or(
@@ -596,8 +577,8 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 
 var CommonUpdate = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 	return And(
 		Str("update"), Str(tbl.Name), Str("set"),
 		Repeat(AssignClause.SetR(1, 3), Str(",")),
@@ -623,8 +604,8 @@ var CommonDelete = NewFn(func(state *State) Fn {
 	} else {
 		col = tbl.GetRandColumn()
 	}
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl}))
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl.GetRandColumnsNonEmpty))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
@@ -650,7 +631,7 @@ var Predicates = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	uniqueIdx := tbl.GetRandUniqueIndexForPointGet()
 	if uniqueIdx != nil {
-		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, NewScopeObj(uniqueIdx))
+		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, uniqueIdx)
 	}
 	return Or(
 		Repeat(Predicate.SetR(1, 5), Or(Str("and"), Str("or"))).SetW(3),
@@ -823,7 +804,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	tbl2 := state.GetRandTable()
 	cols1 := tbl1.GetRandColumns()
 	cols2 := tbl2.GetRandColumns()
-	state.Store(ScopeKeyCurrentTables, NewScopeObj(Tables{tbl1, tbl2}))
+	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
 	preferIndex := RandomBool()
 
 	var joinPredicate = NewFn(func(state *State) Fn {
@@ -924,7 +905,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 				col2 = tbl2.GetRandColumn()
 			}
 		}
-		state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(tbl1.Columns))
+		state.Store(ScopeKeyCurrentOrderByColumns, tbl1.Columns)
 		// TODO: Support exists subquery.
 		return And(
 			Str("select"), HintTiFlash,
@@ -952,7 +933,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	})
 
 	orderByCols := ConcatColumns(tbl1.Columns, tbl2.Columns)
-	state.Store(ScopeKeyCurrentOrderByColumns, NewScopeObj(orderByCols))
+	state.Store(ScopeKeyCurrentOrderByColumns, orderByCols)
 	return Or(
 		And(
 			Str("select"), HintTiFlash,
@@ -1016,7 +997,9 @@ var SelectIntoOutFile = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.StoreInRoot(ScopeKeyLastOutFileTable, NewScopeObj(tbl))
+	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
+	_ = os.RemoveAll(SelectOutFileDir)
+	_ = os.Mkdir(SelectOutFileDir, 0644)
 	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
 	return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 })
@@ -1089,7 +1072,7 @@ var PrepareStmt = NewFn(func(state *State) Fn {
 	}
 	prepare := GenNewPrepare(state.AllocGlobalID(ScopeKeyPrepareID))
 	state.AppendPrepare(prepare)
-	state.Store(ScopeKeyCurrentPrepare, NewScopeObj(prepare))
+	state.Store(ScopeKeyCurrentPrepare, prepare)
 	return And(
 		Str("prepare"),
 		Str(prepare.Name),

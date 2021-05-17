@@ -1,9 +1,9 @@
 package sqlgen
 
 type ControlOption struct {
-	// initial value for state.enableClustered
+	// Deprecated. initial value for state.enableClustered
 	InitEnableClustered bool
-	// the initial number of tables.
+	// Deprecated. the initial number of tables.
 	InitTableCount int
 	// the number of rows to initialize for each table.
 	InitRowCount int
@@ -38,7 +38,7 @@ type Weight struct {
 	CreateTable_WithoutLike     int          // deprecated, use state.SetWeight(CreateTableLike, 0) instead.
 	CreateTable_Partition_Type  string       // deprecated, use state.SetWeight(PartitionDefinitionHash, 100) instead.
 	CreateTable_IndexMoreCol    int          // deprecated, use state.SetRepeat(IndexDefinition, 1, n) instead.
-	CreateTable_MustPrefixIndex bool         // deprecated, use state.StoreConfig(ConfigKeyProbabilityIndexPrefix, NewScopeObj(100 * Percent)) instead.
+	CreateTable_MustPrefixIndex bool         // deprecated, use state.StoreConfig(ConfigKeyProbabilityIndexPrefix, 100 * Percent) instead.
 	CreateTable_MustStrCol      bool         // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
 	CreateTable_MustIntCol      bool         // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
 	CreateTable_IgnoredTypeCols []ColumnType // deprecated, use state.StoreConfig(ConfigKeyArrayAllowColumnTypes) instead.
