@@ -1084,36 +1084,52 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 		return And(withClause, simpleCTEQuery)
 	})
 	simpleCTEQuery = NewFn(func(state *State) Fn {
-		parentCTEColCount := state.ParentCTEColCount()
+		parentCTE := state.ParentCTE()
 		ctes := state.PopCTE()
-		cteNames := make([]string, 0, len(ctes))
-		colNames := make([]string, 0, len(ctes)*2)
 		if rand.Intn(10) == 0 {
 			c := rand.Intn(len(ctes))
 			for i := 0; i < c; i++ {
 				ctes = append(ctes, ctes[rand.Intn(len(ctes))])
 			}
 		}
+
+		rand.Shuffle(len(ctes), func(i, j int) {
+			ctes[j], ctes[i] = ctes[i], ctes[j]
+		})
+
+		ctes = ctes[:rand.Intn(mathutil.Min(len(ctes), 2))+1]
+
+		cteNames := make([]string, 0, len(ctes))
+		colsInfo := make(map[ColumnType][]string)
+		colNames := make([]string, 0)
+		colNames = append(colNames, "1")
 		for i := range ctes {
 			ctes[i].AsName = fmt.Sprintf("cte_as_%d", state.AllocGlobalID(ScopeKeyCTEAsNameID))
 			cteNames = append(cteNames, fmt.Sprintf("%s as %s", ctes[i].Name, ctes[i].AsName))
 			for _, col := range ctes[i].Cols {
+				if _, ok := colsInfo[col.Tp]; !ok {
+					colsInfo[col.Tp] = make([]string, 0)
+				}
+				colsInfo[col.Tp] = append(colsInfo[col.Tp], fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
 				colNames = append(colNames, fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
 			}
 		}
 
-		rand.Shuffle(len(colNames[1:]), func(i, j int) {
-			colNames[1+i], colNames[1+j] = colNames[1+j], colNames[1+i]
-		})
 		// todo: it can infer the cte or the common table
-		field := "*"
-		if parentCTEColCount != 0 {
-			field = strings.Join(colNames[:parentCTEColCount], ",")
+		if parentCTE != nil {
+			colNames = colNames[:1]
+			for _, c := range parentCTE.Cols[1:] {
+				if _, ok := colsInfo[c.Tp]; ok {
+					colNames = append(colNames, colsInfo[c.Tp][rand.Intn(len(colsInfo[c.Tp]))])
+				} else {
+					colNames = append(colNames, PrintConstantWithFunction(c.Tp))
+				}
+			}
 		}
 		return And(
 			Str("("),
 			Str("select"),
-			Str(field),
+			Str(strings.Join(colNames, ",")),
 			Str("from"),
 			Str(strings.Join(cteNames, ",")),
 			If(rand.Intn(10) == 0,
@@ -1121,15 +1137,11 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 					Str("where"),
 					Str("exists"),
 					Str("("),
-					Str("select * from"),
-					Str(cteNames[0]),
-					Str("where"),
-					Str(colNames[0]),
-					Str("<3"),
+					Query,
 					Str(")"),
 				),
 			),
-			If(parentCTEColCount == 0,
+			If(parentCTE == nil,
 				And(
 					Str("order by"),
 					Str(strings.Join(colNames, ",")),
@@ -1158,7 +1170,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			colCnt = 2
 		}
 		cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt))
-		for i := 0; i < colCnt+rand.Intn(4); i++ {
+		for i := 0; i < colCnt+rand.Intn(2); i++ {
 			cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt, ColumnTypeChar))
 		}
 		if !ShouldValid(validSQLPercent) {
@@ -1184,8 +1196,8 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			currentCTE := state.CurrentCTE()
 			fields := make([]string, len(currentCTE.Cols)-1)
 			for i := range fields {
-				switch rand.Intn(3) {
-				case 0:
+				switch rand.Intn(4) {
+				case 0, 3:
 					cols := tbl.FilterColumns(func(column *Column) bool {
 						return column.Tp == currentCTE.Cols[i+1].Tp
 					})

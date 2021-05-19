@@ -43,7 +43,7 @@ func TestExampleCTE(t *testing.T) {
 	tblCount := 2
 	for i := 0; i < tblCount; i++ {
 		sql := sqlgen.CreateTable.Eval(state)
-		fmt.Println(sql)
+		fmt.Println(sql, ";")
 		//.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
 	}
 	for _, tb := range state.GetAllTables() {
@@ -51,14 +51,14 @@ func TestExampleCTE(t *testing.T) {
 		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
 		for i := 0; i < rowCount; i++ {
 			sql := sqlgen.InsertInto.Eval(state)
-			fmt.Println(sql)
+			fmt.Println(sql, ";")
 			//c.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
 		}
 		state.DestroyScope()
 	}
 
 	for i := 0; i < 1000; i++ {
-		fmt.Println(sqlgen.CTEStartWrapper.Eval(state))
+		fmt.Println(sqlgen.CTEStartWrapper.Eval(state), ";")
 	}
 }
 

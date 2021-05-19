@@ -86,6 +86,14 @@ func (s *State) ParentCTEColCount() int {
 	return len(ctes[len(ctes)-1].Cols)
 }
 
+func (s *State) ParentCTE() *CTE {
+	if len(s.ctes) < 2 {
+		return nil
+	}
+	ctes := s.ctes[len(s.ctes)-2]
+	return ctes[len(ctes)-1]
+}
+
 func (s *State) AppendPrepare(pre *Prepare) {
 	s.prepareStmts = append(s.prepareStmts, pre)
 }
