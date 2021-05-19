@@ -210,6 +210,28 @@ func (s *State) GetWeight(fn Fn) int {
 	return fn.Weight
 }
 
+func (s *State) Clear(option ...StateClearOption) {
+	for _, opt := range option {
+		switch opt {
+		case StateClearOptionWeight:
+			s.weight = map[string]int{}
+		case StateClearOptionRepeat:
+			s.repeat = map[string]Interval{}
+		case StateClearOptionConfig:
+			s.config = map[ConfigKeyType]ScopeObj{}
+		case StateClearOptionScope:
+			s.scope = nil
+			s.CreateScope()
+		case StateClearOptionAll:
+			s.weight = map[string]int{}
+			s.repeat = map[string]Interval{}
+			s.config = map[ConfigKeyType]ScopeObj{}
+			s.scope = nil
+			s.CreateScope()
+		}
+	}
+}
+
 func (s *State) GetCurrentStack() string {
 	var sb strings.Builder
 	for i := 0; i < len(s.scope); i++ {
@@ -231,11 +253,11 @@ func (s *State) LastBrokenAssumption() string {
 	return s.lastBrokenAssumption
 }
 
-func (s *State) GetRepeat(fn Fn) (lower int, upper int, ok bool) {
+func (s *State) GetRepeat(fn Fn) (lower int, upper int) {
 	if w, ok := s.repeat[fn.Info]; ok {
-		return w.lower, w.upper, true
+		return w.lower, w.upper
 	}
-	return 0, 0, false
+	return fn.Repeat.lower, fn.Repeat.upper
 }
 
 func (s *State) ExistsConfig(key ConfigKeyType) bool {

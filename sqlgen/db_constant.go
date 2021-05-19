@@ -310,3 +310,13 @@ const Percent = 1
 const ProbabilityMax = 100 * Percent
 
 const SelectOutFileDir = "/tmp/tidb_tp_test_outfile"
+
+type StateClearOption int8
+
+const (
+	StateClearOptionWeight StateClearOption = iota
+	StateClearOptionRepeat
+	StateClearOptionConfig
+	StateClearOptionScope
+	StateClearOptionAll
+)

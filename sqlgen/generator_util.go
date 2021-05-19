@@ -69,10 +69,7 @@ func randSelectByWeight(state *State, fns []Fn) int {
 }
 
 func randGenRepeatCount(state *State, fn Fn) int {
-	low, high := fn.Repeat.lower, fn.Repeat.upper
-	if l, h, ok := state.GetRepeat(fn); ok {
-		low, high = l, h
-	}
+	low, high := state.GetRepeat(fn)
 	return low + rand.Intn(high+1-low)
 }
 

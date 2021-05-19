@@ -32,7 +32,7 @@ var Start = NewFn(func(state *State) Fn {
 		SwitchClustered.SetW(1),
 		AdminCheck.SetW(1),
 		CreateTable.SetW(13),
-		CreateTableLike.SetW(13),
+		CreateTableLike.SetW(6),
 		Query.SetW(20),
 		DMLStmt.SetW(20),
 		DDLStmt.SetW(5),
