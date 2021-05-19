@@ -299,3 +299,25 @@ func PrintPredicateIn(cols []*Column, values [][]string) string {
 	sb.WriteString(")")
 	return sb.String()
 }
+
+func PrintColumnWithFunction(col *Column) string {
+	switch col.Tp {
+	case ColumnTypeInt:
+		return fmt.Sprintf("%s+1", col.Name)
+	case ColumnTypeChar:
+		return fmt.Sprintf("concat(%s, 1)", col.Name)
+	}
+
+	return col.Name
+}
+
+func PrintConstantWithFunction(tp ColumnType) string {
+	switch tp {
+	case ColumnTypeInt:
+		return fmt.Sprintf("1+1")
+	case ColumnTypeChar:
+		return fmt.Sprintf("concat('a', 1)")
+	}
+
+	return "1"
+}

@@ -12,6 +12,7 @@ type State struct {
 	repeat map[string]Interval
 
 	tables []*Table
+	ctes   [][]*CTE
 	scope  []map[ScopeKeyType]ScopeObj
 	config map[ConfigKeyType]ScopeObj
 
@@ -54,6 +55,12 @@ type Column struct {
 	relatedIndices map[int]struct{}
 	relatedTableID int
 	collate        CollationType
+}
+
+type CTE struct {
+	Name   string
+	AsName string
+	Cols   []*Column
 }
 
 type Index struct {
@@ -132,6 +139,17 @@ func (s ScopeObj) ToIndex() *Index {
 
 func (s ScopeObj) ToInt() int {
 	return s.obj.(int)
+}
+
+func (s ScopeObj) ToBool() bool {
+	return s.obj.(bool)
+}
+
+func (s ScopeObj) ToBoolOrDefault(d bool) bool {
+	if s.obj == nil {
+		return d
+	}
+	return s.obj.(bool)
 }
 
 func (s ScopeObj) ToString() string {
@@ -283,4 +301,39 @@ func (s *State) AllocGlobalID(key ScopeKeyType) int {
 	}
 	s.scope[0][key] = ScopeObj{result + 1}
 	return result
+}
+
+func (s *State) PickRandomCTEOrTableName() string {
+	names := make([]string, 0, 10)
+	for _, cteL := range s.ctes {
+		for _, cte := range cteL {
+			names = append(names, cte.Name)
+		}
+	}
+
+	for _, tbl := range s.tables {
+		names = append(names, tbl.Name)
+	}
+
+	return names[rand.Intn(len(names))]
+}
+
+func (s *State) GetRandomCTE() *CTE {
+	ctes := make([]*CTE, 0, 10)
+	for _, cteL := range s.ctes {
+		for _, cte := range cteL {
+			ctes = append(ctes, cte)
+		}
+	}
+
+	return ctes[rand.Intn(len(ctes))]
+}
+
+func (s *State) GetCTECount() int {
+	c := 0
+	for _, cteL := range s.ctes {
+		c += len(cteL)
+	}
+
+	return c
 }

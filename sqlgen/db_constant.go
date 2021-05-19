@@ -278,6 +278,8 @@ const (
 	ScopeKeyIndexUniqID
 	ScopeKeyTmpFileID
 	ScopeKeyPrepareID
+	ScopeKeyCTEUniqID
+	ScopeKeyCTEAsNameID
 )
 
 type ConfigKeyType int64
@@ -294,6 +296,7 @@ const (
 	ConfigKeyArrayAllowColumnTypes                  // value example: []ColumnType{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyEnumInsertOrReplace                    // value should be "insert" or "replace"
 	ConfigKeyIntMaxTableCount                       // value example: 10
+	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
 )
 
 const (

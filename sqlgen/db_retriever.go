@@ -13,6 +13,10 @@ func (s *State) GetAllTables() []*Table {
 	return s.tables
 }
 
+func (s *State) IncCTEDeep() {
+	s.ctes = append(s.ctes, make([]*CTE, 0))
+}
+
 func (s *State) GetTableByID(id int) *Table {
 	for _, t := range s.tables {
 		if t.ID == id {
@@ -365,4 +369,8 @@ func (p *Prepare) UserVars() []string {
 		userVars[i] = fmt.Sprintf("@i%d", i)
 	}
 	return userVars
+}
+
+func (c *CTE) AppendColumn(col *Column) {
+	c.Cols = append(c.Cols, col)
 }

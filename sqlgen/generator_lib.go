@@ -189,6 +189,10 @@ func RandomBool() bool {
 	return rand.Intn(2) == 0
 }
 
+func ShouldValid(i int) bool {
+	return rand.Intn(100) < i
+}
+
 func Join(sep Fn, fns ...Fn) Fn {
 	newFns := make([]Fn, 0, len(fns)*2-1)
 	for i, f := range fns {

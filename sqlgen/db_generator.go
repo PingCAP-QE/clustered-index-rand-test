@@ -19,10 +19,15 @@ func (s *State) GenNewTable() *Table {
 	return newTbl
 }
 
-func (s *State) GenNewColumn() *Column {
+func GenNewCTE(id int) *CTE {
+	return &CTE{
+		Name: fmt.Sprintf("cte_%d", id),
+	}
+}
+
+func (s *State) GenNewColumnWithType(tps... ColumnType) *Column {
 	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
-	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
 	col.Tp = tps[rand.Intn(len(tps))]
 	// collate is only used if the type is string.
 	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
@@ -62,6 +67,11 @@ func (s *State) GenNewColumn() *Column {
 	}
 	col.relatedIndices = map[int]struct{}{}
 	return col
+}
+
+func (s *State) GenNewColumn() *Column {
+	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
+	return s.GenNewColumnWithType(tps...)
 }
 
 func (s *State) GenNewIndex(tbl *Table) *Index {
