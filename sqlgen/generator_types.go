@@ -71,7 +71,12 @@ func (f Fn) Eval(state *State) string {
 	for _, l := range state.hooks {
 		newFn = l.BeforeEvaluate(newFn)
 	}
-	res := newFn.Gen(state)
+	var res string
+	if state.GetWeight(f) == 0 {
+		res = ""
+	} else {
+		res = newFn.Gen(state)
+	}
 	for _, l := range state.hooks {
 		res = l.AfterEvaluate(newFn, res)
 	}
