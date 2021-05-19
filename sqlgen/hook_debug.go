@@ -1,21 +1,22 @@
 package sqlgen
 
+import "fmt"
+
 var _ FnEvaluateHook = (*FnHookDebug)(nil)
 
 type FnHookDebug struct {
 	FnHookDefault
-	parentsFn      []string
-	obtainedResult []string
+	parentFn []string
 }
 
 func (d *FnHookDebug) BeforeEvaluate(fn Fn) Fn {
-	d.parentsFn = append(d.parentsFn, fn.Info)
+	d.parentFn = append(d.parentFn, fn.Info)
+	fmt.Printf("evaluating %v\n", d.parentFn)
 	return fn
 }
 
 func (d *FnHookDebug) AfterEvaluate(fn Fn, result string) string {
-	d.parentsFn = d.parentsFn[:len(d.parentsFn)-1]
-	d.obtainedResult = append(d.obtainedResult, result)
+	d.parentFn = d.parentFn[:len(d.parentFn)-1]
 	return result
 }
 

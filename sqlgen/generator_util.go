@@ -60,7 +60,7 @@ func randSelectByWeight(state *State, fns []Fn) int {
 	num := rand.Intn(totalWeight)
 	acc := 0
 	for i, f := range fns {
-		acc += f.Weight
+		acc += state.GetWeight(f)
 		if acc > num {
 			return i
 		}

@@ -1,6 +1,7 @@
 package sqlgen_test
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -25,8 +26,9 @@ func (s *testSuite) SetUpSuite(c *C) {
 func (s *testSuite) TestStart(c *C) {
 	state := sqlgen.NewState()
 	for i := 0; i < 300; i++ {
-		sqlgen.Start.Eval(state)
-		c.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
+		res := sqlgen.Start.Eval(state)
+		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
+		c.Assert(len(res), Greater, 0, Commentf("i = %d", i))
 	}
 }
 
@@ -38,8 +40,26 @@ func (s *testSuite) TestCreateColumnTypes(c *C) {
 	intColCount := 0
 	for i := 0; i < 100; i++ {
 		res := sqlgen.CreateTable.Eval(state)
-		c.Assert(state.Valid(), IsTrue, Commentf(state.LastBrokenAssumption()))
+		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
 		intColCount += strings.Count(res, "int")
 	}
 	c.Assert(intColCount, Equals, 100*5)
+}
+
+func (s *testSuite) TestPredicates(c *C) {
+	state := sqlgen.NewState()
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	_ = sqlgen.CreateTable.Eval(state)
+	state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables(state.GetAllTables()))
+	defer state.DestroyScope()
+	for i := 0; i < 100; i++ {
+		pred := sqlgen.Predicates.Eval(state)
+		fmt.Println(pred)
+		if strings.Contains(pred, "or") {
+			c.Assert(strings.Contains(pred, " or "), IsTrue, Commentf(pred))
+		}
+		if strings.Contains(pred, "and") {
+			c.Assert(strings.Contains(pred, " and "), IsTrue, Commentf(pred))
+		}
+	}
 }

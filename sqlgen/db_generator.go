@@ -19,13 +19,14 @@ func (s *State) GenNewTable() *Table {
 	return newTbl
 }
 
-func GenNewCTE(id int) *CTE {
+func (s *State) GenNewCTE() *CTE {
+	id := s.AllocGlobalID(ScopeKeyCTEUniqID)
 	return &CTE{
 		Name: fmt.Sprintf("cte_%d", id),
 	}
 }
 
-func (s *State) GenNewColumnWithType(tps... ColumnType) *Column {
+func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = tps[rand.Intn(len(tps))]

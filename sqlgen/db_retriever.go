@@ -39,10 +39,6 @@ func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
 
-func (s *State) Valid() bool {
-	return !s.invalid
-}
-
 type Tables []*Table
 
 func (ts Tables) PickOne() *Table {

@@ -47,14 +47,14 @@ func Or(fns ...Fn) Fn {
 			chosenFnIdx := randSelectByWeight(state, fns)
 			chosenFn := fns[chosenFnIdx]
 			result := chosenFn.Eval(state)
-			if state.Valid() {
+			if !state.invalid {
 				return result
 			}
-			state.Recover()
+			state.invalid = false
 			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
 		}
 		// Need backtracking.
-		state.Invalidate()
+		state.invalid = true
 		return ""
 	}
 	return ret
@@ -115,7 +115,9 @@ func Repeat(fn Fn, sep Fn) Fn {
 			if i != 0 {
 				sepRes := sep.Eval(state)
 				Assert(!state.invalid)
+				resStr.WriteString(" ")
 				resStr.WriteString(sepRes)
+				resStr.WriteString(" ")
 			}
 			res := fn.Eval(state)
 			Assert(!state.invalid)
@@ -145,7 +147,7 @@ var Empty = NewFn(func(state *State) Fn {
 })
 
 var None = NewFn(func(state *State) Fn {
-	state.Invalidate()
+	state.invalid = true
 	return Str("")
 })
 
@@ -191,15 +193,4 @@ func RandomBool() bool {
 
 func ShouldValid(i int) bool {
 	return rand.Intn(100) < i
-}
-
-func Join(sep Fn, fns ...Fn) Fn {
-	newFns := make([]Fn, 0, len(fns)*2-1)
-	for i, f := range fns {
-		newFns = append(newFns, f)
-		if i != len(fns)-1 {
-			newFns = append(newFns, sep)
-		}
-	}
-	return And(newFns...)
 }

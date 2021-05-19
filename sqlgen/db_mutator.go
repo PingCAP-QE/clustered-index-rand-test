@@ -36,14 +36,15 @@ func (s *State) AppendHook(hook FnEvaluateHook) {
 	s.hooks = append(s.hooks, hook)
 }
 
-func (s *State) ReplaceHook(hook FnEvaluateHook) {
-	for i, h := range s.hooks {
-		if h.Info() == hook.Info() {
-			s.hooks[i] = hook
-			return
+func (s *State) RemoveHook(hookInfo string) {
+	filled := 0
+	for _, h := range s.hooks {
+		if h.Info() != hookInfo {
+			s.hooks[filled] = h
+			filled++
 		}
 	}
-	s.AppendHook(hook)
+	s.hooks = s.hooks[:filled]
 }
 
 func (s *State) AppendTable(tbl *Table) {
@@ -99,14 +100,6 @@ func (s *State) RemovePrepare(p *Prepare) {
 		}
 	}
 	s.prepareStmts = append(s.prepareStmts[:pos], s.prepareStmts[pos+1:]...)
-}
-
-func (s *State) Invalidate() {
-	s.invalid = true
-}
-
-func (s *State) Recover() {
-	s.invalid = false
 }
 
 func (t *Table) AppendColumn(c *Column) {

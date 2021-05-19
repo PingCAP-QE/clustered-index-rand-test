@@ -634,7 +634,7 @@ var Predicates = NewFn(func(state *State) Fn {
 		state.Store(ScopeKeyCurrentUniqueIndexForPointGet, uniqueIdx)
 	}
 	return Or(
-		Repeat(Predicate.SetR(1, 5), Or(Str("and"), Str("or"))).SetW(3),
+		Repeat(Predicate.SetR(1, 5), AndOr).SetW(3),
 		PredicatesPointGet.SetW(1),
 		PredicatesIndexMerge.SetW(4),
 	)
@@ -1117,17 +1117,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			Str("from"),
 			Str(strings.Join(cteNames, ",")),
 			If(rand.Intn(10) == 0,
-				And(
-					Str("where"),
-					Str("exists"),
-					Str("("),
-					Str("select * from"),
-					Str(cteNames[0]),
-					Str("where"),
-					Str(colNames[0]),
-					Str("<3"),
-					Str(")"),
-				),
+				Strs("where exists ( select * from", cteNames[0], "where", colNames[0], "< 3 )"),
 			),
 			If(parentCTEColCount == 0,
 				And(
@@ -1152,7 +1142,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 	})
 
 	cte = NewFn(func(state *State) Fn {
-		cte := GenNewCTE(state.AllocGlobalID(ScopeKeyCTEUniqID))
+		cte := state.GenNewCTE()
 		colCnt := state.ParentCTEColCount()
 		if colCnt == 0 {
 			colCnt = 2
@@ -1172,7 +1162,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 
 		return And(
 			Str(cte.Name),
-			Str("("+PrintColumnNamesWithoutPar(cte.Cols, "")+")"),
+			Strs("(", PrintColumnNamesWithoutPar(cte.Cols, ""), ")"),
 			Str("AS"),
 			queryExpressionParens,
 		)
@@ -1248,21 +1238,16 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			)
 		})
 
-		cteBody := NewFn(func(state *State) Fn {
-			return And(
-				cteSeedPart,
-				Opt(
-					And(
-						Str("UNION"),
-						UnionOption,
-						cteRecursivePart,
-					),
+		return And(
+			Str("("), cteSeedPart,
+			Opt(
+				And(
+					Str("UNION"),
+					UnionOption,
+					cteRecursivePart,
 				),
-			)
-		})
-		return Or(
-			And(Str("("), cteBody, Str(")")),
-		)
+			),
+			Str(")"))
 	})
 
 	return cteStart
