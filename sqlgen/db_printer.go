@@ -301,15 +301,23 @@ func PrintPredicateIn(cols []*Column, values [][]string) string {
 }
 
 func PrintColumnWithFunction(col *Column) string {
-	if RandomBool() {
-		return fmt.Sprintf("%s + 1", col.Name)
+	switch col.Tp {
+	case ColumnTypeInt:
+		return fmt.Sprintf("%s+1", col.Name)
+	case ColumnTypeChar:
+		return fmt.Sprintf("concat(%s, 1)", col.Name)
 	}
-	return fmt.Sprintf("concat(%s, 1)", col.Name)
+
+	return col.Name
 }
 
-func PrintConstantWithFunction(ColumnType) string {
-	if RandomBool() {
-		return fmt.Sprintf("1 + 1")
+func PrintConstantWithFunction(tp ColumnType) string {
+	switch tp {
+	case ColumnTypeInt:
+		return fmt.Sprintf("1+1")
+	case ColumnTypeChar:
+		return fmt.Sprintf("concat('a', 1)")
 	}
-	return fmt.Sprintf("concat('a', 1)")
+
+	return "1"
 }

@@ -36,6 +36,8 @@ func TestExampleCTE(t *testing.T) {
 	state := sqlgen.NewState()
 	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, []sqlgen.ColumnType{sqlgen.ColumnTypeChar, sqlgen.ColumnTypeInt})
 	state.StoreConfig(sqlgen.ConfigKeyCTEValidSQLPercent, 100)
+	state.SetWeight(sqlgen.IndexDefinitions, 0)
+	state.SetWeight(sqlgen.PartitionDefinition, 0)
 	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
 	rowCount := 10
 	tblCount := 2

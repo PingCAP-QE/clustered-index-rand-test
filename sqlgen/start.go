@@ -1135,7 +1135,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 					Str(strings.Join(colNames, ",")),
 				),
 			),
-			And(Str("limit"), Str(RandomNum(10, 30))),
+			And(Str("limit"), Str(RandomNum(0, 20))),
 			Str(")"),
 		)
 	})
@@ -1159,7 +1159,7 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 		}
 		cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt))
 		for i := 0; i < colCnt+rand.Intn(4); i++ {
-			cte.AppendColumn(state.GenNewColumn())
+			cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt, ColumnTypeChar))
 		}
 		if !ShouldValid(validSQLPercent) {
 			if RandomBool() && state.GetCTECount() != 0 {
@@ -1186,7 +1186,10 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			for i := range fields {
 				switch rand.Intn(3) {
 				case 0:
-					fields[i] = tbl.GetRandColumn().Name
+					cols := tbl.FilterColumns(func(column *Column) bool {
+						return column.Tp == currentCTE.Cols[i+1].Tp
+					})
+					fields[i] = cols[rand.Intn(len(cols))].Name
 				case 1:
 					fields[i] = currentCTE.Cols[i+1].RandomValue()
 				case 2:
@@ -1222,8 +1225,13 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 			for _, col := range lastCTE.Cols[1:] {
 				fields = append(fields, PrintColumnWithFunction(col))
 			}
-			if !ShouldValid(validSQLPercent) && rand.Intn(20) == 0 {
-				fields = append(fields, "1")
+			if !ShouldValid(validSQLPercent) {
+				rand.Shuffle(len(fields[1:]), func(i, j int) {
+					fields[1+i], fields[1+j] = fields[1+j], fields[1+i]
+				})
+				if rand.Intn(20) == 0 {
+					fields = append(fields, "1")
+				}
 			}
 
 			// todo: recursive part can be a function, const
