@@ -160,6 +160,10 @@ func (c ColumnType) IsStringType() bool {
 	return false
 }
 
+func (c ColumnType) SameTypeAs(other ColumnType) bool {
+	return (c.IsStringType() && other.IsStringType()) || (c.IsIntegerType() && other.IsIntegerType())
+}
+
 func (c ColumnType) RequiredFieldLength() bool {
 	return c == ColumnTypeVarchar || c == ColumnTypeVarBinary
 }
@@ -267,6 +271,7 @@ const (
 	ScopeKeyCurrentSelectedColumns
 	ScopeKeyCurrentOrderByColumns
 	ScopeKeyLastOutFileTable
+	ScopeKeyJoinPreferIndex
 
 	ScopeKeyTableUniqID
 	ScopeKeyColumnUniqID

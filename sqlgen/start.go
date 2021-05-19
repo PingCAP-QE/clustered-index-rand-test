@@ -805,143 +805,15 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	cols1 := tbl1.GetRandColumns()
 	cols2 := tbl2.GetRandColumns()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
-	preferIndex := RandomBool()
-
-	var joinPredicate = NewFn(func(state *State) Fn {
-		var col1, col2 *Column
-		if preferIndex {
-			col1 = tbl1.GetRandColumnsPreferIndex()
-			col2 = tbl2.GetRandColumnsPreferIndex()
-		} else {
-			col1 = tbl1.GetRandColumn()
-			col2 = tbl2.GetRandColumn()
-		}
-		return And(
-			Str(col1.Name),
-			CompareSymbol,
-			Str(col2.Name),
-		)
-	})
-
-	var joinHint = NewFn(func(state *State) Fn {
-		noIndexHint := Or(
-			And(
-				Str("MERGE_JOIN("),
-				Str(tbl1.Name),
-				Str(","),
-				Str(tbl2.Name),
-				Str(")"),
-			),
-			And(
-				Str("HASH_JOIN("),
-				Str(tbl1.Name),
-				Str(","),
-				Str(tbl2.Name),
-				Str(")"),
-			),
-		)
-
-		useIndexHint := Or(
-			And(
-				Str("INL_JOIN("),
-				Str(tbl1.Name),
-				Str(","),
-				Str(tbl2.Name),
-				Str(")"),
-			),
-			And(
-				Str("INL_HASH_JOIN("),
-				Str(tbl1.Name),
-				Str(","),
-				Str(tbl2.Name),
-				Str(")"),
-			),
-			And(
-				Str("INL_MERGE_JOIN("),
-				Str(tbl1.Name),
-				Str(","),
-				Str(tbl2.Name),
-				Str(")"),
-			),
-		)
-		if preferIndex {
-			return Or(
-				Empty,
-				useIndexHint,
-			)
-		}
-
-		return Or(
-			Empty,
-			noIndexHint,
-		)
-	})
-
-	var semiJoinStmt = NewFn(func(state *State) Fn {
-		var col1, col2 *Column
-		if preferIndex {
-			col1 = tbl1.GetRandColumnsPreferIndex()
-			col2 = tbl2.GetRandColumnsPreferIndex()
-		} else {
-			col1 = tbl1.GetRandColumn()
-			col2 = tbl2.GetRandColumn()
-		}
-
-		// We prefer that the types to be compatible.
-		// This method may be extracted to a function later.
-		for i := 0; i <= 5; i++ {
-			if col1.Tp.IsStringType() && col2.Tp.IsStringType() {
-				break
-			}
-			if col1.Tp.IsIntegerType() && col2.Tp.IsIntegerType() {
-				break
-			}
-			if col1.Tp == col2.Tp {
-				break
-			}
-			if preferIndex {
-				col2 = tbl2.GetRandColumnsPreferIndex()
-			} else {
-				col2 = tbl2.GetRandColumn()
-			}
-		}
-		state.Store(ScopeKeyCurrentOrderByColumns, tbl1.Columns)
-		// TODO: Support exists subquery.
-		return And(
-			Str("select"), HintTiFlash,
-			And(
-				Str("/*+ "),
-				joinHint,
-				Str(" */"),
-			),
-			Str(PrintFullQualifiedColName(tbl1, cols1)),
-			Str("from"),
-			Str(tbl1.Name),
-			Str("where"),
-			Str(col1.Name),
-			Str("in"),
-			Str("("),
-			Str("select"),
-			Str(col2.Name),
-			Str("from"),
-			Str(tbl2.Name),
-			Str("where"),
-			Predicates,
-			Str(")"),
-			Opt(OrderByLimit),
-		)
-	})
+	if RandomBool() {
+		state.Store(ScopeKeyJoinPreferIndex, struct{}{})
+	}
 
 	orderByCols := ConcatColumns(tbl1.Columns, tbl2.Columns)
 	state.Store(ScopeKeyCurrentOrderByColumns, orderByCols)
 	return Or(
 		And(
-			Str("select"), HintTiFlash,
-			And(
-				Str("/*+ "),
-				joinHint,
-				Str(" */"),
-			),
+			Str("select"), HintTiFlash, HintJoin,
 			Str(PrintFullQualifiedColName(tbl1, cols1)),
 			Str(","),
 			Str(PrintFullQualifiedColName(tbl2, cols2)),
@@ -949,7 +821,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 			Str(tbl1.Name),
 			Or(Str("left join"), Str("join"), Str("right join")),
 			Str(tbl2.Name),
-			And(Str("on"), Repeat(joinPredicate.SetR(1, 5), AndOr)),
+			And(Str("on"), Repeat(JoinPredicate.SetR(1, 5), AndOr)),
 			And(Str("where")),
 			Predicates,
 			Opt(OrderByLimit),
@@ -965,7 +837,94 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 			Str(tbl2.Name),
 			Opt(OrderByLimit),
 		),
-		semiJoinStmt,
+		SemiJoinStmt,
+	)
+})
+
+var SemiJoinStmt = NewFn(func(state *State) Fn {
+	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
+	t1, t2 := tbls[0], tbls[1]
+	var cols1, cols2 []*Column
+	if state.Exists(ScopeKeyJoinPreferIndex) {
+		cols1 = t1.FilterColumns(func(c *Column) bool {
+			return len(c.relatedIndices) > 0
+		})
+		cols2 = t2.FilterColumns(func(c *Column) bool {
+			return len(c.relatedIndices) > 0
+		})
+	}
+	if len(cols1) == 0 {
+		cols1 = t1.Columns
+	}
+	if len(cols2) == 0 {
+		cols2 = t2.Columns
+	}
+	c1, c2 := RandomCompatibleColumnPair(cols1, cols2)
+	state.Store(ScopeKeyCurrentOrderByColumns, t1.Columns)
+	// TODO: Support exists subquery.
+	return And(
+		Str("select"), HintTiFlash, HintJoin,
+		Str(PrintFullQualifiedColName(t1, cols1)),
+		Str("from"), Str(t1.Name),
+		Str("where"), Str(c1.Name), Str("in"), Str("("),
+		Str("select"), Str(c2.Name), Str("from"), Str(t2.Name),
+		Str("where"), Predicates,
+		Str(")"),
+		Opt(OrderByLimit),
+	)
+})
+
+var JoinPredicate = NewFn(func(state *State) Fn {
+	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
+	t1, t2 := tbls[0], tbls[1]
+	var col1, col2 *Column
+	if state.Exists(ScopeKeyJoinPreferIndex) {
+		col1 = t1.GetRandColumnsPreferIndex()
+		col2 = t2.GetRandColumnsPreferIndex()
+	} else {
+		col1 = t1.GetRandColumn()
+		col2 = t2.GetRandColumn()
+	}
+	return And(
+		Str(col1.Name),
+		CompareSymbol,
+		Str(col2.Name),
+	)
+})
+
+var HintJoin = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
+		return None
+	}
+	return Or(
+		Empty,
+		JoinHintWithoutIndex,
+		JoinHintWithIndex,
+	)
+})
+
+var JoinHintWithoutIndex = NewFn(func(state *State) Fn {
+	if state.Exists(ScopeKeyJoinPreferIndex) {
+		return None
+	}
+	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
+	t1, t2 := tbls[0], tbls[1]
+	return Or(
+		Strs("/*+ merge_join(", t1.Name, ",", t2.Name, "*/"),
+		Strs("/*+ hash_join(", t1.Name, ",", t2.Name, "*/"),
+	)
+})
+
+var JoinHintWithIndex = NewFn(func(state *State) Fn {
+	if !state.Exists(ScopeKeyJoinPreferIndex) {
+		return None
+	}
+	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
+	t1, t2 := tbls[0], tbls[1]
+	return Or(
+		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, "*/"),
+		Strs("/*+ inl_hash_join(", t1.Name, ",", t2.Name, "*/"),
+		Strs("/*+ inl_merge_join(", t1.Name, ",", t2.Name, "*/"),
 	)
 })
 
