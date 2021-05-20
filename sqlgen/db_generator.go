@@ -19,9 +19,10 @@ func (s *State) GenNewTable() *Table {
 	return newTbl
 }
 
-func (s *State) GenNewCTE() *CTE {
+func (s *State) GenNewCTE() *Table {
 	id := s.AllocGlobalID(ScopeKeyCTEUniqID)
-	return &CTE{
+	return &Table{
+		ID:   -1, // we do not use the id in CTE
 		Name: fmt.Sprintf("cte_%d", id),
 	}
 }

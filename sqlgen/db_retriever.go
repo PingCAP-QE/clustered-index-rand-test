@@ -2,6 +2,7 @@ package sqlgen
 
 import (
 	"fmt"
+	"github.com/cznic/mathutil"
 	"math/rand"
 )
 
@@ -9,12 +10,30 @@ func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
 
+func (s *State) GetRandTableOrCTE() *Table {
+	return s.GetRandTableOrCTEs()[0]
+}
+
+func (s *State) GetRandTableOrCTEs() []*Table {
+	tbls := make([]*Table, 0)
+	for _, t := range s.tables {
+		tbls = append(tbls, &(*t))
+	}
+	for _, cte := range s.ctes {
+		for _, c := range cte {
+			tbls = append(tbls, &(*c))
+		}
+	}
+
+	return tbls[:mathutil.Min(rand.Intn(len(tbls)-2)+2, len(tbls))]
+}
+
 func (s *State) GetAllTables() []*Table {
 	return s.tables
 }
 
 func (s *State) IncCTEDeep() {
-	s.ctes = append(s.ctes, make([]*CTE, 0))
+	s.ctes = append(s.ctes, make([]*Table, 0))
 }
 
 func (s *State) GetTableByID(id int) *Table {
@@ -367,6 +386,3 @@ func (p *Prepare) UserVars() []string {
 	return userVars
 }
 
-func (c *CTE) AppendColumn(col *Column) {
-	c.Cols = append(c.Cols, col)
-}

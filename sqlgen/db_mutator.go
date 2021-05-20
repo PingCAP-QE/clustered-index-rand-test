@@ -1,7 +1,9 @@
 package sqlgen
 
 import (
+	"math/rand"
 	"sort"
+	"time"
 )
 
 func (s *State) PopOneTodoSQL() (string, bool) {
@@ -51,11 +53,11 @@ func (s *State) AppendTable(tbl *Table) {
 	s.tables = append(s.tables, tbl)
 }
 
-func (s *State) PushCTE(cte *CTE) {
+func (s *State) PushCTE(cte *Table) {
 	s.ctes[len(s.ctes)-1] = append(s.ctes[len(s.ctes)-1], cte)
 }
 
-func (s *State) PopCTE() []*CTE {
+func (s *State) PopCTE() []*Table {
 	if len(s.ctes) == 0 {
 		panic("0 CTEs")
 	}
@@ -64,7 +66,7 @@ func (s *State) PopCTE() []*CTE {
 	return tc
 }
 
-func (s *State) CurrentCTE() *CTE {
+func (s *State) CurrentCTE() *Table {
 	if len(s.ctes) == 0 {
 		return nil
 	}
@@ -75,7 +77,7 @@ func (s *State) CurrentCTE() *CTE {
 	return l[len(l)-1]
 }
 
-func (s *State) LastCTEs() []*CTE {
+func (s *State) LastCTEs() []*Table {
 	return s.ctes[len(s.ctes)-1]
 }
 
@@ -84,7 +86,15 @@ func (s *State) ParentCTEColCount() int {
 		return 0
 	}
 	ctes := s.ctes[len(s.ctes)-2]
-	return len(ctes[len(ctes)-1].Cols)
+	return len(ctes[len(ctes)-1].Columns)
+}
+
+func (s *State) ParentCTE() *Table {
+	if len(s.ctes) < 2 {
+		return nil
+	}
+	ctes := s.ctes[len(s.ctes)-2]
+	return ctes[len(ctes)-1]
 }
 
 func (s *State) AppendPrepare(pre *Prepare) {
@@ -100,6 +110,14 @@ func (s *State) RemovePrepare(p *Prepare) {
 		}
 	}
 	s.prepareStmts = append(s.prepareStmts[:pos], s.prepareStmts[pos+1:]...)
+}
+
+func (s *State) SetRandomSeed(seed int64) {
+	rand.Seed(seed)
+}
+
+func (s *State) AutoSeed() {
+	s.SetRandomSeed(time.Now().Unix())
 }
 
 func (t *Table) AppendColumn(c *Column) {
