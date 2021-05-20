@@ -93,11 +93,12 @@ var DropTable = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
+	state.RemoveTable(tbl)
 	return Strs("drop table", tbl.Name)
 })
 
 var FlashBackTable = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(HasTables, CanReadGCSavePoint) {
+	if !state.CheckAssumptions(HasTables) {
 		return None
 	}
 	tbl := state.GetRandTable()
@@ -113,20 +114,14 @@ var AdminCheck = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	if state.ctrl.EnableTestTiFlash {
-		// Error: Error 1815: Internal : Can't find a proper physical plan for this query
-		// https://github.com/pingcap/tidb/issues/22947
-		return Str("")
-	} else {
-		if len(tbl.Indices) == 0 {
-			return Strs("admin check table", tbl.Name)
-		}
-		idx := tbl.GetRandomIndex()
-		return Or(
-			Strs("admin check table", tbl.Name),
-			Strs("admin check index", tbl.Name, idx.Name),
-		)
+	if len(tbl.Indices) == 0 {
+		return Strs("admin check table", tbl.Name)
 	}
+	idx := tbl.GetRandomIndex()
+	return Or(
+		Strs("admin check table", tbl.Name),
+		Strs("admin check index", tbl.Name, idx.Name),
+	)
 })
 
 var CreateTable = NewFn(func(state *State) Fn {
@@ -136,7 +131,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	tbl := state.GenNewTable()
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	if state.ctrl.EnableTestTiFlash {
+	if state.Roll(ConfigKeyProbabilityTiFlashTable, 0) {
 		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
@@ -430,10 +425,11 @@ var HintTiFlash = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
+	if !state.ExistsConfig(ConfigKeyUnitTiFlashQueryHint) {
+		return Empty
+	}
 	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
-	return If(state.ctrl.EnableTestTiFlash,
-		Strs("/*+ read_from_storage(tiflash[", PrintTableNames(tbls), "]) */"),
-	)
+	return Strs("/*+ read_from_storage(tiflash[", PrintTableNames(tbls), "]) */")
 })
 
 var HintIndexMerge = NewFn(func(state *State) Fn {
@@ -506,7 +502,7 @@ var CommonInsertSet = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	cols := state.Search(ScopeKeyCurrentSelectedColumns).ToColumns()
 	return And(
-		Str("insert into"), Opt(Str("ignore")), Str(tbl.Name),
+		Str("insert"), Opt(Str("ignore")), Str("into"), Str(tbl.Name),
 		Str(PrintColumnNamesWithPar(cols, "")),
 		Str("set"),
 		Repeat(AssignClause.SetR(1, 3), Str(",")),
@@ -518,7 +514,7 @@ var CommonInsertValues = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	cols := state.Search(ScopeKeyCurrentSelectedColumns).ToColumns()
 	return And(
-		Str("insert into"), Opt(Str("ignore")), Str(tbl.Name),
+		Str("insert"), Opt(Str("ignore")), Str("into"), Str(tbl.Name),
 		Str(PrintColumnNamesWithPar(cols, "")),
 		Str("values"),
 		MultipleRowVals,
@@ -781,8 +777,7 @@ var DropColumn = NewFn(func(state *State) Fn {
 
 var AlterColumn = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
-		MustHaveKey(ScopeKeyCurrentTables),
-		EnableColumnTypeChange) {
+		MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
@@ -936,7 +931,7 @@ var AndOr = NewFn(func(state *State) Fn {
 })
 
 var CreateTableLike = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(NoTooMuchTables) {
+	if !state.CheckAssumptions(NoTooMuchTables, HasTables) {
 		return None
 	}
 	tbl := state.GetRandTable()
@@ -952,7 +947,7 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 })
 
 var SelectIntoOutFile = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad) {
+	if !state.CheckAssumptions(HasTables) {
 		return None
 	}
 	tbl := state.GetRandTable()
@@ -964,7 +959,7 @@ var SelectIntoOutFile = NewFn(func(state *State) Fn {
 })
 
 var LoadTable = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(HasTables, EnabledSelectIntoAndLoad, AlreadySelectOutfile) {
+	if !state.CheckAssumptions(HasTables, AlreadySelectOutfile) {
 		return None
 	}
 	tbl := state.Search(ScopeKeyLastOutFileTable).ToTable()

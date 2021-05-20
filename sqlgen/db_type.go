@@ -6,7 +6,6 @@ import (
 )
 
 type State struct {
-	ctrl   *ControlOption
 	hooks  []FnEvaluateHook
 	weight map[string]int
 	repeat map[string]Interval
@@ -81,29 +80,16 @@ type ScopeObj struct {
 	obj interface{}
 }
 
-func NewState(opts ...func(ctl *ControlOption)) *State {
+func NewState() *State {
 	s := &State{
-		ctrl:   DefaultControlOption(),
 		weight: make(map[string]int),
 		repeat: make(map[string]Interval),
 		config: make(map[ConfigKeyType]ScopeObj),
 	}
-	for _, opt := range opts {
-		opt(s.ctrl)
-	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
-	if s.ctrl.AttachToTxn {
-		s.AppendHook(NewFnHookTxnWrap(s.ctrl))
-	}
-	setupReplacer(s)
+	// s.AppendHook(NewFnHookTxnWrap(20))
 	return s
-}
-
-func NewState2(EnableTestTiFlash bool) *State {
-	return NewState(func(ctl *ControlOption) {
-		ctl.EnableTestTiFlash = EnableTestTiFlash
-	})
 }
 
 func (s ScopeObj) IsNil() bool {

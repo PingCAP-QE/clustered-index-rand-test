@@ -28,10 +28,6 @@ func (s *State) SetRepeat(prod Fn, lower int, upper int) {
 	s.repeat[prod.Info] = Interval{lower, upper}
 }
 
-func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
-	fn(s.ctrl)
-}
-
 func (s *State) AppendHook(hook FnEvaluateHook) {
 	s.hooks = append(s.hooks, hook)
 }
@@ -49,6 +45,16 @@ func (s *State) RemoveHook(hookInfo string) {
 
 func (s *State) AppendTable(tbl *Table) {
 	s.tables = append(s.tables, tbl)
+}
+
+func (s *State) RemoveTable(t *Table) {
+	filled := 0
+	for _, tb := range s.tables {
+		if tb.ID != t.ID {
+			s.tables[filled] = tb
+		}
+	}
+	s.tables = s.tables[:filled]
 }
 
 func (s *State) PushCTE(cte *CTE) {
