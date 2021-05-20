@@ -8,5 +8,4 @@
 *.out
 *.sql
 *.log
-clustered-index-rand-test
 /bin

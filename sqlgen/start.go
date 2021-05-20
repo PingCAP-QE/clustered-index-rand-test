@@ -1,11 +1,7 @@
 package sqlgen
 
 import (
-	"bytes"
-	"context"
-	"database/sql"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"path"
@@ -13,7 +9,6 @@ import (
 	"time"
 
 	"github.com/cznic/mathutil"
-	"github.com/zyguan/sqlz/resultset"
 )
 
 func NewGenerator(state *State) func() string {
@@ -317,6 +312,7 @@ var CommonSelect = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	cols := tbl.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
@@ -362,7 +358,7 @@ var AggFunction = NewFn(func(state *State) Fn {
 		Strf("avg([%fn] [%fn])", distinctOpt, c1),
 		Strf("max([%fn] [%fn])", distinctOpt, c1),
 		Strf("min([%fn] [%fn])", distinctOpt, c1),
-		Strf("group_concat([%fn] [%fn]) order by [%fn]", distinctOpt, c1, c1),
+		Strf("group_concat([%fn] [%fn] order by [%fn])", distinctOpt, c1, c1),
 		Strf("bit_or([%fn])", c1),
 		Strf("bit_xor([%fn])", c1),
 		Strf("bit_and([%fn])", c1),
@@ -373,7 +369,6 @@ var AggFunction = NewFn(func(state *State) Fn {
 		Strf("json_objectagg([%fn], [%fn])", c1, c2),
 		Strf("approx_count_distinct([%fn])", c1),
 		Strf("approx_percentile([%fn], [%fn])", c1, Str(RandomNum(0, 100))),
-		Strf("approx_percentile([%fn], [%fn], [%fn])", c1, c2, Str(RandomNum(0, 100))),
 	)
 })
 
@@ -482,10 +477,10 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	var cols []*Column
-	if state.ExistsConfig(ConfigKeyUnitStrictTransTable) {
-		cols = tbl.GetRandColumnsIncludedDefaultValue()
+	if state.ExistsConfig(ConfigKeyUnitNonStrictTransTable) {
+		cols = tbl.GetRandColumnsNonEmpty()
 	} else {
-		cols = tbl.GetRandColumns()
+		cols = tbl.GetRandColumnsIncludedDefaultValue()
 	}
 	state.Store(ScopeKeyCurrentSelectedColumns, cols)
 	// TODO: insert into t partition(p1) values(xxx)
@@ -501,11 +496,13 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 var CommonInsertSet = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	cols := state.Search(ScopeKeyCurrentSelectedColumns).ToColumns()
+	if len(cols) == 0 {
+		cols = tbl.Columns
+	}
 	return And(
 		Str("insert"), Opt(Str("ignore")), Str("into"), Str(tbl.Name),
-		Str(PrintColumnNamesWithPar(cols, "")),
 		Str("set"),
-		Repeat(AssignClause.SetR(1, 3), Str(",")),
+		Str(PrintRandomAssignments(cols)),
 		Opt(OnDuplicateUpdate),
 	)
 })
@@ -536,11 +533,13 @@ var CommonReplaceValues = NewFn(func(state *State) Fn {
 var CommonReplaceSet = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	cols := state.Search(ScopeKeyCurrentSelectedColumns).ToColumns()
+	if len(cols) == 0 {
+		cols = tbl.Columns
+	}
 	return And(
 		Str("replace into"), Str(tbl.Name),
-		Str(PrintColumnNamesWithPar(cols, "")),
 		Str("set"),
-		Repeat(AssignClause.SetR(1, 3), Str(",")),
+		Str(PrintRandomAssignments(cols)),
 	)
 })
 
@@ -557,9 +556,7 @@ var MultipleRowVals = NewFn(func(state *State) Fn {
 var AssignClause = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	randCol := tbl.GetRandColumn()
-	return Or(
-		Strs(randCol.Name, "=", randCol.RandomValue()),
-	)
+	return Strs(randCol.Name, "=", randCol.RandomValue())
 })
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
@@ -881,9 +878,9 @@ var JoinPredicate = NewFn(func(state *State) Fn {
 		col2 = t2.GetRandColumn()
 	}
 	return And(
-		Str(col1.Name),
+		Str(col1.QualifiedName(state)),
 		CompareSymbol,
-		Str(col2.Name),
+		Str(col2.QualifiedName(state)),
 	)
 })
 
@@ -1247,83 +1244,3 @@ var CTEStartWrapper = NewFn(func(state *State) Fn {
 
 	return cteStart
 })
-
-func RunInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
-	return runInteractTest(ctx, db1, db2, state, sql, true)
-}
-
-// RunInteractTestNoSort is similar to RunInteractTest, but RunInteractTestNoSort doesn't sort the query results
-// before compare them. It'll be useful to run tests for SQLs with "order by" clause.
-func RunInteractTestNoSort(ctx context.Context, db1, db2 *sql.DB, state *State, sql string) error {
-	return runInteractTest(ctx, db1, db2, state, sql, false)
-}
-
-func runInteractTest(ctx context.Context, db1, db2 *sql.DB, state *State, sql string, sortQueryResult bool) error {
-	log.Printf("%s", sql)
-	lsql := strings.ToLower(sql)
-	isAdminCheck := strings.Contains(lsql, "admin") && strings.Contains(lsql, "check")
-	rs1, err1 := runQuery(ctx, db1, sql)
-	rs2, err2 := runQuery(ctx, db2, sql)
-	if isAdminCheck && err1 != nil && !strings.Contains(err1.Error(), "t exist") {
-		return err1
-	}
-	if isAdminCheck && err2 != nil && !strings.Contains(err2.Error(), "t exist") {
-		return err2
-	}
-	if !ValidateErrs(err1, err2) {
-		return fmt.Errorf("errors mismatch: %v <> %v %q", err1, err2, sql)
-	}
-	if rs1 == nil || rs2 == nil {
-		return nil
-	}
-	var h1, h2 string
-	if sortQueryResult {
-		h1, h2 = rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
-	} else {
-		h1, h2 = rs1.DataDigest(resultset.DigestOptions{}), rs2.DataDigest(resultset.DigestOptions{})
-	}
-	if h1 != h2 {
-		var b1, b2 bytes.Buffer
-		rs1.PrettyPrint(&b1)
-		rs2.PrettyPrint(&b2)
-		return fmt.Errorf("result digests mismatch: %s != %s %q\n%s\n%s", h1, h2, sql, b1.String(), b2.String())
-	}
-	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
-		return fmt.Errorf("rows affected mismatch: %d != %d %q",
-			rs1.ExecResult().RowsAffected, rs2.ExecResult().RowsAffected, sql)
-	}
-	return nil
-}
-
-func runQuery(ctx context.Context, db *sql.DB, sql string) (*resultset.ResultSet, error) {
-	rows, err := db.QueryContext(ctx, sql)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return resultset.ReadFromRows(rows)
-}
-
-func ValidateErrs(err1 error, err2 error) bool {
-	ignoreErrMsgs := []string{
-		"with index covered now",                         // 4.0 cannot drop column with index
-		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
-		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
-		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
-		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
-		"Unknown column '_tidb_rowid'",                   // 5.0 clustered index table don't have _tidb_row_id.
-	}
-	for _, msg := range ignoreErrMsgs {
-		match := OneOfContains(err1, err2, msg)
-		if match {
-			return true
-		}
-	}
-	return (err1 == nil && err2 == nil) || (err1 != nil && err2 != nil)
-}
-
-func OneOfContains(err1, err2 error, msg string) bool {
-	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
-	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
-	return c1 || c2
-}

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	"github.com/google/uuid"
@@ -17,29 +19,23 @@ import (
 	"github.com/zyguan/sqlz/resultset"
 )
 
-type globalOption struct {
-	stmtCount int
-	seed      int64
-	debug     bool
-}
-
 func rootCmd() *cobra.Command {
-	opt := &globalOption{}
 	cmd := &cobra.Command{
 		Use: "clustered index random abtest",
 	}
 	cmd.AddCommand(printCmd())
 	cmd.AddCommand(abtestCmd())
-	cmd.AddCommand(checkSyntaxCmd(opt))
-	cmd.Flags().IntVar(&opt.stmtCount, "count", 100, "number of statements to run")
-	cmd.Flags().Int64Var(&opt.seed, "seed", 0, "random seed")
-	cmd.Flags().BoolVar(&opt.debug, "debug", false, "print generated SQLs")
+	cmd.AddCommand(checkSyntaxCmd())
+
 	return cmd
 }
 
-func checkSyntaxCmd(opt *globalOption) *cobra.Command {
+func checkSyntaxCmd() *cobra.Command {
 	var (
-		dsn string
+		stmtCount int
+		seed      string
+		debug     bool
+		dsn       string
 	)
 	cmd := &cobra.Command{
 		Use:           "check-syntax",
@@ -47,29 +43,50 @@ func checkSyntaxCmd(opt *globalOption) *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rand.Seed(opt.seed)
+			parseAndSetSeed(seed)
 			conn := setUpDatabaseConnection(dsn)
 
 			state := sqlgen.NewState()
-			queries := generatePlainSQLs(state, opt.stmtCount)
+			queries := generatePlainSQLs(state, stmtCount)
 
-			for _, query := range queries {
-				if opt.debug {
+			for i, query := range queries {
+				if debug {
+					fmt.Printf("-- statement seq: %d\n", i)
 					fmt.Println(query + ";")
 				}
-				_, err := runQuery(conn, query)
+				_, err := executeQuery(conn, query)
 				if err != nil {
-					if strings.Contains(err.Error(), "ERROR 1064") {
-						fmt.Println("syntax error")
+					errMsg := strings.ToLower(err.Error())
+					if strings.Contains(errMsg, "error") &&
+						strings.Contains(errMsg, "error 1064") {
+						return err
 					}
-					return err
+					fmt.Println(colorizeErrorMsg(err))
 				}
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&dsn, "dsn", "", "dsn for database")
+	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
+	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	return cmd
+}
+
+func colorizeErrorMsg(msg error) string {
+	return fmt.Sprintf("\u001B[31m%s\u001B[0m", msg.Error())
+}
+
+func parseAndSetSeed(seed string) {
+	if seed == "now" {
+		nowSeed := time.Now().Unix()
+		fmt.Printf("current seed: %d\n", nowSeed)
+		rand.Seed(nowSeed)
+	} else {
+		parsedSeed := Try(strconv.Atoi(seed)).(int)
+		rand.Seed(int64(parsedSeed))
+	}
 }
 
 func abtestCmd() *cobra.Command {
@@ -94,9 +111,9 @@ func abtestCmd() *cobra.Command {
 			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
 
 			for _, query := range queries {
-				rs1, err1 := runQuery(conn1, query)
-				rs2, err2 := runQuery(conn2, query)
-				if !sqlgen.ValidateErrs(err1, err2) {
+				rs1, err1 := executeQuery(conn1, query)
+				rs2, err2 := executeQuery(conn2, query)
+				if !ValidateErrs(err1, err2) {
 					return errors.Errorf("error mismatch: %v != %v", err1, err2)
 				}
 				if rs1 == nil || rs2 == nil {
@@ -127,7 +144,7 @@ func setUpDatabaseConnection(dsn string) *sql.Conn {
 	return conn
 }
 
-func runQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
+func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
 	ctx := context.Background()
 	Try(conn.PingContext(ctx))
 	rows, err := conn.QueryContext(ctx, query)
@@ -202,4 +219,28 @@ func printCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&count, "count", 1, "number of SQLs")
 	return cmd
+}
+
+func ValidateErrs(err1 error, err2 error) bool {
+	ignoreErrMsgs := []string{
+		"with index covered now",                         // 4.0 cannot drop column with index
+		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
+		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
+		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
+		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
+		"Unknown column '_tidb_rowid'",                   // 5.0 clustered index table don't have _tidb_row_id.
+	}
+	for _, msg := range ignoreErrMsgs {
+		match := OneOfContains(err1, err2, msg)
+		if match {
+			return true
+		}
+	}
+	return (err1 == nil && err2 == nil) || (err1 != nil && err2 != nil)
+}
+
+func OneOfContains(err1, err2 error, msg string) bool {
+	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
+	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
+	return c1 || c2
 }

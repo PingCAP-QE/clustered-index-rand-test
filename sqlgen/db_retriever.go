@@ -220,21 +220,12 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
-		colID := colIDFn()
-		newCol := &Column{
-			ID:             colID,
-			Name:           c.Name,
-			Tp:             c.Tp,
-			isUnsigned:     c.isUnsigned,
-			arg1:           c.arg1,
-			arg2:           c.arg2,
-			args:           c.args,
-			defaultVal:     c.defaultVal,
-			isNotNull:      c.isNotNull,
-			relatedIndices: map[int]struct{}{},
-		}
-		oldID2NewCol[c.ID] = newCol
-		newCols = append(newCols, newCol)
+		newCol := *c
+		newCol.ID = colIDFn()
+		newCol.relatedIndices = map[int]struct{}{}
+		newCol.relatedTableID = tblID
+		oldID2NewCol[c.ID] = &newCol
+		newCols = append(newCols, &newCol)
 	}
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
@@ -357,6 +348,17 @@ func (i *Index) HasDefaultNullColumn() bool {
 
 func (c *Column) IsDroppable() bool {
 	return len(c.relatedIndices) == 0
+}
+
+func (c *Column) QualifiedName(state *State) string {
+	var tableName string
+	for _, t := range state.tables {
+		if c.relatedTableID == t.ID {
+			tableName = t.Name
+			break
+		}
+	}
+	return fmt.Sprintf("%s.%s", tableName, c.Name)
 }
 
 func (p *Prepare) UserVars() []string {

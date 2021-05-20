@@ -10,7 +10,7 @@ const (
 	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
 	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
 	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
-	ConfigKeyUnitStrictTransTable                   // value example: struct{}{}
+	ConfigKeyUnitNonStrictTransTable                // value example: struct{}{}
 	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
 	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
 	ConfigKeyArrayAllowColumnTypes                  // value example: []ColumnType{ColumnTypeInt, ColumnTypeTinyInt}
