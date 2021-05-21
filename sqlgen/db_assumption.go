@@ -32,14 +32,6 @@ func HasPreparedStmts(s *State) bool {
 	return len(s.prepareStmts) >= 1
 }
 
-func CanReadGCSavePoint(s *State) bool {
-	return s.ctrl.CanReadGCSavePoint
-}
-
-func EnabledSelectIntoAndLoad(s *State) bool {
-	return s.ctrl.EnableSelectOutFileAndLoadData
-}
-
 func AlreadySelectOutfile(s *State) bool {
 	return s.Exists(ScopeKeyLastOutFileTable)
 }
@@ -69,8 +61,4 @@ func HasDroppableColumn(s *State) bool {
 func HasIndices(s *State) bool {
 	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	return len(tbl.Indices) > 0
-}
-
-func EnableColumnTypeChange(s *State) bool {
-	return s.ctrl.EnableColumnTypeChange
 }

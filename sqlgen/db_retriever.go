@@ -2,19 +2,24 @@ package sqlgen
 
 import (
 	"fmt"
-	"github.com/cznic/mathutil"
 	"math/rand"
+
+	"github.com/cznic/mathutil"
 )
 
 func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
 
+func (s *State) GetAllTables() Tables {
+	return s.tables
+}
+
 func (s *State) GetRandTableOrCTE() *Table {
 	return s.GetRandTableOrCTEs()[0]
 }
 
-func (s *State) GetRandTableOrCTEs() []*Table {
+func (s *State) GetRandTableOrCTEs() Tables {
 	tbls := make([]*Table, 0)
 	for _, t := range s.tables {
 		tbls = append(tbls, &(*t))
@@ -26,10 +31,6 @@ func (s *State) GetRandTableOrCTEs() []*Table {
 	}
 
 	return tbls[:mathutil.Min(rand.Intn(len(tbls)-2)+2, len(tbls))]
-}
-
-func (s *State) GetAllTables() []*Table {
-	return s.tables
 }
 
 func (s *State) IncCTEDeep() {
@@ -56,6 +57,16 @@ func (s *State) GetRelatedTables(cols []*Column) []*Table {
 
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
+}
+
+func (s *State) FilterTables(pred func(t *Table) bool) Tables {
+	ret := make(Tables, 0, len(s.tables)/2)
+	for _, t := range s.tables {
+		if pred(t) {
+			ret = append(ret, t)
+		}
+	}
+	return ret
 }
 
 type Tables []*Table
@@ -239,21 +250,12 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
-		colID := colIDFn()
-		newCol := &Column{
-			ID:             colID,
-			Name:           c.Name,
-			Tp:             c.Tp,
-			isUnsigned:     c.isUnsigned,
-			arg1:           c.arg1,
-			arg2:           c.arg2,
-			args:           c.args,
-			defaultVal:     c.defaultVal,
-			isNotNull:      c.isNotNull,
-			relatedIndices: map[int]struct{}{},
-		}
-		oldID2NewCol[c.ID] = newCol
-		newCols = append(newCols, newCol)
+		newCol := *c
+		newCol.ID = colIDFn()
+		newCol.relatedIndices = map[int]struct{}{}
+		newCol.relatedTableID = tblID
+		oldID2NewCol[c.ID] = &newCol
+		newCols = append(newCols, &newCol)
 	}
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
@@ -376,6 +378,17 @@ func (i *Index) HasDefaultNullColumn() bool {
 
 func (c *Column) IsDroppable() bool {
 	return len(c.relatedIndices) == 0
+}
+
+func (c *Column) QualifiedName(state *State) string {
+	var tableName string
+	for _, t := range state.tables {
+		if c.relatedTableID == t.ID {
+			tableName = t.Name
+			break
+		}
+	}
+	return fmt.Sprintf("%s.%s", tableName, c.Name)
 }
 
 func (p *Prepare) UserVars() []string {

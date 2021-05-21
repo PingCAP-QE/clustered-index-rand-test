@@ -1,74 +1,227 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log"
-	"os"
+	"github.com/pkg/errors"
+	"math/rand"
+	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	. "github.com/zyguan/just"
 	"github.com/zyguan/sqlz"
 	"github.com/zyguan/sqlz/resultset"
-	"golang.org/x/sync/errgroup"
 )
 
-type global struct {
-	storeDSN string
-	store    Store
-}
-
 func rootCmd() *cobra.Command {
-	var g global
-
 	cmd := &cobra.Command{
 		Use: "clustered index random abtest",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			g.store, err = NewStore(g.storeDSN)
-			return
-		},
 	}
-	cmd.PersistentFlags().StringVar(&g.storeDSN, "store", "", "mysql dsn of test store")
-	cmd.AddCommand(initCmd(&g))
-	cmd.AddCommand(clearCmd(&g))
-	cmd.AddCommand(genTestCmd(&g))
-	cmd.AddCommand(runTestCmd(&g))
-	cmd.AddCommand(whyTestCmd(&g))
-	cmd.AddCommand(interactCmd())
 	cmd.AddCommand(printCmd())
+	cmd.AddCommand(abtestCmd())
+	cmd.AddCommand(checkSyntaxCmd())
+
 	return cmd
 }
 
-func initCmd(g *global) *cobra.Command {
+func checkSyntaxCmd() *cobra.Command {
+	var (
+		stmtCount int
+		seed      string
+		debug     bool
+		dsn       string
+	)
 	cmd := &cobra.Command{
-		Use:           "init",
-		Short:         "Initialize test store",
+		Use:           "check-syntax",
+		Short:         "Run syntax check test",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return g.store.Init()
+			parseAndSetSeed(seed)
+			conn := setUpDatabaseConnection(dsn)
+
+			state := sqlgen.NewState()
+			queries := generatePlainSQLs(state, stmtCount)
+
+			for i, query := range queries {
+				if debug {
+					fmt.Printf("-- statement seq: %d\n", i)
+					fmt.Println(query + ";")
+				}
+				_, err := executeQuery(conn, query)
+				if err != nil {
+					errMsg := strings.ToLower(err.Error())
+					if strings.Contains(errMsg, "error") &&
+						strings.Contains(errMsg, "error 1064") {
+						return err
+					}
+					fmt.Println(colorizeErrorMsg(err))
+				}
+			}
+			return nil
 		},
 	}
+	cmd.Flags().StringVar(&dsn, "dsn", "", "dsn for database")
+	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
+	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	return cmd
 }
 
-func clearCmd(g *global) *cobra.Command {
+func colorizeErrorMsg(msg error) string {
+	if msg == nil {
+		return ""
+	}
+	return fmt.Sprintf("\u001B[31m%s\u001B[0m", msg.Error())
+}
+
+func parseAndSetSeed(seed string) int64 {
+	if seed == "now" {
+		nowSeed := time.Now().Unix()
+		fmt.Printf("current seed: %d\n", nowSeed)
+		rand.Seed(nowSeed)
+		return nowSeed
+	} else {
+		parsedSeed := int64(Try(strconv.Atoi(seed)).(int))
+		rand.Seed(parsedSeed)
+		return parsedSeed
+	}
+}
+
+func abtestCmd() *cobra.Command {
+	var (
+		stmtCount   int
+		dsn1        string
+		dsn2        string
+		sqlFilePath string
+		logPath     string
+		seed        string
+		debug       bool
+	)
 	cmd := &cobra.Command{
-		Use:           "clear",
-		Short:         "Clear test store",
+		Use:           "abtest",
+		Short:         "Run AB test",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return g.store.Clear()
+			parsedSeed := parseAndSetSeed(seed)
+
+			conn1 := setUpDatabaseConnection(dsn1)
+			conn2 := setUpDatabaseConnection(dsn2)
+
+			state := sqlgen.NewState()
+			queries := generateInitialSQLs(state)
+			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
+
+			for _, query := range queries {
+				if debug {
+					fmt.Println(query + ";")
+				}
+				rs1, err1 := executeQuery(conn1, query)
+				rs2, err2 := executeQuery(conn2, query)
+				if debug {
+					fmt.Println(colorizeErrorMsg(err1))
+					fmt.Println(colorizeErrorMsg(err2))
+				}
+				if !ValidateErrs(err1, err2) {
+					msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
+					return errors.Errorf(msg)
+				}
+				if rs1 == nil && rs2 == nil {
+					continue
+				}
+				if debug {
+					fmt.Println(rs1.String())
+					fmt.Println(rs2.String())
+				}
+				if err := compareResult(rs1, rs2, query); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
+	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
+	cmd.Flags().StringVar(&dsn1, "dsn1", "", "dsn for 1st database")
+	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
+	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
+	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
+	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	return cmd
+}
+
+func setUpDatabaseConnection(dsn string) *sql.Conn {
+	ctx := context.Background()
+	db := Try(sql.Open("mysql", dsn)).(*sql.DB)
+	dbName := "db" + strings.ReplaceAll(uuid.New().String(), "-", "_")
+	conn := Try(sqlz.Connect(ctx, db)).(*sql.Conn)
+	Try(conn.ExecContext(ctx, "create database "+dbName))
+	Try(conn.ExecContext(ctx, "use "+dbName))
+	return conn
+}
+
+func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
+	ctx := context.Background()
+	Try(conn.PingContext(ctx))
+	rows, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return resultset.ReadFromRows(rows)
+}
+
+func generateInitialSQLs(state *sqlgen.State) []string {
+	tableCount, columnCount := 5, 5
+	indexCount, rowCount := 2, 10
+	sqls := make([]string, 0, tableCount+tableCount*rowCount)
+	state.SetRepeat(sqlgen.ColumnDefinition, columnCount, columnCount)
+	state.SetRepeat(sqlgen.IndexDefinition, indexCount, indexCount)
+	for i := 0; i < tableCount; i++ {
+		query := sqlgen.CreateTable.Eval(state)
+		sqls = append(sqls, query)
+	}
+	for _, tb := range state.GetAllTables() {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		for i := 0; i < rowCount; i++ {
+			query := sqlgen.InsertInto.Eval(state)
+			sqls = append(sqls, query)
+		}
+		state.DestroyScope()
+	}
+	return sqls
+}
+
+func generatePlainSQLs(state *sqlgen.State, count int) []string {
+	state.Clear(sqlgen.StateClearOptionAll)
+	sqls := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		sqls = append(sqls, sqlgen.Start.Eval(state))
+	}
+	return sqls
+}
+
+func compareResult(rs1, rs2 *resultset.ResultSet, query string) error {
+	h1, h2 := rs1.OrderedDigest(resultset.DigestOptions{}), rs2.OrderedDigest(resultset.DigestOptions{})
+	if h1 != h2 {
+		var b1, b2 bytes.Buffer
+		rs1.PrettyPrint(&b1)
+		rs2.PrettyPrint(&b2)
+		return fmt.Errorf("result digests mismatch: %s != %s %q\n%s\n%s", h1, h2, query, b1.String(), b2.String())
+	}
+	if rs1.IsExecResult() && rs1.ExecResult().RowsAffected != rs2.ExecResult().RowsAffected {
+		return fmt.Errorf("rows affected mismatch: %d != %d %q",
+			rs1.ExecResult().RowsAffected, rs2.ExecResult().RowsAffected, query)
+	}
+	return nil
 }
 
 func printCmd() *cobra.Command {
@@ -91,303 +244,26 @@ func printCmd() *cobra.Command {
 	return cmd
 }
 
-func interactCmd() *cobra.Command {
-	var (
-		stmtCount int
-		dryrun    bool
-		dsn1      string
-		dsn2      string
-	)
-
-	cmd := &cobra.Command{
-		Use:           "interact",
-		Short:         "Run tests interactively",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
-			state := sqlgen.NewState()
-			gen := sqlgen.NewGenerator(state)
-			for i := 0; i < stmtCount; i++ {
-				if dryrun {
-					fmt.Printf("%s\n", gen())
-				} else {
-					prepare := func(dsn string) (db *sql.DB, dbName string, err error) {
-						db, err = sql.Open("mysql", dsn)
-						if err != nil {
-							return
-						}
-						dbName = "db" + strings.ReplaceAll(uuid.New().String(), "-", "_")
-						var conn *sql.Conn
-						conn, err = sqlz.Connect(ctx, db)
-						if err != nil {
-							return
-						}
-						_, err = conn.ExecContext(ctx, "create database "+dbName)
-						if err != nil {
-							return
-						}
-						_, err = conn.ExecContext(ctx, "use "+dbName)
-						if err != nil {
-							return
-						}
-						return
-					}
-					db1, db1Name, err := prepare(dsn1)
-					if err != nil {
-						return err
-					}
-					db2, db2Name, err := prepare(dsn2)
-					if err != nil {
-						return err
-					}
-
-					err = sqlgen.RunInteractTest(context.Background(), db1, db2, state, gen())
-					if err != nil {
-						return err
-					}
-
-					hs1, err1 := checkTables(ctx, db1, db1Name)
-					if err1 != nil {
-						return err1
-					}
-					hs2, err2 := checkTables(ctx, db2, db2Name)
-					if err2 != nil {
-						return err2
-					}
-					for t := range hs2 {
-						if hs1[t] != hs2[t] {
-							return fmt.Errorf("data mismatch: %s != %s @%s", hs1[t], hs2[t], t)
-						}
-					}
-				}
-			}
-			return nil
-		},
+func ValidateErrs(err1 error, err2 error) bool {
+	ignoreErrMsgs := []string{
+		"with index covered now",                         // 4.0 cannot drop column with index
+		"Unknown system variable",                        // 4.0 cannot recognize tidb_enable_clustered_index
+		"Split table region lower value count should be", // 4.0 not compatible with 'split table between'
+		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
+		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
+		"Unknown column '_tidb_rowid'",                   // 5.0 clustered index table don't have _tidb_row_id.
 	}
-	cmd.Flags().IntVar(&stmtCount, "count", 1, "number of statements to run")
-	cmd.Flags().BoolVar(&dryrun, "dry-run", false, "dry run")
-	cmd.Flags().StringVar(&dsn1, "dsn1", "", "dsn for 1st database")
-	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
-	return cmd
+	for _, msg := range ignoreErrMsgs {
+		match := OneOfContains(err1, err2, msg)
+		if match {
+			return true
+		}
+	}
+	return (err1 == nil && err2 == nil) || (err1 != nil && err2 != nil)
 }
 
-func genTestCmd(g *global) *cobra.Command {
-	var (
-		opts   genTestOptions
-		tests  int
-		dryrun bool
-	)
-
-	cmd := &cobra.Command{
-		Use:           "gen <input file>",
-		Short:         "Generate tests",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			for i := 0; i < tests; i++ {
-				t, err := genTest(opts)
-				if err != nil {
-					return err
-				}
-				if dryrun {
-					for _, stmt := range t.InitSQL {
-						fmt.Println(stmt + ";")
-					}
-					for _, txn := range t.Steps {
-						for _, stmt := range txn {
-							fmt.Println(stmt.Stmt+"; -- query:", naiveQueryDetect(stmt.Stmt))
-						}
-					}
-				} else {
-					if err := g.store.AddTest(t); err != nil {
-						return err
-					}
-					log.Printf("test #%d added", i)
-				}
-			}
-			return nil
-		},
-	}
-	cmd.Flags().IntVar(&tests, "test", 1, "number of test to generate")
-	cmd.Flags().BoolVar(&dryrun, "dry-run", false, "dry run")
-	cmd.Flags().StringVar(&opts.InitRoot, "init-root", "init", "entry rule of initialization sql")
-	cmd.Flags().StringVar(&opts.TxnRoot, "txn-root", "txn", "entry rule of transaction")
-	cmd.Flags().IntVar(&opts.RecurLimit, "recur-limit", 15, "max recursion level for sql generation")
-	cmd.Flags().IntVar(&opts.NumTxn, "txn", 5, "number of transactions per test")
-	cmd.Flags().BoolVar(&opts.Debug, "debug", false, "enable debug option of generator")
-	cmd.Flags().BoolVar(&opts.TiFlash, "tiflash", false, "enable test TiFlash (default false)")
-	return cmd
-}
-
-func runTestCmd(g *global) *cobra.Command {
-	var (
-		opts runABTestOptions
-		dsn1 string
-		dsn2 string
-		test uint32
-	)
-
-	cmd := &cobra.Command{
-		Use:           "run",
-		Short:         "Run generated tests",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			opts.Store = g.store
-			if opts.Threads <= 0 {
-				opts.Threads = 1
-			}
-			if opts.DB1, err = sql.Open("mysql", dsn1); err != nil {
-				return
-			}
-			if opts.DB2, err = sql.Open("mysql", dsn2); err != nil {
-				return
-			}
-			if test > 0 {
-				var cnt uint32
-				opts.Continue = func() bool {
-					return atomic.AddUint32(&cnt, 1) <= test
-				}
-			}
-			var g errgroup.Group
-			failed := make(chan struct{})
-			for i := 0; i < opts.Threads; i++ {
-				g.Go(func() error { return runABTest(context.Background(), failed, opts) })
-			}
-			return g.Wait()
-		},
-	}
-	cmd.Flags().Uint32Var(&test, "test", 0, "number of tests to run")
-	cmd.Flags().StringVar(&dsn1, "dsn1", "", "dsn for 1st database")
-	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
-	cmd.Flags().StringVar(&opts.Tag1, "tag1", "A", "tag of 1st database")
-	cmd.Flags().StringVar(&opts.Tag2, "tag2", "B", "tag of 2nd database")
-	cmd.Flags().IntVar(&opts.Threads, "thread", 1, "number of worker threads")
-	cmd.Flags().IntVar(&opts.QueryTimeout, "query-timeout", 30, "timeout in seconds for a singe query")
-	return cmd
-}
-
-func whyTestCmd(g *global) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "why <test id>",
-		Short:         "Explain a test",
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		Args:          cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			db, err := sql.Open("mysql", g.storeDSN)
-			if err != nil {
-				return err
-			}
-			return PrintWhy(args[0], db)
-		},
-	}
-	return cmd
-}
-
-func PrintWhy(id string, db *sql.DB) error {
-	var (
-		t       Test
-		initRaw []byte
-	)
-	row := db.QueryRow("select status, started_at, finished_at, message, init_sql from test where id = ?", id)
-	if err := row.Scan(&t.Status, &t.StartedAt, &t.FinishedAt, &t.Message, &initRaw); err != nil {
-		return err
-	}
-	if err := json.Unmarshal(initRaw, &t.InitSQL); err != nil {
-		return err
-	}
-	t1 := time.Unix(t.StartedAt, 0)
-	t2 := t1
-	if t.FinishedAt > t.StartedAt {
-		t2 = time.Unix(t.FinishedAt, 0)
-	}
-	fmt.Printf("# [%s] %s (%s,%s)\n", t.Status, id, t1.Format(time.RFC3339), t2.Sub(t1))
-	if len(t.Message) > 0 {
-		fmt.Println("\n> " + t.Message)
-	}
-	if t.Status != TestFailed {
-		return nil
-	}
-
-	dumpRes := func(tag string, raw []byte, err string) {
-		fmt.Println("\n**" + tag + "**")
-		if len(err) > 0 {
-			fmt.Println("Error: " + err)
-			return
-		}
-		var rs resultset.ResultSet
-		if e := rs.Decode(raw); e != nil {
-			fmt.Println("oops: " + e.Error())
-			return
-		}
-		rs.PrettyPrint(os.Stdout)
-	}
-
-	dumpStmts := func(seq int) {
-		var (
-			stmt Stmt
-		)
-		for _, stmt := range t.InitSQL {
-			fmt.Println(stmt + ";")
-		}
-
-		rows, err := db.Query("select stmt, txn from stmt where test_id = ? and seq <= ? order by seq", id, seq)
-		if err != nil {
-			fmt.Println("oops: " + err.Error())
-			return
-		}
-		defer rows.Close()
-		for rows.Next() {
-			if err := rows.Scan(&stmt.Stmt, &stmt.Txn); err != nil {
-				fmt.Println("oops: " + err.Error())
-				return
-			}
-			fmt.Println(stmt.Stmt + ";")
-		}
-		if err := rows.Err(); err != nil {
-			fmt.Println("oops: " + err.Error())
-		}
-	}
-
-	var (
-		seq  int
-		stmt string
-	)
-	if err := db.QueryRow("select seq from stmt_result where test_id = ? order by seq desc", id).Scan(&seq); err != nil {
-		return err
-	}
-	if err := db.QueryRow("select stmt from stmt where test_id = ? and seq = ?", id, seq).Scan(&stmt); err != nil {
-		return err
-	}
-	fmt.Println("\n## last query")
-	fmt.Printf("\n%d: %s\n", seq, stmt)
-
-	fmt.Println("\n```")
-	rows, err := db.Query("select tag, result, errmsg from stmt_result where test_id = ? and seq = ? order by tag", id, seq)
-	if err != nil {
-		fmt.Println("oops: " + err.Error())
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var (
-				tag string
-				err string
-				raw []byte
-			)
-			if rows.Scan(&tag, &raw, &err) == nil {
-				dumpRes(tag, raw, err)
-			}
-		}
-	}
-	fmt.Println("\n```")
-
-	fmt.Println("\n## history")
-
-	fmt.Println("\n```sql")
-	dumpStmts(seq)
-	fmt.Println("```")
-
-	return nil
+func OneOfContains(err1, err2 error, msg string) bool {
+	c1 := err1 != nil && strings.Contains(err1.Error(), msg) && err2 == nil
+	c2 := err2 != nil && strings.Contains(err2.Error(), msg) && err1 == nil
+	return c1 || c2
 }

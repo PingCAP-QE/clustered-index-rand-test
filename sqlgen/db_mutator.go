@@ -30,10 +30,6 @@ func (s *State) SetRepeat(prod Fn, lower int, upper int) {
 	s.repeat[prod.Info] = Interval{lower, upper}
 }
 
-func (s *State) UpdateCtrlOption(fn func(option *ControlOption)) {
-	fn(s.ctrl)
-}
-
 func (s *State) AppendHook(hook FnEvaluateHook) {
 	s.hooks = append(s.hooks, hook)
 }
@@ -51,6 +47,16 @@ func (s *State) RemoveHook(hookInfo string) {
 
 func (s *State) AppendTable(tbl *Table) {
 	s.tables = append(s.tables, tbl)
+}
+
+func (s *State) RemoveTable(t *Table) {
+	filled := 0
+	for _, tb := range s.tables {
+		if tb.ID != t.ID {
+			s.tables[filled] = tb
+		}
+	}
+	s.tables = s.tables[:filled]
 }
 
 func (s *State) PushCTE(cte *Table) {
@@ -129,6 +135,18 @@ func (t *Table) AppendColumn(c *Column) {
 }
 
 func (t *Table) RemoveColumn(c *Column) {
+	var idxToRemove []*Index
+	for _, idx := range t.Indices {
+		for _, idxCol := range idx.Columns {
+			if idxCol.ID == c.ID {
+				idxToRemove = append(idxToRemove, idx)
+				break
+			}
+		}
+	}
+	for _, idx := range idxToRemove {
+		t.RemoveIndex(idx)
+	}
 	var pos int
 	for i := range t.Columns {
 		if t.Columns[i].ID == c.ID {
@@ -143,6 +161,14 @@ func (t *Table) RemoveColumn(c *Column) {
 }
 
 func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
+	for _, idx := range t.Indices {
+		for i, idxCol := range idx.Columns {
+			if idxCol.ID == oldCol.ID {
+				idx.Columns[i] = newCol
+				break
+			}
+		}
+	}
 	newCol.relatedTableID = t.ID
 	for colIdx := range t.Columns {
 		if t.Columns[colIdx].ID != oldCol.ID {

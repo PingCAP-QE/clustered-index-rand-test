@@ -1,10 +1,8 @@
-count ?= 20
-
 all: build
 
 build: fmt
 	@echo "Building binary..."
-	@go build -o bin/clustered-index-rand-test
+	@go build -o bin/sqlgen
 
 fmt:
 	@echo "go fmt..."
@@ -13,26 +11,13 @@ fmt:
 test: build
 	@go test ./...
 
-abtest: bins build
-	@./tests/run-test.sh
+abtest: build
+	@bin/sqlgen check-syntax \
+		--dsn1 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
+		--dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200
 
-bins:
-	@which bin/tidb-master || (echo "bin/tidb-master not found" && exit 1)
-	@which bin/tidb-4.0 || (echo "bin/tidb-4.0 not found" && exit 1)
-
-test-syntax: bins build
-	@python3 tests/run-syntax-check.py $(count)
+test-syntax: build
+	@bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' --count 200
 
 gen: build
-	@bin/clustered-index-rand-test print --count $(count)
-
-#clean:
-#	@rm bin/tidb-master 2> /dev/null || echo "bin/tidb-master not found"
-#	@rm bin/tidb-4.0 2> /dev/null || echo "bin/tidb-4.0 not found"
-#	@rm bin/clustered-index-rand-test 2> /dev/null || echo "bin/tidb-4.0 not found"
-
-start-services:
-	@./tests/_utils/start_services
-
-stop-services:
-	@./tests/_utils/stop_services
+	@bin/sqlgen print --count 200

@@ -1,14 +1,39 @@
 clustered-index-rand-test
 ===
 
+This project provides a flexible way to generate SQL strings.
+
 ## Quick start
 
-#### Run AB Test
+### Run AB Test
 
-1. Prepare two binaries `tidb-master` and `tidb-4.0` in the `bin` directory.
-1. Run `make abtest`.
+Send 200 random SQLs to `127.0.0.1:4000` and `127.0.0.1:3306` database instances, and compare the result between them:
 
-#### Generate SQLs as a library
+```bash
+make
+./bin/sqlgen abtest \
+  --dsn1 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
+  --dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200 --debug
+```
+
+### Run quick syntax test
+
+Send 100 random SQLs to `127.0.0.1:4000` and using the random seed `1621496851`:
+
+```bash
+make
+./bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
+   --debug --seed 1621496851
+```
+
+### Print 100 random SQLs
+
+```bash
+make
+./bin/sqlgen print --count 100
+```
+
+### Generate SQLs as a library
 
 Print 200 SQL statements randomly after setting `@@global.tidb_enable_clustered_index` to true:
 
@@ -23,43 +48,61 @@ func main() {
 }
 ```
 
-#### Generate SQLs as a binary
+Generate 5 random `CREATE TABLE` statements, each with 5 columns and 2 indexes and 10 `INSERT INTO` statements.
 
-Print 200 SQL statements randomly:
-
-```
-make gen count=200
+```go
+func printInitSQL() {
+    state := sqlgen.NewState()
+    tableCount, columnCount := 5, 5
+    indexCount, rowCount := 2, 10
+    state.SetRepeat(sqlgen.ColumnDefinition, columnCount, columnCount)
+    state.SetRepeat(sqlgen.IndexDefinition, indexCount, indexCount)
+    for i := 0; i < tableCount; i++ {
+        sql := sqlgen.CreateTable.Eval(state)
+        fmt.Println(sql)
+    }
+    for _, tb := range state.GetAllTables() {
+        state.CreateScope()
+        state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+        for i := 0; i < rowCount; i++ {
+            sql := sqlgen.InsertInto.Eval(state)
+            fmt.Println(sql)
+        }
+        state.DestroyScope()
+    }
+}
 ```
 
 To check/modify the generation rules, see the file `sqlgen/start.go`.
 
-## Introduction
-
-This project provides a flexible way to generate SQL strings. Comparing with randgen/go-randgen, it has the following advantages:
+## Features
 
 - Good readability. It uses Yacc-style code to describe the grammar. Here is the comparison for a simple 'or' branch: 
-  ```yacc
-  dmlStmt:
+    ```yacc
+    dmlStmt:
      query
-  |  commonDelete
-  |  commonInsert
-  |  commonUpdate
-  ```
-  ```go
-  dmlStmt = NewFn("dmlStmt", func() Fn {
-	return Or(
-		query,
-		commonDelete,
-		commonInsert,
-		commonUpdate,
-	)
-  })
-  ```
+    |  commonDelete
+    |  CommonInsertOrReplace
+    |  commonUpdate
+    ```
+    ```go
+    var DMLStmt = NewFn(func(state *State) Fn {
+        if !state.CheckAssumptions(HasTables) {
+            return None
+        }
+        return Or(
+            QueryPrepare,
+            CommonDelete,
+            CommonInsertOrReplace,
+            CommonUpdate,
+        )
+    })
+    ```
 - Flexible state management. It provides full functions of Golang.
 
   Why do we need state management? Because the correctness of the generating SQL is guaranteed by the state. 
   
-  For example, the index columns in a SQL like `ALTER TABLE t ADD INDEX idx(a, b);` are chosen randomly. This requires the embedded language to store these metadata(including all available table names, all column names in each table, etc.). 
+  For example, the index columns in a SQL like `ALTER TABLE t ADD INDEX idx(a, b);` are chosen randomly. This requires the embedded language to store the columns information of `t`. The metadata also including all available table names, all column names in each table, etc. 
   
   However, for scripting language like Perl/Lua, this can mess things up if the there are a lot of metadata to track:
  
@@ -95,29 +138,39 @@ This project provides a flexible way to generate SQL strings. Comparing with ran
 
 ## Concepts
 
-- **Production**: a rule that defines how to generate a part of string. All the productions are described in this way:
+- **Fn**: a rule that defines how to generate a part of string. We can define the `Fn`s in this way:
     ```go
-    prod_name = NewFn("prod_name", func() Fn {
-        /* initialization or preprocess */
-        /* production body */ return Or(
-            sub_prod1,
-            sub_prod2,
+    fn_name = NewFn(func(state *State) Fn {
+        /* assumption check */
+        /* initialization and preprocess */
+        return Or(
+            /* fn body */
+            sub_fn1,
+            sub_fn2,
             ...
         )
     })
     ```
-    `Fn` is a representation of production. 
+
+    Evaluating a `Fn` produces a string:
+    ```go
+    state := NewState()
+    sqlPart := fn_name.Eval(state)
+    ```
+    ```go
+    func (f Fn) Eval(state *State) string { ... }
+    ``` 
     
-    When it is being evaluated, the sub-productions are also evaluated. Each production builds its own string by using both information about itself and sub-productions. Finally, a string is concatenated in a bottom-up way and returned.
+    When a `Fn` is being evaluated, the sub-`Fn`s are also evaluated. Each `Fn` builds its own string by using both information about itself and sub-`Fn`s. Finally, a string is concatenated bottom-up and returned.
 
-- **Production combinator**: A function that accepts zero or more `Fn`s and returns exactly one `Fn`. It is used to keep productions readable, there are many combinators that have corresponding notations in Yacc. Here are a few combinators:
-  - `Or(...prod)`: Chooses one branch in the sub-productions, like notation `|` in Yacc.
-  - `And(...prod)`: Concatenates all the sub-productions.
-  - `Str(prod)`: Indicates a terminal/leaf production.
-  - `If(cond, ...prod)`: Only generates the sub-production if the condition is satisfied.
-  - `OptIf(cond, ...prod)`: Similar to `If()`, the difference is that `OptIf()` will generate a empty string if the condition is not satisfied. As a dummy rule, please use `If()` inside `Or()` and use `OptIf()` inside `And`. 
+- **Fn combinator**: A function that accepts zero or more `Fn`s and returns exactly one `Fn`. It is used to keep `Fn`s readable, there are many combinators that have corresponding notations in Yacc. Here are a few combinators:
+  - `Or(...fn)`: Chooses one branch in the sub-`Fn`s, like notation `|` in Yacc.
+  - `And(...fn)`: Concatenates all the sub-`Fn`s.
+  - `Str(fn)`: Indicates a terminal/leaf `Fn`.
+  - `If(cond, ...fn)`: Only generates the sub-`Fn`s if the condition is satisfied.
+  - `Repeat(fn, sepFn)`: Concatenates the result of `fn` with the seperation `Fn` `sepFn`. The repeating times is decided by `Fn.Repeat`(with type `Interval{lower:int, upper:int}`).
 
-- **Production weight**: the probability of this branch being selected. It is only meaningful inside the `Or()` combinator. Each `Fn` has an attribute `weight`, one can set it through `SetW()`. For example,
+- **Fn weight**: the probability to select this branch. It is useful in `Or()` combinator. Each `Fn` has an attribute `weight`. You can set the default value through `SetW()`. For example,
     ```go
     return Or(
         dmlStmt.SetW(12),
@@ -129,14 +182,24 @@ This project provides a flexible way to generate SQL strings. Comparing with ran
     ```
   The ratio of selecting probability of `[dmlStmt : ddlStmt : splitRegion : commonAnalyze]` is `[12 : 3 : 2 : 1]`.
 
-- **State**: the place where stores all of the meta information. The database entities are abstracted to the corresponding structs: `Table`, `Column` and `Index`.
-
-    Each of them also exposes convenient functions to retrieve/mutate the data. Here is an example of the most common usage:
-
+- **Fn repeat**: the repeating times of a `Fn` in `Repeat()` combinator. Each `Fn` has an attribute `repeat`. You can set the default value through `SetR()`. For example,
     ```go
-    createTable = NewFn("createTable", func() Fn {
-        tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID))
+    var ColumnDefinitions = NewFn(func(state *State) Fn {
         // ...
+        return Repeat(ColumnDefinition.SetR(1, 10), Str(","))
+    })
+    ```
+  The `ColumnDefinition` Fn can repeat `[1, 10]` times during evaluation.
+
+- **State**: the place where stores all the metadata, and it provides convenient functions to retrieve/mutate them. The meta data includes:
+    - database state(tables, columns, indexes),
+    - configurations to control `Fn`'s behavior, and
+    - intermediate information during evaluation.
+    
+    For database state, here is an example of state interaction:
+    ```go
+    var CreateTable = NewFn(func(state *State) Fn {
+        tbl := GenNewTable()
         state.AppendTable(tbl)  // <--------------------- mutate
         // ...
         return And(
@@ -150,14 +213,20 @@ This project provides a flexible way to generate SQL strings. Comparing with ran
     })
     ```
     ```go
-    commonAnalyze = NewFn("commonAnalyze", func() Fn {
+    var AnalyzeTable = NewFn(func(state *State) Fn {
         tbl := state.GetRandTable() // <--------------------- retrieve
         return And(Str("analyze table"), Str(tbl.name))
     })
     ```
-    When we generating a `CREATE TABLE` SQL, a table entity `*Table` is also put to the state. The function `GetRandTable` is used to get a random table from the state.
+    When we generating a `CREATE TABLE` SQL, a table entity `*Table` is also put to the state. The function `GetRandTable()` is used to get a random table from the state.
 
-- **Scope management**: for most productions, the requirement of message passing can be satisfied with *nested* definitions. For example, we have the production dependency `createTable -> definitions -> idxDefs -> idxDef`. We need to modify the state during generating `idxDef` by appending a new index to the current table(`currentTable.Append(newIndex)`). To reference the entity `currentTable`, we can define them in a nested block:
+    For configurations, here is an example to 
+
+- **Messeging between Fns**: there are 2 ways to pass the information between `Fn`s: 
+  - Nested definition
+  - Scoping mechanism
+
+  for most `Fn`s, the requirement of message passing can be satisfied with *nested* definitions. For example, we have the production dependency `createTable -> definitions -> idxDefs -> idxDef`. We need to modify the state during generating `idxDef` by appending a new index to the current table(`currentTable.Append(newIndex)`). To reference the entity `currentTable`, we can define them in a nested block:
     ```go
     createTable = NewFn("createTable", func() Fn {
         tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID)) // <------ `tbl` referenced
@@ -237,9 +306,3 @@ For the productions with a lot of constraints or complex conditions, answering t
 - Does it need to be printed in a special way? If yes, do the format work in `db_printer.go`.
 - Need to make it generate multiple SQLs at a time? Use `InjectTodoSQL()`. It can append custom strings to the queue in the generator.
 - Does it require the cleanup work? Here is a signature of a hook: `(p *PostListener) Register(fnName string, fn func())`. A custom function can be registered to a production, it will be called after the production is generated.
-
-## FAQ
-
-1. Why use struct instead of function to represent production?
-    
-    The functions are evaluated immediately when they are called. So it is not possible to reference each other in the block. However, this pattern is not uncommon in Yacc grammar. What's more, it is also inconvenient to intercept the function call.

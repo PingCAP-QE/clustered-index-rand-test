@@ -6,7 +6,6 @@ import (
 )
 
 type State struct {
-	ctrl   *ControlOption
 	hooks  []FnEvaluateHook
 	weight map[string]int
 	repeat map[string]Interval
@@ -76,30 +75,17 @@ type ScopeObj struct {
 	obj interface{}
 }
 
-func NewState(opts ...func(ctl *ControlOption)) *State {
+func NewState() *State {
 	s := &State{
-		ctrl:   DefaultControlOption(),
 		weight: make(map[string]int),
 		repeat: make(map[string]Interval),
 		config: make(map[ConfigKeyType]ScopeObj),
 	}
-	for _, opt := range opts {
-		opt(s.ctrl)
-	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
-	if s.ctrl.AttachToTxn {
-		s.AppendHook(NewFnHookTxnWrap(s.ctrl))
-	}
-	setupReplacer(s)
+	// s.AppendHook(NewFnHookTxnWrap(20))
 	s.AutoSeed()
 	return s
-}
-
-func NewState2(EnableTestTiFlash bool) *State {
-	return NewState(func(ctl *ControlOption) {
-		ctl.EnableTestTiFlash = EnableTestTiFlash
-	})
 }
 
 func (s ScopeObj) IsNil() bool {
@@ -272,6 +258,18 @@ func (s *State) GetRepeat(fn Fn) (lower int, upper int) {
 		return w.lower, w.upper
 	}
 	return fn.Repeat.lower, fn.Repeat.upper
+}
+
+func (s *State) RemoveRepeat(fn Fn) {
+	if _, ok := s.repeat[fn.Info]; ok {
+		delete(s.repeat, fn.Info)
+	}
+}
+
+func (s *State) RemoveWeight(fn Fn) {
+	if _, ok := s.weight[fn.Info]; ok {
+		delete(s.weight, fn.Info)
+	}
 }
 
 func (s *State) ExistsConfig(key ConfigKeyType) bool {

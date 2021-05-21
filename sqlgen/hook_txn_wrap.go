@@ -4,9 +4,9 @@ var _ FnEvaluateHook = (*FnHookTxnWrap)(nil)
 
 type FnHookTxnWrap struct {
 	FnHookDefault
-	inTxn         bool
-	inflightStmts int
-	ctl           *ControlOption
+	maxTxnStmtCount int
+	inTxn           bool
+	inflightStmts   int
 }
 
 const txnStartWrapName = "txnWrappedStart"
@@ -72,7 +72,7 @@ func (s *FnHookTxnWrap) endTxn() string {
 	if !s.inTxn {
 		fnIdx = 0
 	} else {
-		inTxnW := s.ctl.MaxTxnStmtCount - s.inflightStmts
+		inTxnW := s.maxTxnStmtCount - s.inflightStmts
 		if inTxnW < 0 {
 			inTxnW = 0
 		}
@@ -93,9 +93,9 @@ func (s *FnHookTxnWrap) endTxn() string {
 	return chosenFn.Eval(nil)
 }
 
-func NewFnHookTxnWrap(ctrl *ControlOption) *FnHookTxnWrap {
+func NewFnHookTxnWrap(maxTxnStmtCount int) *FnHookTxnWrap {
 	return &FnHookTxnWrap{
-		FnHookDefault: NewFnHookDefault("txn_wrap"),
-		ctl:           ctrl,
+		FnHookDefault:   NewFnHookDefault("txn_wrap"),
+		maxTxnStmtCount: maxTxnStmtCount,
 	}
 }
