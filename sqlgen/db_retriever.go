@@ -9,7 +9,7 @@ func (s *State) GetRandTable() *Table {
 	return s.tables[rand.Intn(len(s.tables))]
 }
 
-func (s *State) GetAllTables() []*Table {
+func (s *State) GetAllTables() Tables {
 	return s.tables
 }
 
@@ -37,6 +37,31 @@ func (s *State) GetRelatedTables(cols []*Column) []*Table {
 
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
+}
+
+func (s *State) FilterTables(pred func(t *Table) bool) Tables {
+	ret := make(Tables, 0, len(s.tables)/2)
+	for _, t := range s.tables {
+		if pred(t) {
+			ret = append(ret, t)
+		}
+	}
+	return ret
+}
+
+func (s *State) CheckIntegrity() {
+	for _, tb := range s.tables {
+		Assert(tb != nil)
+		for _, col := range tb.Columns {
+			Assert(col != nil)
+		}
+		for _, idx := range tb.Indices {
+			Assert(idx != nil)
+			for _, idxCol := range idx.Columns {
+				Assert(idxCol != nil)
+			}
+		}
+	}
 }
 
 type Tables []*Table

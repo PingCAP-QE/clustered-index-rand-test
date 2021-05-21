@@ -63,3 +63,28 @@ func (s *testSuite) TestPredicates(c *C) {
 		}
 	}
 }
+
+func (s *testSuite) TestCreateTableLike(c *C) {
+	state := sqlgen.NewState()
+	_ = sqlgen.CreateTable.Eval(state)
+	for i := 0; i < 100; i++ {
+		_ = sqlgen.CreateTableLike.Eval(state)
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{state.GetAllTables().PickOne()})
+		sqlgen.AddColumn.Eval(state)
+		state.DestroyScope()
+		dropColTbls := state.FilterTables(func(t *sqlgen.Table) bool {
+			state.CreateScope()
+			defer state.DestroyScope()
+			state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{t})
+			return sqlgen.MoreThan1Columns(state) && sqlgen.HasDroppableColumn(state)
+		})
+		if len(dropColTbls) > 0 {
+			state.CreateScope()
+			state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{dropColTbls.PickOne()})
+			sqlgen.DropColumn.Eval(state)
+			state.DestroyScope()
+		}
+	}
+	state.CheckIntegrity()
+}

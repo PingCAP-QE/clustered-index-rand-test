@@ -117,6 +117,18 @@ func (t *Table) AppendColumn(c *Column) {
 }
 
 func (t *Table) RemoveColumn(c *Column) {
+	var idxToRemove []*Index
+	for _, idx := range t.Indices {
+		for _, idxCol := range idx.Columns {
+			if idxCol.ID == c.ID {
+				idxToRemove = append(idxToRemove, idx)
+				break
+			}
+		}
+	}
+	for _, idx := range idxToRemove {
+		t.RemoveIndex(idx)
+	}
 	var pos int
 	for i := range t.Columns {
 		if t.Columns[i].ID == c.ID {
