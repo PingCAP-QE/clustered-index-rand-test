@@ -49,21 +49,6 @@ func (s *State) FilterTables(pred func(t *Table) bool) Tables {
 	return ret
 }
 
-func (s *State) CheckIntegrity() {
-	for _, tb := range s.tables {
-		Assert(tb != nil)
-		for _, col := range tb.Columns {
-			Assert(col != nil)
-		}
-		for _, idx := range tb.Indices {
-			Assert(idx != nil)
-			for _, idxCol := range idx.Columns {
-				Assert(idxCol != nil)
-			}
-		}
-	}
-}
-
 type Tables []*Table
 
 func (ts Tables) PickOne() *Table {

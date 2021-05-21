@@ -264,6 +264,18 @@ func (s *State) GetRepeat(fn Fn) (lower int, upper int) {
 	return fn.Repeat.lower, fn.Repeat.upper
 }
 
+func (s *State) RemoveRepeat(fn Fn) {
+	if _, ok := s.repeat[fn.Info]; ok {
+		delete(s.repeat, fn.Info)
+	}
+}
+
+func (s *State) RemoveWeight(fn Fn) {
+	if _, ok := s.weight[fn.Info]; ok {
+		delete(s.weight, fn.Info)
+	}
+}
+
 func (s *State) ExistsConfig(key ConfigKeyType) bool {
 	_, ok := s.config[key]
 	return ok

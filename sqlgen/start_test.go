@@ -1,7 +1,6 @@
 package sqlgen_test
 
 import (
-	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -46,24 +45,6 @@ func (s *testSuite) TestCreateColumnTypes(c *C) {
 	c.Assert(intColCount, Equals, 100*5)
 }
 
-func (s *testSuite) TestPredicates(c *C) {
-	state := sqlgen.NewState()
-	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
-	_ = sqlgen.CreateTable.Eval(state)
-	state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables(state.GetAllTables()))
-	defer state.DestroyScope()
-	for i := 0; i < 100; i++ {
-		pred := sqlgen.Predicates.Eval(state)
-		fmt.Println(pred)
-		if strings.Contains(pred, "or") {
-			c.Assert(strings.Contains(pred, " or "), IsTrue, Commentf(pred))
-		}
-		if strings.Contains(pred, "and") {
-			c.Assert(strings.Contains(pred, " and "), IsTrue, Commentf(pred))
-		}
-	}
-}
-
 func (s *testSuite) TestCreateTableLike(c *C) {
 	state := sqlgen.NewState()
 	_ = sqlgen.CreateTable.Eval(state)
@@ -86,5 +67,5 @@ func (s *testSuite) TestCreateTableLike(c *C) {
 			state.DestroyScope()
 		}
 	}
-	state.CheckIntegrity()
+	state.CheckIntegrity(state)
 }

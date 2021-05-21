@@ -143,6 +143,14 @@ func (t *Table) RemoveColumn(c *Column) {
 }
 
 func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
+	for _, idx := range t.Indices {
+		for i, idxCol := range idx.Columns {
+			if idxCol.ID == oldCol.ID {
+				idx.Columns[i] = newCol
+				break
+			}
+		}
+	}
 	newCol.relatedTableID = t.ID
 	for colIdx := range t.Columns {
 		if t.Columns[colIdx].ID != oldCol.ID {
