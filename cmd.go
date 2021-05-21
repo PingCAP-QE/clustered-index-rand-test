@@ -75,17 +75,22 @@ func checkSyntaxCmd() *cobra.Command {
 }
 
 func colorizeErrorMsg(msg error) string {
+	if msg == nil {
+		return ""
+	}
 	return fmt.Sprintf("\u001B[31m%s\u001B[0m", msg.Error())
 }
 
-func parseAndSetSeed(seed string) {
+func parseAndSetSeed(seed string) int64 {
 	if seed == "now" {
 		nowSeed := time.Now().Unix()
 		fmt.Printf("current seed: %d\n", nowSeed)
 		rand.Seed(nowSeed)
+		return nowSeed
 	} else {
-		parsedSeed := Try(strconv.Atoi(seed)).(int)
-		rand.Seed(int64(parsedSeed))
+		parsedSeed := int64(Try(strconv.Atoi(seed)).(int))
+		rand.Seed(parsedSeed)
+		return parsedSeed
 	}
 }
 
@@ -96,6 +101,8 @@ func abtestCmd() *cobra.Command {
 		dsn2        string
 		sqlFilePath string
 		logPath     string
+		seed        string
+		debug       bool
 	)
 	cmd := &cobra.Command{
 		Use:           "abtest",
@@ -103,6 +110,8 @@ func abtestCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			parsedSeed := parseAndSetSeed(seed)
+
 			conn1 := setUpDatabaseConnection(dsn1)
 			conn2 := setUpDatabaseConnection(dsn2)
 
@@ -111,13 +120,25 @@ func abtestCmd() *cobra.Command {
 			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
 
 			for _, query := range queries {
+				if debug {
+					fmt.Println(query + ";")
+				}
 				rs1, err1 := executeQuery(conn1, query)
 				rs2, err2 := executeQuery(conn2, query)
-				if !ValidateErrs(err1, err2) {
-					return errors.Errorf("error mismatch: %v != %v", err1, err2)
+				if debug {
+					fmt.Println(colorizeErrorMsg(err1))
+					fmt.Println(colorizeErrorMsg(err2))
 				}
-				if rs1 == nil || rs2 == nil {
-					return nil
+				if !ValidateErrs(err1, err2) {
+					msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
+					return errors.Errorf(msg)
+				}
+				if rs1 == nil && rs2 == nil {
+					continue
+				}
+				if debug {
+					fmt.Println(rs1.String())
+					fmt.Println(rs2.String())
 				}
 				if err := compareResult(rs1, rs2, query); err != nil {
 					return err
@@ -131,6 +152,8 @@ func abtestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
 	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
 	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
+	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	return cmd
 }
 
