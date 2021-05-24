@@ -29,6 +29,7 @@ var Start = NewFn(func(state *State) Fn {
 		CreateTable.SetW(13),
 		CreateTableLike.SetW(6),
 		Query.SetW(20),
+		QueryPrepare.SetW(2),
 		DMLStmt.SetW(20),
 		DDLStmt.SetW(5),
 		SplitRegion.SetW(1),
@@ -47,9 +48,8 @@ var DMLStmt = NewFn(func(state *State) Fn {
 		return None
 	}
 	return Or(
-		QueryPrepare.SetW(1),
 		CommonDelete.SetW(1),
-		CommonInsertOrReplace.SetW(1),
+		CommonInsertOrReplace.SetW(3),
 		CommonUpdate.SetW(1),
 	)
 })

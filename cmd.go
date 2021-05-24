@@ -21,7 +21,7 @@ import (
 
 func rootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "clustered index random abtest",
+		Use: "sqlgen",
 	}
 	cmd.AddCommand(printCmd())
 	cmd.AddCommand(abtestCmd())
