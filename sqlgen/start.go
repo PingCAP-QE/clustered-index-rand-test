@@ -60,12 +60,15 @@ var DDLStmt = NewFn(func(state *State) Fn {
 	}
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	return Or(
+	return And(
+		Str("/*DDL/"),
+		Or(
 		AddColumn,
 		AddIndex,
 		DropColumn,
 		DropIndex,
 		AlterColumn,
+		),
 	)
 })
 
@@ -89,7 +92,7 @@ var DropTable = NewFn(func(state *State) Fn {
 	}
 	tbl := state.GetRandTable()
 	state.RemoveTable(tbl)
-	return Strs("drop table", tbl.Name)
+	return Strs("/*DDL*/ drop table", tbl.Name)
 })
 
 var FlashBackTable = NewFn(func(state *State) Fn {
@@ -97,10 +100,10 @@ var FlashBackTable = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.Name))
+	state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ flashback table %s", tbl.Name))
 	return Or(
-		Strs("drop table", tbl.Name),
-		Strs("truncate table", tbl.Name),
+		Strs("/*DDL*/ drop table", tbl.Name),
+		Strs("/*DDL*/ truncate table", tbl.Name),
 	)
 })
 
@@ -140,10 +143,10 @@ var CreateTable = NewFn(func(state *State) Fn {
 	eTableOption := TableOptions.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
 	if eIdxDefs == "" {
-		return Strs("create table", tbl.Name, "(", eColDefs, ")",
+		return Strs("/*DDL*/ create table", tbl.Name, "(", eColDefs, ")",
 			eTableOption, ePartitionDef)
 	} else {
-		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
+		return Strs("/*DDL*/ create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
 			eTableOption, ePartitionDef)
 	}
 })
@@ -739,7 +742,7 @@ var AddIndex = NewFn(func(state *State) Fn {
 	idx := state.GenNewIndex(tbl)
 	tbl.AppendIndex(idx)
 
-	return Strs("/*DDL*/",
+	return Strs(
 		"alter table", tbl.Name,
 		"add index", idx.Name,
 		"(", PrintIndexColumnNames(idx), ")",
@@ -755,7 +758,7 @@ var DropIndex = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := tbl.GetRandomIndex()
 	tbl.RemoveIndex(idx)
-	return Strs("/*DDL*/",
+	return Strs(
 		"alter table", tbl.Name,
 		"drop index", idx.Name,
 	)
@@ -767,7 +770,7 @@ var AddColumn = NewFn(func(state *State) Fn {
 		ToConfigAllowedColumnTypes().AddColumnOrDefault()
 	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
-	return Strs( "/*DDL*/",
+	return Strs(
 		"alter table", tbl.Name,
 		"add column", col.Name, PrintColumnType(col),
 	)
@@ -783,7 +786,7 @@ var DropColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := tbl.GetRandDroppableColumn()
 	tbl.RemoveColumn(col)
-	return Strs("/*DDL*/",
+	return Strs(
 		"alter table", tbl.Name,
 		"drop column", col.Name,
 	)
@@ -805,10 +808,10 @@ var AlterColumn = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentModifyColumn, newCol)
 	if RandomBool() {
 		newCol.Name = col.Name
-		return And(Str("/*DDL*/ alter table"), Str(tbl.Name), Str("modify column"),
+		return And(Str("alter table"), Str(tbl.Name), Str("modify column"),
 			Str(col.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
 	}
-	return And(Str("/*DDL*/ alter table"), Str(tbl.Name), Str("change column"),
+	return And(Str("alter table"), Str(tbl.Name), Str("change column"),
 		Str(col.Name), Str(newCol.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
 })
 
@@ -998,7 +1001,7 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 		return state.AllocGlobalID(ScopeKeyIndexUniqID)
 	})
 	state.AppendTable(newTbl)
-	return Strs("create table", newTbl.Name, "like", tbl.Name)
+	return Strs("/*DDL*/ create table", newTbl.Name, "like", tbl.Name)
 })
 
 var SelectIntoOutFile = NewFn(func(state *State) Fn {
@@ -1043,7 +1046,7 @@ var SplitRegion = NewFn(func(state *State) Fn {
 	var splitTableRegionBetween = NewFn(func(state *State) Fn {
 		rows := tbl.GenMultipleRowsAscForHandleCols(2)
 		low, high := rows[0], rows[1]
-		return Strs(splitTablePrefix, "between",
+		return Strs("/*DDL*/", splitTablePrefix, "between",
 			"(", PrintRandValues(low), ")", "and",
 			"(", PrintRandValues(high), ")", "regions", RandomNum(2, 10))
 	})
@@ -1052,7 +1055,7 @@ var SplitRegion = NewFn(func(state *State) Fn {
 	var splitIndexRegionBetween = NewFn(func(state *State) Fn {
 		rows := tbl.GenMultipleRowsAscForIndexCols(2, idx)
 		low, high := rows[0], rows[1]
-		return Strs(splitTablePrefix, idxPrefix, "between",
+		return Strs("/*DDL*/", splitTablePrefix, idxPrefix, "between",
 			"(", PrintRandValues(low), ")", "and",
 			"(", PrintRandValues(high), ")", "regions", RandomNum(2, 10))
 	})
@@ -1060,13 +1063,13 @@ var SplitRegion = NewFn(func(state *State) Fn {
 	// split table t by ((1, 2), (100, 200));
 	var splitTableRegionBy = NewFn(func(state *State) Fn {
 		rows := tbl.GenMultipleRowsAscForHandleCols(rand.Intn(10) + 2)
-		return Strs(splitTablePrefix, "by", PrintSplitByItems(rows))
+		return Strs("/*DDL*/", splitTablePrefix, "by", PrintSplitByItems(rows))
 	})
 
 	// split table t index idx by ((1, 2), (100, 200));
 	var splitIndexRegionBy = NewFn(func(state *State) Fn {
 		rows := tbl.GenMultipleRowsAscForIndexCols(rand.Intn(10)+2, idx)
-		return Strs(splitTablePrefix, idxPrefix, "by", PrintSplitByItems(rows))
+		return Strs("/*DDL*/", splitTablePrefix, idxPrefix, "by", PrintSplitByItems(rows))
 	})
 
 	if splittingIndex {

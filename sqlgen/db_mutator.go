@@ -48,6 +48,7 @@ func (s *State) RemoveTable(t *Table) {
 	for _, tb := range s.tables {
 		if tb.ID != t.ID {
 			s.tables[filled] = tb
+			filled++
 		}
 	}
 	s.tables = s.tables[:filled]

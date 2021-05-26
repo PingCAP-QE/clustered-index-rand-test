@@ -232,13 +232,19 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		newCol := *c
-		newCol.ID = colIDFn()
+		newCol.ID = c.ID
+		if colIDFn != nil {
+			newCol.ID = colIDFn()
+		}
 		oldID2NewCol[c.ID] = &newCol
 		newCols = append(newCols, &newCol)
 	}
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
-		idxID := idxIDFn()
+		idxID := idx.Id
+		if idxIDFn != nil {
+			idxID = idxIDFn()
+		}
 		newIdx := &Index{
 			Id:           idxID,
 			Name:         idx.Name,
@@ -253,8 +259,10 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-
-	tblID := tblIDFn()
+	tblID := t.ID
+	if tblIDFn != nil {
+		tblID = tblIDFn()
+	}
 	newTable := *t
 	newTable.ID = tblID
 	newTable.Name = fmt.Sprintf("tbl_%d", tblID)

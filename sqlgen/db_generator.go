@@ -27,6 +27,23 @@ func (s *State) GenNewCTE() *CTE {
 	}
 }
 
+func (s *State) Clone() *State {
+	s1 := *s
+	s1.tables = make([]*Table, 0, len(s.tables))
+	for _, tbl := range s.tables {
+		s1.tables = append(s1.tables, tbl.Clone(nil,nil,nil))
+	}
+	s1.scope = make([]map[ScopeKeyType]ScopeObj, 0, len(s.scope))
+	for _, v := range s.scope {
+		temp := map[ScopeKeyType]ScopeObj{}
+		for k, v := range v {
+			temp[k] = v
+		}
+		s1.scope = append(s1.scope, temp)
+	}
+	return &s1
+}
+
 func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
