@@ -267,6 +267,7 @@ const (
 	ScopeKeyCurrentSelectedColNum
 	ScopeKeyCurrentPrepare
 	ScopeKeyCurrentPartitionColumn
+	ScopeKeyCurrentModifyColumn
 	ScopeKeyCurrentUniqueIndexForPointGet
 	ScopeKeyCurrentSelectedColumns
 	ScopeKeyCurrentOrderByColumns

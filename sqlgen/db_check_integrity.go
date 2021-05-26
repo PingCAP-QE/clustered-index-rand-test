@@ -28,14 +28,6 @@ func (t *Table) CheckIntegrity(state *State) {
 }
 
 func (c *Column) CheckIntegrity(state *State) {
-	found := false
-	for _, tb := range state.tables {
-		if tb.ID == c.relatedTableID {
-			found = true
-			break
-		}
-	}
-	Assert(found)
 }
 
 func (i *Index) CheckIntegrity(state *State) {

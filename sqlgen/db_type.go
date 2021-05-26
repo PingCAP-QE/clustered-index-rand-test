@@ -49,11 +49,9 @@ type Column struct {
 	arg2       int      // optional
 	args       []string // for ColumnTypeSet and ColumnTypeEnum
 
-	defaultVal     string
-	isNotNull      bool
-	relatedIndices map[int]struct{}
-	relatedTableID int
-	collate        CollationType
+	defaultVal string
+	isNotNull  bool
+	collate    CollationType
 }
 
 type CTE struct {
@@ -162,6 +160,10 @@ func (s ScopeObj) ToColumns() []*Column {
 
 func (s ScopeObj) ToPrepare() *Prepare {
 	return s.obj.(*Prepare)
+}
+
+func (s ScopeObj) ToTableColumnPairs() TableColumnPairs {
+	return s.obj.(TableColumnPairs)
 }
 
 func (s *State) CreateScope() {

@@ -66,7 +66,6 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	if !col.Tp.DisallowDefaultValue() && RandomBool() {
 		col.defaultVal = col.RandomValue()
 	}
-	col.relatedIndices = map[int]struct{}{}
 	return col
 }
 

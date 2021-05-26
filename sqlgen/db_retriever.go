@@ -26,15 +26,6 @@ func (s *State) GetTableByID(id int) *Table {
 	return nil
 }
 
-func (s *State) GetRelatedTables(cols []*Column) []*Table {
-	tbs := make([]*Table, len(cols))
-	for i, c := range cols {
-		tbs[i] = s.GetTableByID(c.relatedTableID)
-		Assert(tbs[i] != nil)
-	}
-	return tbs
-}
-
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
@@ -105,7 +96,7 @@ func (t *Table) GetRandColumnForPartition() *Column {
 
 func (t *Table) GetRandDroppableColumn() *Column {
 	restCols := t.FilterColumns(func(c *Column) bool {
-		return c.IsDroppable()
+		return !c.ColumnHasIndex(t)
 	})
 	return restCols[rand.Intn(len(restCols))]
 }
@@ -127,15 +118,6 @@ func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
 		selectedCols = append(selectedCols, chosenCol)
 	}
 	return selectedCols
-}
-
-func (t *Table) HasDroppableColumn() bool {
-	for _, c := range t.Columns {
-		if c.IsDroppable() {
-			return true
-		}
-	}
-	return false
 }
 
 func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
@@ -232,8 +214,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	for _, c := range t.Columns {
 		newCol := *c
 		newCol.ID = colIDFn()
-		newCol.relatedIndices = map[int]struct{}{}
-		newCol.relatedTableID = tblID
 		oldID2NewCol[c.ID] = &newCol
 		newCols = append(newCols, &newCol)
 	}
@@ -249,7 +229,6 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
 		for _, ic := range idx.Columns {
 			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.ID])
-			ic.relatedIndices[idxID] = struct{}{}
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
@@ -317,7 +296,7 @@ func (t *Table) GetRandColumnsPreferIndex() *Column {
 	var col *Column
 	for i := 0; i <= 5; i++ {
 		col = t.Columns[rand.Intn(len(t.Columns))]
-		if len(col.relatedIndices) > 0 {
+		if col.ColumnHasIndex(t) {
 			return col
 		}
 	}
@@ -343,8 +322,26 @@ func (t *Table) GetUniqueKeyColumns() []*Column {
 	return indexes[rand.Intn(len(indexes))].Columns
 }
 
+func (c *Column) ColumnHasIndex(t *Table) bool {
+	for _, idx := range t.Indices {
+		if idx.ContainsColumn(c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (i *Index) IsUnique() bool {
 	return i.Tp == IndexTypePrimary || i.Tp == IndexTypeUnique
+}
+
+func (i *Index) ContainsColumn(c *Column) bool {
+	for _, idxCol := range i.Columns {
+		if idxCol.ID == c.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func (i *Index) HasDefaultNullColumn() bool {
@@ -354,21 +351,6 @@ func (i *Index) HasDefaultNullColumn() bool {
 		}
 	}
 	return false
-}
-
-func (c *Column) IsDroppable() bool {
-	return len(c.relatedIndices) == 0
-}
-
-func (c *Column) QualifiedName(state *State) string {
-	var tableName string
-	for _, t := range state.tables {
-		if c.relatedTableID == t.ID {
-			tableName = t.Name
-			break
-		}
-	}
-	return fmt.Sprintf("%s.%s", tableName, c.Name)
 }
 
 func (p *Prepare) UserVars() []string {

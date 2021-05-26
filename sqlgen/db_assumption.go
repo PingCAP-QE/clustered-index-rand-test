@@ -51,7 +51,7 @@ func MustHaveKey(key ScopeKeyType) func(s *State) bool {
 func HasDroppableColumn(s *State) bool {
 	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	for _, c := range tbl.Columns {
-		if c.IsDroppable() {
+		if !c.ColumnHasIndex(tbl) {
 			return true
 		}
 	}

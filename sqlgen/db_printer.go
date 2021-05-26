@@ -18,18 +18,19 @@ func PrintTableNames(tbs []*Table) string {
 	return sb.String()
 }
 
-func PrintQualifiedColumnNames(tbs []*Table, cols []*Column) string {
-	Assert(len(tbs) == len(cols))
+func PrintQualifiedColumnNames(tableColPairs TableColumnPairs) string {
 	var sb strings.Builder
-	for i, c := range cols {
-		sb.WriteString(tbs[i].Name)
-		sb.WriteString(".")
-		sb.WriteString(c.Name)
-		if i != len(cols)-1 {
+	for i, pair := range tableColPairs {
+		if i > 0 {
 			sb.WriteString(",")
 		}
+		sb.WriteString(PrintQualifiedColumnName(pair.t, pair.c))
 	}
 	return sb.String()
+}
+
+func PrintQualifiedColumnName(tb *Table, col *Column) string {
+	return fmt.Sprintf("%s.%s", tb.Name, col.Name)
 }
 
 func PrintColumnNamesWithPar(cols []*Column, emptyMarker string) string {

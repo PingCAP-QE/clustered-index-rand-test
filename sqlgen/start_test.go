@@ -1,6 +1,7 @@
 package sqlgen_test
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -68,4 +69,29 @@ func (s *testSuite) TestCreateTableLike(c *C) {
 		}
 	}
 	state.CheckIntegrity(state)
+}
+
+func (s *testSuite) TestAlterColumnPosition(c *C) {
+	state := sqlgen.NewState()
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	_ = sqlgen.CreateTable.Eval(state)
+	state.CreateScope()
+	state.Store(sqlgen.ScopeKeyCurrentTables, state.GetAllTables())
+	defer state.DestroyScope()
+	for i := 0; i < 10; i++ {
+		_ = sqlgen.InsertInto.Eval(state)
+	}
+	for i := 0; i < 100; i++ {
+		_ = sqlgen.AlterColumn.Eval(state)
+	}
+	// TODO: implement the type-value compatibility check.
+	t := state.GetRandTable()
+	for _, c := range t.Columns {
+		fmt.Printf("%s ", c.Tp)
+	}
+	fmt.Println()
+	for _, v := range t.GetRandRow(nil) {
+		fmt.Printf("%s ", v)
+	}
+	fmt.Println()
 }

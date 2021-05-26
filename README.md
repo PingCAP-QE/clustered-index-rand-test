@@ -28,14 +28,14 @@ The following snippet prints 200 `CREATE TABLE` SQLs. Each table has no indexes 
 ```go
 func main() {
     state := sqlgen.NewState()
-	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 200)
-	state.SetWeight(sqlgen.IndexDefinitions, 0)
-	state.SetWeight(sqlgen.PartitionDefinition, 0)
-	for i := 0; i < 200; i++ {
-		sql := sqlgen.CreateTable.Eval(state)
-		fmt.Println(sql)
-		fmt.Println(";")
-	}
+    state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 200)
+    state.SetWeight(sqlgen.IndexDefinitions, 0)
+    state.SetWeight(sqlgen.PartitionDefinition, 0)
+    for i := 0; i < 200; i++ {
+        sql := sqlgen.CreateTable.Eval(state)
+        fmt.Println(sql)
+        fmt.Println(";")
+    }
 }
 ```
 
@@ -68,7 +68,7 @@ To explore more examples, see the file`{proj_root}/sqlgen/example_test.go`.
     - Set the advance config option: `state.StoreConfig(config_key, value)`
 
 
-- Good readability. It uses Yacc-style code to describe the grammar. The grammar definition of data manipulation language(DML) is as follows:
+- Good readability: it uses Yacc-style code to describe the grammar. The grammar definition of data manipulation language(DML) is as follows:
     ```go
     var DMLStmt = NewFn(func(state *State) Fn {
         // ...
@@ -89,7 +89,7 @@ To explore more examples, see the file`{proj_root}/sqlgen/example_test.go`.
     ```go
     type State struct {
         // ...
-    	tables []*Table
+        tables []*Table
     }
     type Table struct {
         ID      int
@@ -110,12 +110,12 @@ As we mentioned above, all the rules in grammar are written in Golang.
 
 ```go
 var SetOperator = NewFn(func(state *State) Fn {
-	return Or(
-		Str("union"),
-		Str("union all"),
-		Str("except"),
-		Str("intersect"),
-	)
+    return Or(
+        Str("union"),
+        Str("union all"),
+        Str("except"),
+        Str("intersect"),
+    )
 })
 ```
 
@@ -152,13 +152,13 @@ func(state *State) Fn {}
 
 ```go
 var AddColumn = NewFn(func(state *State) Fn {
-	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := state.GenNewColumn()
-	tbl.AppendColumn(col)
-	return Strs(
-		"alter table", tbl.Name,
-		"add column", col.Name, PrintColumnType(col),
-	)
+    tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+    col := state.GenNewColumn()
+    tbl.AppendColumn(col)
+    return Strs(
+        "alter table", tbl.Name,
+        "add column", col.Name, PrintColumnType(col),
+    )
 })
 ```
 
@@ -181,13 +181,13 @@ In the above example, the parent `Fn` of `AddColumn` (`DDLStmt`) needs to set cu
 
 ```go
 var DDLStmt = NewFn(func(state *State) Fn {
-	// ...
-	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	return Or(
-		AddColumn,
-		//...
-	)
+    // ...
+    tbl := state.GetRandTable()
+    state.Store(ScopeKeyCurrentTables, Tables{tbl})
+    return Or(
+        AddColumn,
+        //...
+    )
 })
 ```
 
@@ -214,12 +214,12 @@ But what is the default weight configuration for each `Fn`? The answer is `SetW(
 
 ```go
 var DMLStmt = NewFn(func(state *State) Fn {
-	// ...
-	return Or(
-		CommonDelete.SetW(1),
-		CommonInsertOrReplace.SetW(3),
-		CommonUpdate.SetW(1),
-	)
+    // ...
+    return Or(
+        CommonDelete.SetW(1),
+        CommonInsertOrReplace.SetW(3),
+        CommonUpdate.SetW(1),
+    )
 })
 ```
 
@@ -229,16 +229,16 @@ Similarly, `SetR()` is used to change the **repeat** count of a specific `Fn` wr
 
 ```go
 var CommonUpdate = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
-	return And(
-		Str("update"), Str(tbl.Name), Str("set"),
-		Repeat(AssignClause.SetR(1, 3), Str(",")),  // <-------
-		Str("where"),
-		Predicates,
-		Opt(OrderByLimit),
-	)
+    tbl := state.GetRandTable()
+    state.Store(ScopeKeyCurrentTables, Tables{tbl})
+    state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
+    return And(
+        Str("update"), Str(tbl.Name), Str("set"),
+        Repeat(AssignClause.SetR(1, 3), Str(",")),  // <-------
+        Str("where"),
+        Predicates,
+        Opt(OrderByLimit),
+    )
 })
 ```
 
