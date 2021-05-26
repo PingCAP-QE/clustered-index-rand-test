@@ -69,11 +69,6 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	return col
 }
 
-func (s *State) GenNewColumn() *Column {
-	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
-	return s.GenNewColumnWithType(tps...)
-}
-
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}

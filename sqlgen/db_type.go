@@ -106,17 +106,6 @@ func (s ScopeObj) ToColumn() *Column {
 	return s.obj.(*Column)
 }
 
-func (s ScopeObj) ToColumnTypes() []ColumnType {
-	return s.obj.([]ColumnType)
-}
-
-func (s ScopeObj) ToColumnTypesOrDefault(defau1t []ColumnType) []ColumnType {
-	if s.obj == nil {
-		return defau1t
-	}
-	return s.ToColumnTypes()
-}
-
 func (s ScopeObj) ToIndex() *Index {
 	return s.obj.(*Index)
 }

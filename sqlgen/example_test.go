@@ -114,3 +114,33 @@ func (s *testSuite) TestExampleIntegerColumnTypeChange(c *C) {
 	}
 	fmt.Printf("Total alter table statements: %d\n", alterTableCount)
 }
+
+func (s *testSuite) TestExampleColumnTypeChangeWithGivenTypes(c *C) {
+	state := sqlgen.NewState()
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 100)
+	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
+
+	tpCfg := sqlgen.NewConfigAllowColumnTypes()
+	tpCfg.CreateTable = []sqlgen.ColumnType{sqlgen.ColumnTypeInt}
+	tpCfg.AddColumn = []sqlgen.ColumnType{sqlgen.ColumnTypeBigInt}
+	tpCfg.ModifyColumn = []sqlgen.ColumnType{sqlgen.ColumnTypeTinyInt}
+	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, tpCfg)
+	for i := 0; i < 100; i++ {
+		query := sqlgen.CreateTable.Eval(state)
+		c.Assert(strings.Count(query, "int"), Equals, 5, Commentf("%s", query))
+	}
+	for i := 0; i < 20; i++ {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{state.GetRandTable()})
+		query := sqlgen.AddColumn.Eval(state)
+		c.Assert(strings.Contains(query, "bigint"), IsTrue, Commentf("%s", query))
+		state.DestroyScope()
+	}
+	for i := 0; i < 20; i++ {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{state.GetRandTable()})
+		query := sqlgen.AlterColumn.Eval(state)
+		c.Assert(strings.Contains(query, "tinyint"), IsTrue, Commentf("%s", query))
+		state.DestroyScope()
+	}
+}

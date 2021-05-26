@@ -72,7 +72,17 @@ const (
 	ColumnTypeTimestamp
 )
 
-var ColumnTypeAllTypes = []ColumnType{
+type ColumnTypes []ColumnType
+
+func (tps ColumnTypes) Clone() ColumnTypes {
+	ret := make(ColumnTypes, len(tps))
+	for i, r := range tps {
+		ret[i] = r
+	}
+	return ret
+}
+
+var ColumnTypeAllTypes = ColumnTypes{
 	ColumnTypeInt,
 	ColumnTypeTinyInt,
 	ColumnTypeSmallInt,
@@ -99,21 +109,21 @@ var ColumnTypeAllTypes = []ColumnType{
 	ColumnTypeTimestamp,
 }
 
-var ColumnTypeIntegerTypes = []ColumnType{
+var ColumnTypeIntegerTypes = ColumnTypes{
 	ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt,
 	ColumnTypeMediumInt, ColumnTypeBigInt, ColumnTypeBoolean,
 }
 
-var ColumnTypeFloatingTypes = []ColumnType{
+var ColumnTypeFloatingTypes = ColumnTypes{
 	ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal,
 }
 
-var ColumnTypeStringTypes = []ColumnType{
+var ColumnTypeStringTypes = ColumnTypes{
 	ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary,
 	ColumnTypeVarBinary, ColumnTypeEnum, ColumnTypeSet,
 }
 
-var ColumnTypeTimeTypes = []ColumnType{
+var ColumnTypeTimeTypes = ColumnTypes{
 	ColumnTypeDate, ColumnTypeTime, ColumnTypeDatetime, ColumnTypeTimestamp,
 }
 
@@ -255,8 +265,6 @@ const (
 	IndexTypeNonUnique IndexType = iota
 	IndexTypeUnique
 	IndexTypePrimary
-
-	IndexTypeMax
 )
 
 type ScopeKeyType int8

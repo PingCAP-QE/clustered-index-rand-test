@@ -13,7 +13,7 @@ const (
 	ConfigKeyUnitNonStrictTransTable                // value example: struct{}{}
 	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
 	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
-	ConfigKeyArrayAllowColumnTypes                  // value example: []ColumnType{ColumnTypeInt, ColumnTypeTinyInt}
+	ConfigKeyArrayAllowColumnTypes                  // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyIntMaxTableCount                       // value example: 10
 	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
 )
@@ -26,3 +26,38 @@ const (
 
 const Percent = 1
 const ProbabilityMax = 100 * Percent
+
+type ConfigAllowedColumnTypes struct {
+	Default      ColumnTypes
+	CreateTable  ColumnTypes
+	AddColumn    ColumnTypes
+	ModifyColumn ColumnTypes
+}
+
+func NewConfigAllowColumnTypes() *ConfigAllowedColumnTypes {
+	return &ConfigAllowedColumnTypes{Default: ColumnTypeAllTypes.Clone()}
+}
+
+func ResolveColumnTypes(s *State, extractor func(*ConfigAllowedColumnTypes) ColumnTypes) ColumnTypes {
+	if !s.ExistsConfig(ConfigKeyArrayAllowColumnTypes) {
+		return ColumnTypeAllTypes
+	}
+	tpsCfg := s.SearchConfig(ConfigKeyArrayAllowColumnTypes)
+	switch v := tpsCfg.obj.(type) {
+	case ColumnTypes:
+		return v
+	case []ColumnType:
+		return v
+	case *ConfigAllowedColumnTypes:
+		tps := extractor(v)
+		if len(tps) == 0 {
+			tps = v.Default
+		}
+		if len(tps) == 0 {
+			tps = ColumnTypeAllTypes
+		}
+		return tps
+	}
+	NeverReach()
+	return nil
+}

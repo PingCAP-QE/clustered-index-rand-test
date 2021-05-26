@@ -153,7 +153,9 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := state.GenNewColumn()
+	colTps := ResolveColumnTypes(state,
+		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.CreateTable })
+	col := state.GenNewColumnWithType(colTps...)
 	tbl.AppendColumn(col)
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
@@ -750,7 +752,9 @@ var DropIndex = NewFn(func(state *State) Fn {
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := state.GenNewColumn()
+	colTps := ResolveColumnTypes(state,
+		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.AddColumn })
+	col := state.GenNewColumnWithType(colTps...)
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -775,13 +779,11 @@ var DropColumn = NewFn(func(state *State) Fn {
 })
 
 var AlterColumn = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(
-		MustHaveKey(ScopeKeyCurrentTables)) {
-		return None
-	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := tbl.GetRandColumn()
-	newCol := state.GenNewColumn()
+	colTps := ResolveColumnTypes(state,
+		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.ModifyColumn })
+	newCol := state.GenNewColumnWithType(colTps...)
 	tbl.ReplaceColumn(col, newCol)
 	state.Store(ScopeKeyCurrentModifyColumn, newCol)
 	if RandomBool() {
