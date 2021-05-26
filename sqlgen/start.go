@@ -739,7 +739,7 @@ var AddIndex = NewFn(func(state *State) Fn {
 	idx := state.GenNewIndex(tbl)
 	tbl.AppendIndex(idx)
 
-	return Strs(
+	return Strs("/*DDL*/",
 		"alter table", tbl.Name,
 		"add index", idx.Name,
 		"(", PrintIndexColumnNames(idx), ")",
@@ -755,7 +755,7 @@ var DropIndex = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := tbl.GetRandomIndex()
 	tbl.RemoveIndex(idx)
-	return Strs(
+	return Strs("/*DDL*/",
 		"alter table", tbl.Name,
 		"drop index", idx.Name,
 	)
@@ -767,7 +767,7 @@ var AddColumn = NewFn(func(state *State) Fn {
 		ToConfigAllowedColumnTypes().AddColumnOrDefault()
 	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
-	return Strs(
+	return Strs( "/*DDL*/",
 		"alter table", tbl.Name,
 		"add column", col.Name, PrintColumnType(col),
 	)
@@ -783,7 +783,7 @@ var DropColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := tbl.GetRandDroppableColumn()
 	tbl.RemoveColumn(col)
-	return Strs(
+	return Strs("/*DDL*/",
 		"alter table", tbl.Name,
 		"drop column", col.Name,
 	)
@@ -805,10 +805,10 @@ var AlterColumn = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentModifyColumn, newCol)
 	if RandomBool() {
 		newCol.Name = col.Name
-		return And(Str("alter table"), Str(tbl.Name), Str("modify column"),
+		return And(Str("/*DDL*/ alter table"), Str(tbl.Name), Str("modify column"),
 			Str(col.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
 	}
-	return And(Str("alter table"), Str(tbl.Name), Str("change column"),
+	return And(Str("/*DDL*/ alter table"), Str(tbl.Name), Str("change column"),
 		Str(col.Name), Str(newCol.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
 })
 
