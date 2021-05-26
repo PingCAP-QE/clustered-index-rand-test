@@ -95,3 +95,25 @@ func (s *testSuite) TestAlterColumnPosition(c *C) {
 	}
 	fmt.Println()
 }
+
+func (s *testSuite) TestConfigKeyUnitAvoidAlterPKColumn(c *C) {
+	state := sqlgen.NewState()
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	state.SetRepeat(sqlgen.IndexDefinition, 1, 1)
+	state.StoreConfig(sqlgen.ConfigKeyUnitAvoidAlterPKColumn, struct{}{})
+	_ = sqlgen.CreateTable.Eval(state)
+	tbl := state.GetRandTable()
+	pk := tbl.GetRandomIndex()
+	c.Assert(pk.Tp, Equals, sqlgen.IndexTypePrimary)
+	colsWithPK := tbl.FilterColumns(func(c *sqlgen.Column) bool {
+		return pk.ContainsColumn(c)
+	})
+	state.CreateScope()
+	state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tbl})
+	for i := 0; i < 30; i++ {
+		sqlgen.AlterColumn.Eval(state)
+	}
+	for _, pkCol := range colsWithPK {
+		c.Assert(tbl.ContainsColumn(pkCol), IsTrue)
+	}
+}

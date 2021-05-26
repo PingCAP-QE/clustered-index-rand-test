@@ -57,6 +57,26 @@ func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
+func (t *Table) GetRandNonPKColumn() *Column {
+	var pkIdx *Index
+	for _, idx := range t.Indices {
+		if idx.Tp == IndexTypePrimary {
+			pkIdx = idx
+			break
+		}
+	}
+	if pkIdx == nil {
+		return t.GetRandColumn()
+	}
+	cols := t.FilterColumns(func(c *Column) bool {
+		return !pkIdx.ContainsColumn(c)
+	})
+	if len(cols) == 0 {
+		return nil
+	}
+	return cols[rand.Intn(len(cols))]
+}
+
 // GetRandIndexFirstColumn returns a random index's first columns.
 // If there is no index, return GetRandColumn().
 func (t *Table) GetRandIndexFirstColumn() *Column {
@@ -94,6 +114,7 @@ func (t *Table) GetRandColumnForPartition() *Column {
 	return cols[rand.Intn(len(cols))]
 }
 
+// TODO: remove this constraint after TiDB support drop index columns.
 func (t *Table) GetRandDroppableColumn() *Column {
 	restCols := t.FilterColumns(func(c *Column) bool {
 		return !c.ColumnHasIndex(t)
@@ -280,15 +301,13 @@ func (t *Table) GetRandUniqueIndexForPointGet() *Index {
 	return uniqueIdxs[rand.Intn(len(uniqueIdxs))]
 }
 
-// GetColumnOffset gets the offset for a column.
-func (t *Table) GetColumnOffset(column *Column) int {
-	for i, col := range t.Columns {
+func (t *Table) ContainsColumn(column *Column) bool {
+	for _, col := range t.Columns {
 		if col.ID == column.ID {
-			return i
+			return true
 		}
 	}
-	Assert(false)
-	return 0
+	return false
 }
 
 // GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.

@@ -48,6 +48,7 @@ func MustHaveKey(key ScopeKeyType) func(s *State) bool {
 	}
 }
 
+// TODO: remove this constraint after TiDB support drop column with index.
 func HasDroppableColumn(s *State) bool {
 	tbl := s.Search(ScopeKeyCurrentTables).ToTables().One()
 	for _, c := range tbl.Columns {

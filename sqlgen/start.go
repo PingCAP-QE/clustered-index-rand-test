@@ -138,7 +138,11 @@ var CreateTable = NewFn(func(state *State) Fn {
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
-	return Strs("create table", tbl.Name, "(", eColDefs, eIdxDefs, ")", ePartitionDef)
+	if eIdxDefs == "" {
+		return Strs("create table", tbl.Name, "(", eColDefs, ")", ePartitionDef)
+	} else {
+		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")", ePartitionDef)
+	}
 })
 
 var ColumnDefinitions = NewFn(func(state *State) Fn {
@@ -153,9 +157,8 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	colTps := ResolveColumnTypes(state,
-		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.CreateTable })
-	col := state.GenNewColumnWithType(colTps...)
+	extractCreateTableCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.CreateTable }
+	col := state.GenNewColumnWithType(ResolveColumnTypes(state, extractCreateTableCfg)...)
 	tbl.AppendColumn(col)
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
@@ -164,13 +167,7 @@ var IndexDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
-	if RandomBool() {
-		return Empty
-	}
-	return And(
-		Str(","),
-		Repeat(IndexDefinition.SetR(1, 4), Str(",")),
-	)
+	return Repeat(IndexDefinition.SetR(0, 4), Str(","))
 })
 
 var IndexDefinition = NewFn(func(state *State) Fn {
@@ -752,9 +749,8 @@ var DropIndex = NewFn(func(state *State) Fn {
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	colTps := ResolveColumnTypes(state,
-		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.AddColumn })
-	col := state.GenNewColumnWithType(colTps...)
+	extractAddColCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.AddColumn }
+	col := state.GenNewColumnWithType(ResolveColumnTypes(state, extractAddColCfg)...)
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -781,9 +777,14 @@ var DropColumn = NewFn(func(state *State) Fn {
 var AlterColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	col := tbl.GetRandColumn()
-	colTps := ResolveColumnTypes(state,
-		func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.ModifyColumn })
-	newCol := state.GenNewColumnWithType(colTps...)
+	if state.ExistsConfig(ConfigKeyUnitAvoidAlterPKColumn) {
+		col = tbl.GetRandNonPKColumn()
+		if col == nil {
+			return None
+		}
+	}
+	extractAlterColCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.ModifyColumn }
+	newCol := state.GenNewColumnWithType(ResolveColumnTypes(state, extractAlterColCfg)...)
 	tbl.ReplaceColumn(col, newCol)
 	state.Store(ScopeKeyCurrentModifyColumn, newCol)
 	if RandomBool() {

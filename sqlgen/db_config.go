@@ -6,12 +6,13 @@ const (
 	ConfigKeyNone                     ConfigKeyType = iota
 	ConfigKeyProbabilityIndexPrefix                 // value example: 50*Percent
 	ConfigKeyProbabilityTiFlashTable                // value example: 50*Percent
+	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
 	ConfigKeyUnitFirstColumnIndexable               // value example: struct{}{}
 	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
 	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
 	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
 	ConfigKeyUnitNonStrictTransTable                // value example: struct{}{}
-	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
+	ConfigKeyUnitAvoidAlterPKColumn                 // value example: struct{}{}
 	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
 	ConfigKeyArrayAllowColumnTypes                  // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyIntMaxTableCount                       // value example: 10
