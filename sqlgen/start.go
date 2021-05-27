@@ -137,12 +137,20 @@ var CreateTable = NewFn(func(state *State) Fn {
 		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
+	eTableOption := TableOptions.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
 	if eIdxDefs == "" {
-		return Strs("create table", tbl.Name, "(", eColDefs, ")", ePartitionDef)
+		return Strs("create table", tbl.Name, "(", eColDefs, ")",
+			eTableOption, ePartitionDef)
 	} else {
-		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")", ePartitionDef)
+		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
+			eTableOption, ePartitionDef)
 	}
+})
+
+var TableOptions = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	return Strs("collate", tbl.Collate.String())
 })
 
 var ColumnDefinitions = NewFn(func(state *State) Fn {
@@ -956,9 +964,9 @@ var JoinHintWithIndex = NewFn(func(state *State) Fn {
 	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
 	t1, t2 := tbls[0], tbls[1]
 	return Or(
-		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, "*/"),
-		Strs("/*+ inl_hash_join(", t1.Name, ",", t2.Name, "*/"),
-		Strs("/*+ inl_merge_join(", t1.Name, ",", t2.Name, "*/"),
+		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, ") */"),
+		Strs("/*+ inl_hash_join(", t1.Name, ",", t2.Name, ") */"),
+		Strs("/*+ inl_merge_join(", t1.Name, ",", t2.Name, ") */"),
 	)
 })
 

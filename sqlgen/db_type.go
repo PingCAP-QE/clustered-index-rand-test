@@ -28,6 +28,7 @@ type Table struct {
 	Name    string
 	Columns []*Column
 	Indices []*Index
+	Collate CollationType
 
 	containsPK        bool // to ensure at most 1 pk in each table
 	values            [][]string

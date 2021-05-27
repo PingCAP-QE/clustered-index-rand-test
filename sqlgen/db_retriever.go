@@ -227,10 +227,7 @@ func (t *Table) cloneColumns() []*Column {
 }
 
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
-	tblID := tblIDFn()
-	name := fmt.Sprintf("tbl_%d", tblID)
 	t.CheckIntegrity()
-
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
@@ -257,18 +254,17 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		newIdxs = append(newIdxs, newIdx)
 	}
 
-	newTable := &Table{
-		ID:         tblID,
-		Name:       name,
-		Columns:    newCols,
-		Indices:    newIdxs,
-		containsPK: t.containsPK,
-		values:     nil,
-	}
-	newTable.childTables = []*Table{newTable}
+	tblID := tblIDFn()
+	newTable := *t
+	newTable.ID = tblID
+	newTable.Name = fmt.Sprintf("tbl_%d", tblID)
+	newTable.Columns = newCols
+	newTable.Indices = newIdxs
+	newTable.values = nil
+	newTable.childTables = []*Table{&newTable}
 	// TODO: DROP TABLE need to remove itself from children tables.
-	t.childTables = append(t.childTables, newTable)
-	return newTable
+	t.childTables = append(t.childTables, &newTable)
+	return &newTable
 }
 
 func (t *Table) GetRandColumns() []*Column {

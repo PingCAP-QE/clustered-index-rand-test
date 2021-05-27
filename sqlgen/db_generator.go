@@ -15,6 +15,7 @@ func (s *State) GenNewTable() *Table {
 	id := s.AllocGlobalID(ScopeKeyTableUniqID)
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
+	newTbl.Collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
