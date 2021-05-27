@@ -249,7 +249,9 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
 		for _, ic := range idx.Columns {
-			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.ID])
+			newCol, ok := oldID2NewCol[ic.ID]
+			Assert(ok)
+			newIdx.Columns = append(newIdx.Columns, newCol)
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}

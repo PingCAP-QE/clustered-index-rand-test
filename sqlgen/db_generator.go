@@ -110,10 +110,11 @@ func LimitIndexColumnSize(cols []*Column) []*Column {
 	for i, c := range cols {
 		keySize += c.EstimateSizeInBytes()
 		if keySize > DefaultKeySize {
-			maxIdx = i - 1
+			maxIdx = i
 			break
 		}
 	}
+	Assert(maxIdx > 0)
 	return cols[:maxIdx]
 }
 
