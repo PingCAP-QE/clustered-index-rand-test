@@ -7,6 +7,7 @@ import (
 
 func (s *testSuite) TestStateClear(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	state.SetWeight(sqlgen.CreateTable, 100)
 	c.Assert(state.GetWeight(sqlgen.CreateTable), Equals, 100)
 	state.Clear(sqlgen.StateClearOptionWeight)

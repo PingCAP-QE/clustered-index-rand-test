@@ -25,6 +25,7 @@ func (s *testSuite) SetUpSuite(c *C) {
 
 func (s *testSuite) TestStart(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	for i := 0; i < 300; i++ {
 		res := sqlgen.Start.Eval(state)
 		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
@@ -34,6 +35,7 @@ func (s *testSuite) TestStart(c *C) {
 
 func (s *testSuite) TestCreateColumnTypes(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 100)
 	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, []sqlgen.ColumnType{sqlgen.ColumnTypeInt})
 	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
@@ -48,6 +50,7 @@ func (s *testSuite) TestCreateColumnTypes(c *C) {
 
 func (s *testSuite) TestCreateTableLike(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	_ = sqlgen.CreateTable.Eval(state)
 	for i := 0; i < 100; i++ {
 		_ = sqlgen.CreateTableLike.Eval(state)
@@ -68,11 +71,11 @@ func (s *testSuite) TestCreateTableLike(c *C) {
 			state.DestroyScope()
 		}
 	}
-	state.CheckIntegrity(state)
 }
 
 func (s *testSuite) TestAlterColumnPosition(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	_ = sqlgen.CreateTable.Eval(state)
 	state.CreateScope()
@@ -98,6 +101,7 @@ func (s *testSuite) TestAlterColumnPosition(c *C) {
 
 func (s *testSuite) TestConfigKeyUnitAvoidAlterPKColumn(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	state.SetRepeat(sqlgen.IndexDefinition, 1, 1)
 	state.StoreConfig(sqlgen.ConfigKeyUnitAvoidAlterPKColumn, struct{}{})

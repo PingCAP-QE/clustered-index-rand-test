@@ -6,31 +6,34 @@ var _ IntegrityChecker = (*Column)(nil)
 var _ IntegrityChecker = (*Index)(nil)
 
 type IntegrityChecker interface {
-	CheckIntegrity(state *State)
+	CheckIntegrity()
 }
 
-func (s *State) CheckIntegrity(state *State) {
+func (s *State) CheckIntegrity() {
 	for _, tb := range s.tables {
 		Assert(tb != nil)
-		tb.CheckIntegrity(state)
+		tb.CheckIntegrity()
 	}
 }
 
-func (t *Table) CheckIntegrity(state *State) {
+func (t *Table) CheckIntegrity() {
 	for _, col := range t.Columns {
 		Assert(col != nil)
-		col.CheckIntegrity(state)
+		col.CheckIntegrity()
 	}
 	for _, idx := range t.Indices {
 		Assert(idx != nil)
-		idx.CheckIntegrity(state)
+		idx.CheckIntegrity()
+		for _, idxCol := range idx.Columns {
+			Assert(t.ContainsColumn(idxCol))
+		}
 	}
 }
 
-func (c *Column) CheckIntegrity(state *State) {
+func (c *Column) CheckIntegrity() {
 }
 
-func (i *Index) CheckIntegrity(state *State) {
+func (i *Index) CheckIntegrity() {
 	for _, idxCol := range i.Columns {
 		Assert(idxCol != nil)
 	}

@@ -229,6 +229,7 @@ func (t *Table) cloneColumns() []*Column {
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 	tblID := tblIDFn()
 	name := fmt.Sprintf("tbl_%d", tblID)
+	t.CheckIntegrity()
 
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
