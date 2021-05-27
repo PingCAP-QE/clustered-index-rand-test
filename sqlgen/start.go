@@ -61,7 +61,7 @@ var DDLStmt = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return And(
-		Str("/*DDL/"),
+		Str("/*DDL*/"),
 		Or(
 		AddColumn,
 		AddIndex,
