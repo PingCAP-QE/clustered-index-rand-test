@@ -69,7 +69,7 @@ func (f Fn) SetRI(fixed int) Fn {
 func (f Fn) Eval(state *State) string {
 	newFn := f
 	for _, l := range state.hooks {
-		newFn = l.BeforeEvaluate(newFn)
+		newFn = l.BeforeEvaluate(state, newFn)
 	}
 	var res string
 	if state.GetWeight(f) == 0 {
@@ -78,7 +78,7 @@ func (f Fn) Eval(state *State) string {
 		res = newFn.Gen(state)
 	}
 	for _, l := range state.hooks {
-		res = l.AfterEvaluate(newFn, res)
+		res = l.AfterEvaluate(state, newFn, res)
 	}
 	return res
 }
