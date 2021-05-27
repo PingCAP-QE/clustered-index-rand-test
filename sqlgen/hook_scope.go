@@ -4,24 +4,22 @@ var _ FnEvaluateHook = (*FnHookScope)(nil)
 
 type FnHookScope struct {
 	FnHookDefault
-	state *State
 }
 
-func (s *FnHookScope) BeforeEvaluate(fn Fn) Fn {
-	s.state.CreateScope()
-	s.state.Store(ScopeKeyCurrentFn, fn.Info)
-	s.state.fnStack = s.state.GetCurrentStack()
+func (s *FnHookScope) BeforeEvaluate(state *State, fn Fn) Fn {
+	state.CreateScope()
+	state.Store(ScopeKeyCurrentFn, fn.Info)
+	state.fnStack = state.GetCurrentStack()
 	return fn
 }
 
-func (s *FnHookScope) AfterEvaluate(fn Fn, result string) string {
-	s.state.DestroyScope()
+func (s *FnHookScope) AfterEvaluate(state *State, fn Fn, result string) string {
+	state.DestroyScope()
 	return result
 }
 
 func NewFnHookScope(state *State) *FnHookScope {
 	return &FnHookScope{
 		FnHookDefault: NewFnHookDefault("scope"),
-		state:         state,
 	}
 }

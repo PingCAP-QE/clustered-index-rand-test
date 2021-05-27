@@ -11,7 +11,7 @@ func (h *FnHookReplacer) Replace(targetFn Fn, newFn Fn) {
 	h.dict[targetFn.Info] = newFn
 }
 
-func (h *FnHookReplacer) BeforeEvaluate(fn Fn) Fn {
+func (h *FnHookReplacer) BeforeEvaluate(state *State, fn Fn) Fn {
 	if newFn, ok := h.dict[fn.Info]; ok {
 		return newFn
 	}
