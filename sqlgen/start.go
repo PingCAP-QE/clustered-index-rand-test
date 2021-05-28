@@ -63,11 +63,11 @@ var DDLStmt = NewFn(func(state *State) Fn {
 	return And(
 		Str("/*DDL*/"),
 		Or(
-		AddColumn,
-		AddIndex,
-		DropColumn,
-		DropIndex,
-		AlterColumn,
+			AddColumn,
+			AddIndex,
+			DropColumn,
+			DropIndex,
+			AlterColumn,
 		),
 	)
 })
