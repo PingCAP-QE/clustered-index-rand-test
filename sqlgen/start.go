@@ -698,9 +698,16 @@ var Predicate = NewFn(func(state *State) Fn {
 		return Repeat(randVal.SetR(1, 5), Str(","))
 	})
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
-	return Or(
+	pre := Or(
 		And(Str(colName), CompareSymbol, randVal),
 		And(Str(colName), Str("in"), Str("("), randColVals, Str(")")),
+		And(Str("IsNull("), Str(colName), Str(")")),
+		And(Str(colName), Str("between"), randVal, Str("and"), randVal),
+		And(Str(colName), Str("not in"), Str("("), randColVals, Str(")")),
+	)
+	return Or(
+		pre,
+		And(Str("not("), pre, Str(")")),
 	)
 })
 
