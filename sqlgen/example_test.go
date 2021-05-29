@@ -33,6 +33,43 @@ func generateInsertInto(state *sqlgen.State, rowCount int) []string {
 	return result
 }
 
+func generateQuery(state *sqlgen.State, count int) []string {
+	result := make([]string, 0, count)
+	for _, tb := range state.GetAllTables() {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		for i := 0; i < count; i++ {
+			sql := sqlgen.Query.Eval(state)
+			result = append(result, sql)
+		}
+		state.DestroyScope()
+	}
+	return result
+}
+
+func (s *testSuite) TestQuery(c *C) {
+	state := sqlgen.NewState()
+	rowCount := 10
+	tblCount := 2
+	for i := 0; i < tblCount; i++ {
+		sql := sqlgen.CreateTable.Eval(state)
+		fmt.Println(sql)
+	}
+	for _, tb := range state.GetAllTables() {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		for i := 0; i < rowCount; i++ {
+			sql := sqlgen.InsertInto.Eval(state)
+			fmt.Println(sql)
+		}
+		state.DestroyScope()
+	}
+	queries := generateQuery(state, rowCount)
+	for _, sql := range queries {
+		fmt.Println(sql)
+	}
+}
+
 func (s *testSuite) TestExampleInitialize(c *C) {
 	state := sqlgen.NewState()
 	tableCount, columnCount := 5, 5
