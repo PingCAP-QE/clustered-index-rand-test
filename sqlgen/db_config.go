@@ -1,5 +1,7 @@
 package sqlgen
 
+import "math/rand"
+
 type ConfigKeyType int64
 
 const (
@@ -39,26 +41,63 @@ func NewConfigAllowColumnTypes() *ConfigAllowedColumnTypes {
 	return &ConfigAllowedColumnTypes{Default: ColumnTypeAllTypes.Clone()}
 }
 
-func ResolveColumnTypes(s *State, extractor func(*ConfigAllowedColumnTypes) ColumnTypes) ColumnTypes {
-	if !s.ExistsConfig(ConfigKeyArrayAllowColumnTypes) {
-		return ColumnTypeAllTypes
+func (c *ConfigAllowedColumnTypes) CreateTableOrDefault() ColumnTypes {
+	if len(c.CreateTable) == 0 {
+		return c.Default
 	}
-	tpsCfg := s.SearchConfig(ConfigKeyArrayAllowColumnTypes)
-	switch v := tpsCfg.obj.(type) {
+	return c.CreateTable
+}
+
+func (c *ConfigAllowedColumnTypes) AddColumnOrDefault() ColumnTypes {
+	if len(c.AddColumn) == 0 {
+		return c.Default
+	}
+	return c.AddColumn
+}
+
+func (c *ConfigAllowedColumnTypes) ModifyColumnOrDefault() ColumnTypes {
+	if len(c.ModifyColumn) == 0 {
+		return c.Default
+	}
+	return c.ModifyColumn
+}
+
+func (s ScopeObj) ToConfigAllowedColumnTypes() *ConfigAllowedColumnTypes {
+	cfg := NewConfigAllowColumnTypes()
+	if s.IsNil() {
+		return cfg
+	}
+	switch v := s.obj.(type) {
 	case ColumnTypes:
-		return v
+		cfg.Default = v
 	case []ColumnType:
-		return v
+		cfg.Default = v
 	case *ConfigAllowedColumnTypes:
-		tps := extractor(v)
-		if len(tps) == 0 {
-			tps = v.Default
-		}
-		if len(tps) == 0 {
-			tps = ColumnTypeAllTypes
-		}
-		return tps
+		cfg = v
+	default:
+		NeverReach()
 	}
-	NeverReach()
-	return nil
+	return cfg
+}
+
+func ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols Columns) Columns {
+	// Make sure the first column is not bit || enum || set.
+	firstColCandidates := totalCols.FilterColumnsIndices(func(c *Column) bool {
+		return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
+	})
+	if len(firstColCandidates) == 0 {
+		totalCols = totalCols.GetRandColumnsNonEmpty()
+	} else {
+		firstColIdx := firstColCandidates[rand.Intn(len(firstColCandidates))]
+		totalCols[0], totalCols[firstColIdx] = totalCols[firstColIdx], totalCols[0]
+		rand.Shuffle(len(totalCols)-1, func(i, j int) {
+			totalCols[i+1], totalCols[j+1] = totalCols[j+1], totalCols[i+1]
+		})
+		restNum := 0
+		if len(totalCols) > 1 {
+			restNum = rand.Intn(len(totalCols) - 1)
+		}
+		totalCols = totalCols[:1+restNum]
+	}
+	return totalCols
 }

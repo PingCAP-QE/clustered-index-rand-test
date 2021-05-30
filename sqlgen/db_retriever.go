@@ -142,13 +142,22 @@ func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
 }
 
 func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
-	restCols := make([]*Column, 0, len(t.Columns)/2)
+	return t.Columns.FilterColumns(pred)
+}
+
+func (t *Table) SpanColumns(pred func(column *Column) bool) ([]*Column, []*Column) {
+	result := make([]*Column, len(t.Columns))
+	front, behind := 0, len(t.Columns)-1
 	for _, c := range t.Columns {
 		if pred(c) {
-			restCols = append(restCols, c)
+			result[front] = c
+			front++
+		} else {
+			result[behind] = c
+			behind--
 		}
 	}
-	return restCols
+	return result[:front], result[front:]
 }
 
 func (t *Table) FilterIndexes(pred func(idx *Index) bool) []*Index {
@@ -218,16 +227,7 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	return "GetRandRowVal: column not found"
 }
 
-func (t *Table) cloneColumns() []*Column {
-	cols := make([]*Column, len(t.Columns))
-	for i, c := range t.Columns {
-		cols[i] = c
-	}
-	return cols
-}
-
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
-	t.CheckIntegrity()
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
@@ -273,20 +273,7 @@ func (t *Table) GetRandColumns() []*Column {
 		return nil
 	}
 	// insert into t (cols..) values (...)
-	return t.GetRandColumnsNonEmpty()
-}
-
-func (t *Table) GetRandColumnsNonEmpty() []*Column {
-	count := 1 + rand.Intn(len(t.Columns))
-	return t.GetRandNColumns(count)
-}
-
-func (t *Table) GetRandNColumns(n int) []*Column {
-	cols := t.cloneColumns()
-	rand.Shuffle(len(cols), func(i, j int) {
-		cols[i], cols[j] = cols[j], cols[i]
-	})
-	return cols[:n]
+	return t.Columns.GetRandColumnsNonEmpty()
 }
 
 // GetRandUniqueIndexForPointGet gets a random unique index.
@@ -298,15 +285,6 @@ func (t *Table) GetRandUniqueIndexForPointGet() *Index {
 		return nil
 	}
 	return uniqueIdxs[rand.Intn(len(uniqueIdxs))]
-}
-
-func (t *Table) ContainsColumn(column *Column) bool {
-	for _, col := range t.Columns {
-		if col.ID == column.ID {
-			return true
-		}
-	}
-	return false
 }
 
 // GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.
@@ -338,6 +316,59 @@ func (t *Table) GetUniqueKeyColumns() []*Column {
 		return nil
 	}
 	return indexes[rand.Intn(len(indexes))].Columns
+}
+
+func (cols Columns) FilterColumns(pred func(c *Column) bool) Columns {
+	restCols := make([]*Column, 0, len(cols)/2)
+	for _, c := range cols {
+		if pred(c) {
+			restCols = append(restCols, c)
+		}
+	}
+	return restCols
+}
+
+func (cols Columns) FilterColumnsIndices(pred func(c *Column) bool) []int {
+	restCols := make([]int, 0, len(cols)/2)
+	for i, c := range cols {
+		if pred(c) {
+			restCols = append(restCols, i)
+		}
+	}
+	return restCols
+}
+
+func (cols Columns) Clone() Columns {
+	newCols := make([]*Column, len(cols))
+	for i, c := range cols {
+		newCols[i] = c
+	}
+	return newCols
+}
+
+func (cols Columns) GetRandNColumns(n int) Columns {
+	newCols := cols.Clone()
+	rand.Shuffle(len(newCols), func(i, j int) {
+		cols[i], cols[j] = cols[j], cols[i]
+	})
+	return newCols[:n]
+}
+
+func (cols Columns) GetRandColumnsNonEmpty() Columns {
+	if len(cols) == 0 {
+		return nil
+	}
+	count := 1 + rand.Intn(len(cols))
+	return cols.GetRandNColumns(count)
+}
+
+func (cols Columns) ContainColumn(c *Column) bool {
+	for _, col := range cols {
+		if col.ID == c.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Column) ColumnHasIndex(t *Table) bool {

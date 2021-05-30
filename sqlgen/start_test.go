@@ -33,6 +33,18 @@ func (s *testSuite) TestStart(c *C) {
 	}
 }
 
+func (s *testSuite) TestConfigKeyUnitFirstColumnIndexable(c *C) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 300)
+	state.StoreConfig(sqlgen.ConfigKeyUnitFirstColumnIndexable, struct{}{})
+	for i := 0; i < 300; i++ {
+		res := sqlgen.CreateTable.Eval(state)
+		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
+		c.Assert(len(res), Greater, 0, Commentf("i = %d", i))
+	}
+}
+
 func (s *testSuite) TestCreateColumnTypes(c *C) {
 	state := sqlgen.NewState()
 	defer state.CheckIntegrity()
@@ -118,6 +130,6 @@ func (s *testSuite) TestConfigKeyUnitAvoidAlterPKColumn(c *C) {
 		sqlgen.AlterColumn.Eval(state)
 	}
 	for _, pkCol := range colsWithPK {
-		c.Assert(tbl.ContainsColumn(pkCol), IsTrue)
+		c.Assert(tbl.Columns.ContainColumn(pkCol), IsTrue)
 	}
 }

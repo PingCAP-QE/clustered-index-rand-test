@@ -1,6 +1,7 @@
 package sqlgen
 
 import (
+	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"log"
 	"runtime/debug"
@@ -43,8 +44,14 @@ func Assert(cond bool, targets ...interface{}) {
 	}
 }
 
-func NeverReach() Fn {
+type Columns []*Column
+
+func NeverReach(msgs ...string) Fn {
 	debug.PrintStack()
+	if len(msgs) > 0 {
+		errMsg := fmt.Sprintf("assertion failed: should not reach here %s", msgs)
+		log.Fatal(errMsg)
+	}
 	log.Fatal("assertion failed: should not reach here")
 	return defaultFn()
 }

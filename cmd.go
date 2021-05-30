@@ -36,6 +36,7 @@ func checkSyntaxCmd() *cobra.Command {
 		seed      string
 		debug     bool
 		dsn       string
+		failfast  bool
 	)
 	cmd := &cobra.Command{
 		Use:           "check-syntax",
@@ -62,6 +63,9 @@ func checkSyntaxCmd() *cobra.Command {
 						return err
 					}
 					fmt.Println(colorizeErrorMsg(err))
+					if failfast {
+						return err
+					}
 				}
 			}
 			return nil
@@ -71,6 +75,7 @@ func checkSyntaxCmd() *cobra.Command {
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
 	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
+	cmd.Flags().BoolVar(&failfast, "failfast", false, "fail on any error")
 	return cmd
 }
 
@@ -82,16 +87,16 @@ func colorizeErrorMsg(msg error) string {
 }
 
 func parseAndSetSeed(seed string) int64 {
+	var seedInt int64
 	if seed == "now" {
-		nowSeed := time.Now().Unix()
-		fmt.Printf("current seed: %d\n", nowSeed)
-		rand.Seed(nowSeed)
-		return nowSeed
+		seedInt = time.Now().Unix()
+		rand.Seed(seedInt)
 	} else {
-		parsedSeed := int64(Try(strconv.Atoi(seed)).(int))
-		rand.Seed(parsedSeed)
-		return parsedSeed
+		seedInt = int64(Try(strconv.Atoi(seed)).(int))
+		rand.Seed(seedInt)
 	}
+	fmt.Printf("current seed: %d\n", seedInt)
+	return seedInt
 }
 
 func abtestCmd() *cobra.Command {

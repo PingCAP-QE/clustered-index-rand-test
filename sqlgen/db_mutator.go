@@ -1,9 +1,5 @@
 package sqlgen
 
-import (
-	"sort"
-)
-
 func (s *State) PopOneTodoSQL() (string, bool) {
 	if len(s.todoSQLs) == 0 {
 		return "", false
@@ -202,14 +198,6 @@ func (t *Table) columnOffset(col *Column) int {
 		}
 	}
 	return -1
-}
-
-// Only use it when there is no table data.
-func (t *Table) ReorderColumns() {
-	Assert(len(t.values) == 0, "ReorderColumns should only be used when there is no table data")
-	sort.Slice(t.Columns, func(i, j int) bool {
-		return t.Columns[i].ID < t.Columns[j].ID
-	})
 }
 
 func (t *Table) AppendIndex(idx *Index) {

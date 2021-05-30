@@ -26,7 +26,7 @@ type State struct {
 type Table struct {
 	ID      int
 	Name    string
-	Columns []*Column
+	Columns Columns
 	Indices []*Index
 	Collate CollationType
 

@@ -73,20 +73,11 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	var totalCols []*Column
+	totalCols := tbl.Columns.Clone()
 	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
-		// Make sure the first column is not bit || enum || set.
-		firstColCandidates := tbl.FilterColumns(func(c *Column) bool {
-			return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
-		})
-		if len(firstColCandidates) == 0 {
-			totalCols = tbl.GetRandColumnsNonEmpty()
-		} else {
-			totalCols = append(totalCols, firstColCandidates[rand.Intn(len(firstColCandidates))])
-			totalCols = append(totalCols, tbl.GetRandColumns()...)
-		}
+		totalCols = ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols)
 	} else {
-		totalCols = tbl.GetRandColumnsNonEmpty()
+		totalCols = tbl.Columns.GetRandColumnsNonEmpty()
 	}
 	idx.Columns = LimitIndexColumnSize(totalCols)
 	idx.ColumnPrefix = GenPrefixLen(s, totalCols)

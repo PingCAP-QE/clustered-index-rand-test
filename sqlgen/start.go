@@ -161,12 +161,10 @@ var ColumnDefinitions = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinition = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
-		return None
-	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	extractCreateTableCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.CreateTable }
-	col := state.GenNewColumnWithType(ResolveColumnTypes(state, extractCreateTableCfg)...)
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().CreateTableOrDefault()
+	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
@@ -179,9 +177,6 @@ var IndexDefinitions = NewFn(func(state *State) Fn {
 })
 
 var IndexDefinition = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
-		return None
-	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := state.GenNewIndex(tbl)
 	if idx.IsUnique() && state.Exists(ScopeKeyCurrentPartitionColumn) {
@@ -318,9 +313,9 @@ var CommonSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
-	cols := tbl.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
+	cols := tbl.Columns.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.GetRandColumnsNonEmpty()
+	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
@@ -341,7 +336,6 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	pkCols := tbl.GetUniqueKeyColumns()
-	groupByCols := tbl.GetRandColumns()
 	return And(
 		Str("select"), HintAggToCop, AggFunction, Str("aggCol"),
 		Str("from"),
@@ -349,11 +343,17 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		Str("from"), Str(tbl.Name), Str("where"), Predicates,
 		If(len(pkCols) != 0, Strs("order by", PrintColumnNamesWithoutPar(pkCols, ""))),
 		Str(") ordered_tbl"),
-		If(len(groupByCols) > 0, Strs("group by", PrintColumnNamesWithoutPar(groupByCols, ""))),
+		GroupByColumnsOpt,
 		Opt(Str("order by aggCol")),
 		Opt(Strs("limit", RandomNum(1, 1000))),
 		ForUpdateOpt,
 	)
+})
+
+var GroupByColumnsOpt = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
+	return Opt(Strs("group by", PrintColumnNamesWithoutPar(cols, "")))
 })
 
 var AggFunction = NewFn(func(state *State) Fn {
@@ -485,7 +485,7 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	var cols []*Column
 	if state.ExistsConfig(ConfigKeyUnitNonStrictTransTable) {
-		cols = tbl.GetRandColumnsNonEmpty()
+		cols = tbl.Columns.GetRandColumnsNonEmpty()
 	} else {
 		cols = tbl.GetRandColumnsIncludedDefaultValue()
 	}
@@ -568,7 +568,7 @@ var AssignClause = NewFn(func(state *State) Fn {
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	cols := tbl.GetRandColumnsNonEmpty()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
 	return Strs(
 		"on duplicate key update",
 		PrintRandomAssignments(cols),
@@ -578,7 +578,7 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 var CommonUpdate = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.GetRandColumnsNonEmpty()
+	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 	return And(
 		Str("update"), Str(tbl.Name), Str("set"),
@@ -606,7 +606,7 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		col = tbl.GetRandColumn()
 	}
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.GetRandColumnsNonEmpty()
+	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 
 	var randRowVal = NewFn(func(state *State) Fn {
@@ -764,8 +764,9 @@ var DropIndex = NewFn(func(state *State) Fn {
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	extractAddColCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.AddColumn }
-	col := state.GenNewColumnWithType(ResolveColumnTypes(state, extractAddColCfg)...)
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().AddColumnOrDefault()
+	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -798,8 +799,9 @@ var AlterColumn = NewFn(func(state *State) Fn {
 			return None
 		}
 	}
-	extractAlterColCfg := func(cfg *ConfigAllowedColumnTypes) ColumnTypes { return cfg.ModifyColumn }
-	newCol := state.GenNewColumnWithType(ResolveColumnTypes(state, extractAlterColCfg)...)
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().ModifyColumnOrDefault()
+	newCol := state.GenNewColumnWithType(tps...)
 	tbl.ReplaceColumn(col, newCol)
 	state.Store(ScopeKeyCurrentModifyColumn, newCol)
 	if RandomBool() {
