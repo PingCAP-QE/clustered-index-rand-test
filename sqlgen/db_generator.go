@@ -35,7 +35,7 @@ func (s *State) Clone() *State {
 	s1 := *s
 	s1.tables = make([]*Table, 0, len(s.tables))
 	for _, tbl := range s.tables {
-		s1.tables = append(s1.tables, tbl.Clone(nil,nil,nil))
+		s1.tables = append(s1.tables, tbl.Clone(nil, nil, nil))
 	}
 	s1.scope = make([]map[ScopeKeyType]ScopeObj, 0, len(s.scope))
 	for _, v := range s.scope {

@@ -37,6 +37,13 @@ func (d *FnHookPred) AddMatchFn(fn Fn) {
 	d.toMatchFns = append(d.toMatchFns, fn)
 }
 
+func (d *FnHookPred) Build(fns []Fn) *FnHookPred {
+	for _, f := range fns {
+		d.AddMatchFn(f)
+	}
+	return d
+}
+
 func NewFnHookPred() *FnHookPred {
 	return &FnHookPred{FnHookDefault: NewFnHookDefault("debug")}
 }

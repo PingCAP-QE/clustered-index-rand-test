@@ -22,7 +22,6 @@ type Fn struct {
 	Info   string
 	Weight int
 	Repeat Interval
-	Hint   string
 }
 
 func defaultFn() Fn {
@@ -82,9 +81,4 @@ func (f Fn) Eval(state *State) string {
 		res = l.AfterEvaluate(state, newFn, res)
 	}
 	return res
-}
-
-func (f Fn) WithHint(hint string) Fn {
-	f.Hint = hint
-	return f
 }
