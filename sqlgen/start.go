@@ -60,15 +60,13 @@ var DDLStmt = NewFn(func(state *State) Fn {
 	}
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	return And(
-		Or(
+	return Or(
 			AddColumn,
 			AddIndex,
 			DropColumn,
 			DropIndex,
 			AlterColumn,
-		),
-	).WithHint("/*DDL*/")
+		).WithHint("/*DDL*/")
 })
 
 var SwitchRowFormatVer = NewFn(func(state *State) Fn {
