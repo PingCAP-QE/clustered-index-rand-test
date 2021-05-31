@@ -127,7 +127,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	if state.Roll(ConfigKeyProbabilityTiFlashTable, 0) {
-		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
+		state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
