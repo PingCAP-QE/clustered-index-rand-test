@@ -87,6 +87,9 @@ func NewState() *State {
 	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
+	s.StoreConfig(ConfigKeyUnitAvoidAlterPKColumn, struct{}{})
+	s.StoreConfig(ConfigKeyUnitLimitIndexKeyLength, struct{}{})
+	s.StoreConfig(ConfigKeyUnitAvoidDropPrimaryKey, struct{}{})
 	// s.AppendHook(NewFnHookTxnWrap(20))
 	return s
 }
