@@ -16,6 +16,7 @@ const (
 	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
 	ConfigKeyUnitNonStrictTransTable                // value example: struct{}{}
 	ConfigKeyUnitAvoidAlterPKColumn                 // value example: struct{}{}
+	ConfigKeyUnitAvoidDropPrimaryKey                // value example: struct{}{}
 	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
 	ConfigKeyArrayAllowColumnTypes                  // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyIntMaxTableCount                       // value example: 10

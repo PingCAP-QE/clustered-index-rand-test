@@ -97,7 +97,7 @@ var FlashBackTable = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.Name))
+	state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ flashback table %s", tbl.Name))
 	return Or(
 		Strs("drop table", tbl.Name),
 		Strs("truncate table", tbl.Name),
@@ -127,7 +127,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	if state.Roll(ConfigKeyProbabilityTiFlashTable, 0) {
-		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
+		state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
@@ -754,7 +754,15 @@ var DropIndex = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := tbl.GetRandomIndex()
+	if idx.Tp == IndexTypePrimary && state.ExistsConfig(ConfigKeyUnitAvoidDropPrimaryKey) {
+		// we are not support drop primary when it's clustered.
+		return None
+	}
 	tbl.RemoveIndex(idx)
+	if idx.Tp == IndexTypePrimary {
+		tbl.containsPK = false
+		return Strs("alter table", tbl.Name, "drop primary key")
+	}
 	return Strs(
 		"alter table", tbl.Name,
 		"drop index", idx.Name,
