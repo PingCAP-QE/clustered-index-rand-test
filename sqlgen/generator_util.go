@@ -9,9 +9,22 @@ import (
 	"strings"
 )
 
+var (
+	srcReadable = true
+	fnCounter   = 0
+)
+
 func constructFnInfo(filePath string, line int) string {
+	if !srcReadable {
+		fnCounter++
+		return fmt.Sprintf("fn_%d", fnCounter)
+	}
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0600)
-	Assert(err == nil)
+	if err != nil {
+		srcReadable = false
+		fnCounter++
+		return fmt.Sprintf("fn_%d", fnCounter)
+	}
 	sc := bufio.NewScanner(file)
 	currentLine := 0
 	for sc.Scan() {

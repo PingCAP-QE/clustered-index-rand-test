@@ -46,15 +46,6 @@ func (s *State) GetTableByID(id int) *Table {
 	return nil
 }
 
-func (s *State) GetRelatedTables(cols []*Column) []*Table {
-	tbs := make([]*Table, len(cols))
-	for i, c := range cols {
-		tbs[i] = s.GetTableByID(c.relatedTableID)
-		Assert(tbs[i] != nil)
-	}
-	return tbs
-}
-
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
@@ -84,6 +75,26 @@ func (ts Tables) One() *Table {
 
 func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
+}
+
+func (t *Table) GetRandNonPKColumn() *Column {
+	var pkIdx *Index
+	for _, idx := range t.Indices {
+		if idx.Tp == IndexTypePrimary {
+			pkIdx = idx
+			break
+		}
+	}
+	if pkIdx == nil {
+		return t.GetRandColumn()
+	}
+	cols := t.FilterColumns(func(c *Column) bool {
+		return !pkIdx.ContainsColumn(c)
+	})
+	if len(cols) == 0 {
+		return nil
+	}
+	return cols[rand.Intn(len(cols))]
 }
 
 // GetRandIndexFirstColumn returns a random index's first columns.
@@ -123,9 +134,10 @@ func (t *Table) GetRandColumnForPartition() *Column {
 	return cols[rand.Intn(len(cols))]
 }
 
+// TODO: remove this constraint after TiDB support drop index columns.
 func (t *Table) GetRandDroppableColumn() *Column {
 	restCols := t.FilterColumns(func(c *Column) bool {
-		return c.IsDroppable()
+		return !c.ColumnHasIndex(t)
 	})
 	return restCols[rand.Intn(len(restCols))]
 }
@@ -149,23 +161,23 @@ func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
 	return selectedCols
 }
 
-func (t *Table) HasDroppableColumn() bool {
-	for _, c := range t.Columns {
-		if c.IsDroppable() {
-			return true
-		}
-	}
-	return false
+func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
+	return t.Columns.FilterColumns(pred)
 }
 
-func (t *Table) FilterColumns(pred func(column *Column) bool) []*Column {
-	restCols := make([]*Column, 0, len(t.Columns)/2)
+func (t *Table) SpanColumns(pred func(column *Column) bool) ([]*Column, []*Column) {
+	result := make([]*Column, len(t.Columns))
+	front, behind := 0, len(t.Columns)-1
 	for _, c := range t.Columns {
 		if pred(c) {
-			restCols = append(restCols, c)
+			result[front] = c
+			front++
+		} else {
+			result[behind] = c
+			behind--
 		}
 	}
-	return restCols
+	return result[:front], result[front:]
 }
 
 func (t *Table) FilterIndexes(pred func(idx *Index) bool) []*Index {
@@ -235,31 +247,24 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	return "GetRandRowVal: column not found"
 }
 
-func (t *Table) cloneColumns() []*Column {
-	cols := make([]*Column, len(t.Columns))
-	for i, c := range t.Columns {
-		cols[i] = c
-	}
-	return cols
-}
-
 func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
-	tblID := tblIDFn()
-	name := fmt.Sprintf("tbl_%d", tblID)
-
 	oldID2NewCol := make(map[int]*Column, len(t.Columns))
 	newCols := make([]*Column, 0, len(t.Columns))
 	for _, c := range t.Columns {
 		newCol := *c
-		newCol.ID = colIDFn()
-		newCol.relatedIndices = map[int]struct{}{}
-		newCol.relatedTableID = tblID
+		newCol.ID = c.ID
+		if colIDFn != nil {
+			newCol.ID = colIDFn()
+		}
 		oldID2NewCol[c.ID] = &newCol
 		newCols = append(newCols, &newCol)
 	}
 	newIdxs := make([]*Index, 0, len(t.Indices))
 	for _, idx := range t.Indices {
-		idxID := idxIDFn()
+		idxID := idx.Id
+		if idxIDFn != nil {
+			idxID = idxIDFn()
+		}
 		newIdx := &Index{
 			Id:           idxID,
 			Name:         idx.Name,
@@ -268,24 +273,26 @@ func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
 		}
 		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
 		for _, ic := range idx.Columns {
-			newIdx.Columns = append(newIdx.Columns, oldID2NewCol[ic.ID])
-			ic.relatedIndices[idxID] = struct{}{}
+			newCol, ok := oldID2NewCol[ic.ID]
+			Assert(ok)
+			newIdx.Columns = append(newIdx.Columns, newCol)
 		}
 		newIdxs = append(newIdxs, newIdx)
 	}
-
-	newTable := &Table{
-		ID:         tblID,
-		Name:       name,
-		Columns:    newCols,
-		Indices:    newIdxs,
-		containsPK: t.containsPK,
-		values:     nil,
+	tblID := t.ID
+	if tblIDFn != nil {
+		tblID = tblIDFn()
 	}
-	newTable.childTables = []*Table{newTable}
+	newTable := *t
+	newTable.ID = tblID
+	newTable.Name = fmt.Sprintf("tbl_%d", tblID)
+	newTable.Columns = newCols
+	newTable.Indices = newIdxs
+	newTable.values = nil
+	newTable.childTables = []*Table{&newTable}
 	// TODO: DROP TABLE need to remove itself from children tables.
-	t.childTables = append(t.childTables, newTable)
-	return newTable
+	t.childTables = append(t.childTables, &newTable)
+	return &newTable
 }
 
 func (t *Table) GetRandColumns() []*Column {
@@ -294,20 +301,7 @@ func (t *Table) GetRandColumns() []*Column {
 		return nil
 	}
 	// insert into t (cols..) values (...)
-	return t.GetRandColumnsNonEmpty()
-}
-
-func (t *Table) GetRandColumnsNonEmpty() []*Column {
-	count := 1 + rand.Intn(len(t.Columns))
-	return t.GetRandNColumns(count)
-}
-
-func (t *Table) GetRandNColumns(n int) []*Column {
-	cols := t.cloneColumns()
-	rand.Shuffle(len(cols), func(i, j int) {
-		cols[i], cols[j] = cols[j], cols[i]
-	})
-	return cols[:n]
+	return t.Columns.GetRandColumnsNonEmpty()
 }
 
 // GetRandUniqueIndexForPointGet gets a random unique index.
@@ -321,23 +315,12 @@ func (t *Table) GetRandUniqueIndexForPointGet() *Index {
 	return uniqueIdxs[rand.Intn(len(uniqueIdxs))]
 }
 
-// GetColumnOffset gets the offset for a column.
-func (t *Table) GetColumnOffset(column *Column) int {
-	for i, col := range t.Columns {
-		if col.ID == column.ID {
-			return i
-		}
-	}
-	Assert(false)
-	return 0
-}
-
 // GetRandColumnsPreferIndex gets a random column, and give the indexed column more chance.
 func (t *Table) GetRandColumnsPreferIndex() *Column {
 	var col *Column
 	for i := 0; i <= 5; i++ {
 		col = t.Columns[rand.Intn(len(t.Columns))]
-		if len(col.relatedIndices) > 0 {
+		if col.ColumnHasIndex(t) {
 			return col
 		}
 	}
@@ -363,8 +346,87 @@ func (t *Table) GetUniqueKeyColumns() []*Column {
 	return indexes[rand.Intn(len(indexes))].Columns
 }
 
+func (cols Columns) FilterColumns(pred func(c *Column) bool) Columns {
+	restCols := make([]*Column, 0, len(cols)/2)
+	for _, c := range cols {
+		if pred(c) {
+			restCols = append(restCols, c)
+		}
+	}
+	return restCols
+}
+
+func (cols Columns) FilterColumnsIndices(pred func(c *Column) bool) []int {
+	restCols := make([]int, 0, len(cols)/2)
+	for i, c := range cols {
+		if pred(c) {
+			restCols = append(restCols, i)
+		}
+	}
+	return restCols
+}
+
+func (cols Columns) Clone() Columns {
+	newCols := make([]*Column, len(cols))
+	for i, c := range cols {
+		newCols[i] = c
+	}
+	return newCols
+}
+
+func (cols Columns) GetRandNColumns(n int) Columns {
+	newCols := cols.Clone()
+	rand.Shuffle(len(newCols), func(i, j int) {
+		cols[i], cols[j] = cols[j], cols[i]
+	})
+	return newCols[:n]
+}
+
+func (cols Columns) GetRandColumnsNonEmpty() Columns {
+	if len(cols) == 0 {
+		return nil
+	}
+	count := 1 + rand.Intn(len(cols))
+	return cols.GetRandNColumns(count)
+}
+
+func (cols Columns) ContainColumn(c *Column) bool {
+	for _, col := range cols {
+		if col.ID == c.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func (cols Columns) EstimateSizeInBytes() int {
+	total := 0
+	for _, c := range cols {
+		total += c.EstimateSizeInBytes()
+	}
+	return total
+}
+
+func (c *Column) ColumnHasIndex(t *Table) bool {
+	for _, idx := range t.Indices {
+		if idx.ContainsColumn(c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (i *Index) IsUnique() bool {
 	return i.Tp == IndexTypePrimary || i.Tp == IndexTypeUnique
+}
+
+func (i *Index) ContainsColumn(c *Column) bool {
+	for _, idxCol := range i.Columns {
+		if idxCol.ID == c.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func (i *Index) HasDefaultNullColumn() bool {
@@ -374,21 +436,6 @@ func (i *Index) HasDefaultNullColumn() bool {
 		}
 	}
 	return false
-}
-
-func (c *Column) IsDroppable() bool {
-	return len(c.relatedIndices) == 0
-}
-
-func (c *Column) QualifiedName(state *State) string {
-	var tableName string
-	for _, t := range state.tables {
-		if c.relatedTableID == t.ID {
-			tableName = t.Name
-			break
-		}
-	}
-	return fmt.Sprintf("%s.%s", tableName, c.Name)
 }
 
 func (p *Prepare) UserVars() []string {

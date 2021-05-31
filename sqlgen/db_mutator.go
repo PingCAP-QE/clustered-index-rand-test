@@ -2,7 +2,6 @@ package sqlgen
 
 import (
 	"math/rand"
-	"sort"
 	"time"
 )
 
@@ -54,6 +53,7 @@ func (s *State) RemoveTable(t *Table) {
 	for _, tb := range s.tables {
 		if tb.ID != t.ID {
 			s.tables[filled] = tb
+			filled++
 		}
 	}
 	s.tables = s.tables[:filled]
@@ -127,7 +127,6 @@ func (s *State) AutoSeed() {
 }
 
 func (t *Table) AppendColumn(c *Column) {
-	c.relatedTableID = t.ID
 	t.Columns = append(t.Columns, c)
 	for i := range t.values {
 		t.values[i] = append(t.values[i], c.ZeroValue())
@@ -169,32 +168,61 @@ func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
 			}
 		}
 	}
-	newCol.relatedTableID = t.ID
+	incompatibleTp := !newCol.Tp.SameTypeAs(oldCol.Tp)
 	for colIdx := range t.Columns {
 		if t.Columns[colIdx].ID != oldCol.ID {
 			continue
 		}
 		t.Columns[colIdx] = newCol
 		for rowIdx := range t.values {
-			// TODO: support reasonable data change.
-			t.values[rowIdx][colIdx] = newCol.ZeroValue()
+			if incompatibleTp {
+				// TODO: support reasonable data change.
+				t.values[rowIdx][colIdx] = newCol.ZeroValue()
+			}
 		}
 		break
 	}
 }
 
-// Only use it when there is no table data.
-func (t *Table) ReorderColumns() {
-	Assert(len(t.values) == 0, "ReorderColumns should only be used when there is no table data")
-	sort.Slice(t.Columns, func(i, j int) bool {
-		return t.Columns[i].ID < t.Columns[j].ID
-	})
+func (t *Table) MoveColumnToFirst(col *Column) {
+	pos := t.columnOffset(col)
+	Assert(pos != -1)
+	t.moveColumnCommon(pos, 0)
+}
+
+func (t *Table) MoveColumnAfterColumn(c1, c2 *Column) {
+	p1 := t.columnOffset(c1)
+	p2 := t.columnOffset(c2)
+	if p1 == p2 {
+		return
+	} else if p1 < p2 {
+		t.moveColumnCommon(p1, p2)
+	} else {
+		t.moveColumnCommon(p1, p2+1)
+	}
+}
+
+func (t *Table) moveColumnCommon(src, dest int) {
+	get := func(i int) interface{} { return t.Columns[i] }
+	set := func(i int, v interface{}) { t.Columns[i] = v.(*Column) }
+	Move(src, dest, get, set)
+	for _, row := range t.values {
+		get := func(i int) interface{} { return row[i] }
+		set := func(i int, v interface{}) { row[i] = v.(string) }
+		Move(src, dest, get, set)
+	}
+}
+
+func (t *Table) columnOffset(col *Column) int {
+	for i, c := range t.Columns {
+		if c.ID == col.ID {
+			return i
+		}
+	}
+	return -1
 }
 
 func (t *Table) AppendIndex(idx *Index) {
-	for _, idxCol := range idx.Columns {
-		idxCol.relatedIndices[idx.Id] = struct{}{}
-	}
 	t.Indices = append(t.Indices, idx)
 }
 
@@ -207,9 +235,6 @@ func (t *Table) RemoveIndex(idx *Index) {
 		}
 	}
 	t.Indices = append(t.Indices[:pos], t.Indices[pos+1:]...)
-	for _, idxCol := range idx.Columns {
-		delete(idxCol.relatedIndices, idx.Id)
-	}
 }
 
 func (t *Table) AppendRow(row []string) {
@@ -230,7 +255,6 @@ func (i *Index) AppendColumnIfNotExists(cols ...*Column) {
 		}
 		i.Columns = append(i.Columns, c)
 		i.ColumnPrefix = append(i.ColumnPrefix, 0)
-		c.relatedIndices[i.Id] = struct{}{}
 	}
 }
 

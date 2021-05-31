@@ -70,9 +70,21 @@ const (
 	ColumnTypeTime
 	ColumnTypeDatetime
 	ColumnTypeTimestamp
+
+	ColumnTypeMax
 )
 
-var ColumnTypeAllTypes = []ColumnType{
+type ColumnTypes []ColumnType
+
+func (tps ColumnTypes) Clone() ColumnTypes {
+	ret := make(ColumnTypes, len(tps))
+	for i, r := range tps {
+		ret[i] = r
+	}
+	return ret
+}
+
+var ColumnTypeAllTypes = ColumnTypes{
 	ColumnTypeInt,
 	ColumnTypeTinyInt,
 	ColumnTypeSmallInt,
@@ -99,21 +111,21 @@ var ColumnTypeAllTypes = []ColumnType{
 	ColumnTypeTimestamp,
 }
 
-var ColumnTypeIntegerTypes = []ColumnType{
+var ColumnTypeIntegerTypes = ColumnTypes{
 	ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt,
 	ColumnTypeMediumInt, ColumnTypeBigInt, ColumnTypeBoolean,
 }
 
-var ColumnTypeFloatingTypes = []ColumnType{
+var ColumnTypeFloatingTypes = ColumnTypes{
 	ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal,
 }
 
-var ColumnTypeStringTypes = []ColumnType{
+var ColumnTypeStringTypes = ColumnTypes{
 	ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary,
 	ColumnTypeVarBinary, ColumnTypeEnum, ColumnTypeSet,
 }
 
-var ColumnTypeTimeTypes = []ColumnType{
+var ColumnTypeTimeTypes = ColumnTypes{
 	ColumnTypeDate, ColumnTypeTime, ColumnTypeDatetime, ColumnTypeTimestamp,
 }
 
@@ -147,8 +159,9 @@ func (c CollationType) String() string {
 		return "utf8_unicode_ci"
 	case CollationUtf8mb4UnicodeCI:
 		return "utf8mb4_unicode_ci"
+	default:
+		return fmt.Sprintf("unknown: %d", c)
 	}
-	return "invalid type"
 }
 
 func (c ColumnType) IsStringType() bool {
@@ -245,8 +258,9 @@ func (c ColumnType) String() string {
 		return "datetime"
 	case ColumnTypeTimestamp:
 		return "timestamp"
+	default:
+		return fmt.Sprintf("unknown: %d", c)
 	}
-	return "invalid type"
 }
 
 type IndexType int64
@@ -255,8 +269,6 @@ const (
 	IndexTypeNonUnique IndexType = iota
 	IndexTypeUnique
 	IndexTypePrimary
-
-	IndexTypeMax
 )
 
 type ScopeKeyType int8
@@ -267,6 +279,7 @@ const (
 	ScopeKeyCurrentSelectedColNum
 	ScopeKeyCurrentPrepare
 	ScopeKeyCurrentPartitionColumn
+	ScopeKeyCurrentModifyColumn
 	ScopeKeyCurrentUniqueIndexForPointGet
 	ScopeKeyCurrentSelectedColumns
 	ScopeKeyCurrentOrderByColumns
@@ -282,7 +295,7 @@ const (
 	ScopeKeyCTEAsNameID
 )
 
-const DefaultKeySize = 3072
+const DefaultKeySizeLimit = 3072
 
 const SelectOutFileDir = "/tmp/tidb_tp_test_outfile"
 

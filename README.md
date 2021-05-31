@@ -1,9 +1,294 @@
 clustered-index-rand-test
 ===
 
-This project provides a flexible way to generate SQL strings.
+This project is another string generator. It provides a flexible way to generate random executable TiDB(MySQL dialect) statements.
+
+As an example, here are 5 statements generated randomly by it:
+
+```sql
+create table tbl_0 ( col_0 float not null  ) ;
+
+insert ignore into tbl_0 set col_0 = 8153.190551246335 on duplicate key update col_0 = 3997.4899996753697;
+
+update tbl_0 set col_0 = 3603.5625826319924 , col_0 = 58.00063810721654 , col_0 = 3505.8937799085083 where tbl_0.col_0 <> 4434.149686520456 and tbl_0.col_0 != 3926.1006744991073 and tbl_0.col_0 in ( 9744.643055728244 , 727.5001134612802 , 4280.999473216482 ) ;
+
+insert ignore into tbl_0  values ( 1073.1669938161926 ) , ( 6322.370383941029 ) , ( 1522.1675401347838 ) , ( 3773.6490425815045 ) , ( 3702.7100487371335 ) on duplicate key update col_0 = 9631.248457125721;
+
+( select   row_number() over w from tbl_0 window w as ( order by col_0 rows between 4 preceding and current row) order by col_0 , ntile( 3 ) over w limit 311 for update ) union ( select   percent_rank() over w from tbl_0 window w as ( order by col_0 )  limit 90 ) order by 1 limit 811;
+```
+
+To make the generated statements as semantic-correct as possible, an internal state is maintained during the generating process. For example, `INSERT`s can only be generated after a `CREATE TABLE`.
+
+We can adjust the config to allow/disallow generating some statements, or change the probability of the specific statements.
 
 ## Quick start
+
+The following snippet prints 200 `CREATE TABLE` SQLs. Each table has no indexes or partitions.
+
+```go
+func main() {
+    state := sqlgen.NewState()
+    state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 200)
+    state.SetWeight(sqlgen.IndexDefinitions, 0)
+    state.SetWeight(sqlgen.PartitionDefinition, 0)
+    for i := 0; i < 200; i++ {
+        sql := sqlgen.CreateTable.Eval(state)
+        fmt.Println(sql)
+        fmt.Println(";")
+    }
+}
+```
+
+Output:
+
+```sql
+-- ...
+create table tbl_30 ( col_152 smallint unsigned  ) ;
+create table tbl_31 ( col_153 boolean , col_154 bigint unsigned default 3261186910083315146 not null , col_155 tinyint unsigned default 18 not null , col_156 timestamp , col_157 set('Alice','Bob','Charlie','David') default 'Charlie' , col_158 mediumint unsigned  ); 
+create table tbl_32 ( col_159 blob(293) collate binary  ) ;
+-- ...
+```
+
+What is happening:
+
+1. We create a new state through `sqlgen.NewState()`.
+2. Before generating SQLs, we adjust the config properly:
+    - The max table count is changed to `200`(default is `20`).
+    - Index & paritition definitions are `SetWeight()` to `0`.
+3. We invoke the `Eval()` of `sqlgen.CreateTable` against the state initialized before. It returns a `CREATE TABLE` string.
+
+To explore more examples, see the file`{proj_root}/sqlgen/example_test.go`.
+
+## Features
+
+- Easy to use: As mentioned in "Quick Start", to generate a custom SQL, only a few steps are required. We can use the state config methods to achieve the following purposes:
+    - Not to generate part of SQL: `state.SetWeight(/* rule */, 0)`
+    - Set the weight of part of SQL: `state.SetWeight(/* rule */, weight)`
+    - Set the repeat count of part of SQL: `state.SetRepeat(/* rule */, lower_count, upper_count)`
+    - Set the advance config option: `state.StoreConfig(config_key, value)`
+
+
+- Good readability: it uses Yacc-style code to describe the grammar. The grammar definition of data manipulation language(DML) is as follows:
+    ```go
+    var DMLStmt = NewFn(func(state *State) Fn {
+        // ...
+        return Or(
+            CommonDelete,
+            CommonInsertOrReplace,
+            CommonUpdate,
+        )
+    })
+    ```
+    It will randomly pick one of `DELETE`, `INSERT/REPLACE` and `UPDATE` during the generating process(`DMLStmt.Eval()`).
+    
+    Good readibility means peeking the definition of the "rule" should be enough to know its functionality.
+
+- Flexible state management: the state is used to make sure the generated SQLs are semantic-correct. Unlike randgen/go-randgen, this project uses Golang instead of embedded scripting languages(Perl/Lua) to represent and interact with the state.
+
+    Thus we can manage the state in a modular way:
+    ```go
+    type State struct {
+        // ...
+        tables []*Table
+    }
+    type Table struct {
+        ID      int
+        Name    string
+        Columns []*Column
+        Indices []*Index
+        // ...
+    }
+    ```
+
+    Furthermore, the generating process can be run interactively. We can change the state on the fly according to the response status of the target database server, or other complex conditions.
+
+## Basics
+
+As we mentioned above, all the rules in grammar are written in Golang. 
+
+**`Fn`** is a representation of the "rule". Evaluating a `Fn` can get a string.
+
+```go
+var SetOperator = NewFn(func(state *State) Fn {
+    return Or(
+        Str("union"),
+        Str("union all"),
+        Str("except"),
+        Str("intersect"),
+    )
+})
+```
+
+`SetOperator` is one of the `Fn`s. Here we show the basic structure of a `Fn`. It is designed to be a global exported variable, so that the users can reference it to generate a string directly through `SetOperator.Eval()`. 
+
+A closure is passed to the `NewFn()`, which picks a string randomly from the set `{"union", "union all", "except", "intersect"}`.
+
+`Or()` is one of the `Fn` combinators. A **combinator** accepts one or more `Fn`s as parameters, and returns exactly one `Fn`. `Or()` randomly pick one of its parameters as the returning value. There are some other combinators:
+  - `And()` concatenates all of its parameters, using a space(" ") as the separator.
+  - `If()` returns empty string if the first paramenter(bool type) is evaluated to `false`. Otherwise, it returns the second parameter.
+  - `Opt()` returns empty string with 1/2 probability. Otherwise, it returns the first parameter.
+
+This allows us to describe the grammar with the style of Yacc:
+
+```go
+return Or(
+    And(...),
+    And(..., Opt(...)),
+    If(..., 
+        Or(
+            And(...),
+        ),
+    )
+)
+```
+
+You may notice that there is a parameter `state *State` in closure signature:
+
+```go
+func(state *State) Fn {}
+```
+
+`SetOperator` does not use this parameter because it is simple enough to express. However, some `Fn`s may need more information to generate a string. For example, the `AddColumn` statement requires the existence of the target table.
+
+```go
+var AddColumn = NewFn(func(state *State) Fn {
+    tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+    col := state.GenNewColumn()
+    tbl.AppendColumn(col)
+    return Strs(
+        "alter table", tbl.Name,
+        "add column", col.Name, PrintColumnType(col),
+    )
+})
+```
+
+To get the target table, we use `state.Search()` to lookup current table in the scope. 
+
+A **scope** is a multi-level map structure, which is used to share the information between `Fn`s evaluation. Similar to the "block" concept in Golang, inner scopes `Fn`s can access the `ScopeKey` set by the outer scopes. The `ScopeKey` store in each scope will be destroyed after leaving the scope.
+
+```
+Start{
+    DDLStmt{
+        scope[ScopeKeyCurrentTables] := get_random_table()
+        AddColumn{
+            tbl := scope[ScopeKeyCurrentTables]
+        }
+    }
+}
+```
+
+In the above example, the parent `Fn` of `AddColumn` (`DDLStmt`) needs to set current table in the scope with the key `ScopeKeyCurrentTables`:
+
+```go
+var DDLStmt = NewFn(func(state *State) Fn {
+    // ...
+    tbl := state.GetRandTable()
+    state.Store(ScopeKeyCurrentTables, Tables{tbl})
+    return Or(
+        AddColumn,
+        //...
+    )
+})
+```
+
+Here are some methods to manipulate the scopes:
+
+- `CreateScope()`: create a new scope, set the current scope to it.
+- `DestroyScope()`: destroy the current scope, set the current scope to its parent scope.
+- `Store(key ScopeKeyType, val interface{})`: store the object to the current scope using key as entry.
+- `Search(key ScopeKeyType)`: lookup the object with the key in current scope and all of the parent scopes.
+
+Thanks to the hook mechanism, `CreateScope()` and `DestroyScope()` can be automatically invoked before and after `Fn` evaluation (see `FnHookScope`). So it is enough for us to focus on `Store()/Search()`.
+
+Next we will show how to set the generating probability of different branches in the `Or()` combinator.
+
+The **weight** is used to control this probability.
+
+In "Quick Start" part, we use the following method to overwrite the weight of specific `Fn`.
+
+```go
+state.SetWeight(sqlgen.IndexDefinitions, 0)
+```
+
+But what is the default weight configuration for each `Fn`? The answer is `SetW()`:
+
+```go
+var DMLStmt = NewFn(func(state *State) Fn {
+    // ...
+    return Or(
+        CommonDelete.SetW(1),
+        CommonInsertOrReplace.SetW(3),
+        CommonUpdate.SetW(1),
+    )
+})
+```
+
+In this example, the ratio of generating probability of `[Delete : Insert/Replace : Update]` is `[1 : 3 : 1]`. For those `Fn`s without following `SetW()`, the default weight is `1`.
+
+Similarly, `SetR()` is used to change the **repeat** count of a specific `Fn` wrapped in `Repeat()`.
+
+```go
+var CommonUpdate = NewFn(func(state *State) Fn {
+    tbl := state.GetRandTable()
+    state.Store(ScopeKeyCurrentTables, Tables{tbl})
+    state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
+    return And(
+        Str("update"), Str(tbl.Name), Str("set"),
+        Repeat(AssignClause.SetR(1, 3), Str(",")),  // <-------
+        Str("where"),
+        Predicates,
+        Opt(OrderByLimit),
+    )
+})
+```
+
+`AssignClause.SetR(1, 3)` means the assignments will appear [1, 3] times in the result.
+
+Finally, let's look back to `state *State`. Except sharing information among `Fn`s, the state plays 2 other roles:
+
+- Database state container: it contains tables, columns, indexes, and other database entity. Each of them has a struct representation. For example, `type Column struct {...}` stands for columns.
+
+  We can change the state through functions in `db_mutator.go`, and read the state through functions in `db_retriever.go`. Here are some examples:
+  - [W]`(s *State) AppendTable(tbl *Table)`
+  - [W]`(t *Table) AppendColumn(c *Column)`
+  - [W]`(t *Table) AppendIndex(idx *Index)`
+  - [R]`(s *State) GetRandTable() *Table`
+  - [R]`(t *Table) GetRandColumn() *Column`
+- Configurations provider: these are used to control `Fn`'s behavior. It is usually set before, and keep unchanged during `Fn` evaluation. The available config option locates in `db_config.go`.
+
+## Directory structure
+
+```bash
+./sqlgen
+├── db_assumption.go
+├── db_check_integrity.go   # Integrity checker for debugging
+├── db_config.go            # Fn evaluation config
+├── db_constant.go
+├── db_generator.go         # A collection of functions that generate random values, like column types, column values and others
+├── db_mutator.go           # A collection of functions that modify the state
+├── db_printer.go           # A collection of functions that help printing the target string
+├── db_retriever.go         # A collection of functions that read the state
+├── db_test.go
+├── db_transformer.go       # Complex database entity conversion
+├── db_type.go              # Definition of State, Table, Column, Index and others
+├── db_util.go
+├── example_test.go         # Example usages
+├── generator_lib.go        # Fn combinators
+├── generator_types.go      # Basic struct types
+├── generator_util.go
+├── hook.go                 # Fn evaluation hooks
+├── hook_debug.go
+├── hook_replacer.go
+├── hook_scope.go
+├── hook_test.go
+├── hook_txn_wrap.go
+├── start.go                # Yacc-style grammar file
+└── start_test.go
+```
+
+## Test
+
+This project also integrates a simple AB test framework.
 
 ### Run AB Test
 
@@ -32,277 +317,3 @@ make
 make
 ./bin/sqlgen print --count 100
 ```
-
-### Generate SQLs as a library
-
-Print 200 SQL statements randomly after setting `@@global.tidb_enable_clustered_index` to true:
-
-```go
-func main() {
-    state := NewState()
-    state.InjectTodoSQL("set @@global.tidb_enable_clustered_index=true")
-    gen := NewGenerator(state)
-    for i := 0; i < 200; i++ {
-        fmt.Printf("%s;\n", gen())
-    }
-}
-```
-
-Generate 5 random `CREATE TABLE` statements, each with 5 columns and 2 indexes and 10 `INSERT INTO` statements.
-
-```go
-func printInitSQL() {
-    state := sqlgen.NewState()
-    tableCount, columnCount := 5, 5
-    indexCount, rowCount := 2, 10
-    state.SetRepeat(sqlgen.ColumnDefinition, columnCount, columnCount)
-    state.SetRepeat(sqlgen.IndexDefinition, indexCount, indexCount)
-    for i := 0; i < tableCount; i++ {
-        sql := sqlgen.CreateTable.Eval(state)
-        fmt.Println(sql)
-    }
-    for _, tb := range state.GetAllTables() {
-        state.CreateScope()
-        state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
-        for i := 0; i < rowCount; i++ {
-            sql := sqlgen.InsertInto.Eval(state)
-            fmt.Println(sql)
-        }
-        state.DestroyScope()
-    }
-}
-```
-
-To check/modify the generation rules, see the file `sqlgen/start.go`.
-
-## Features
-
-- Good readability. It uses Yacc-style code to describe the grammar. Here is the comparison for a simple 'or' branch: 
-    ```yacc
-    dmlStmt:
-     query
-    |  commonDelete
-    |  CommonInsertOrReplace
-    |  commonUpdate
-    ```
-    ```go
-    var DMLStmt = NewFn(func(state *State) Fn {
-        if !state.CheckAssumptions(HasTables) {
-            return None
-        }
-        return Or(
-            QueryPrepare,
-            CommonDelete,
-            CommonInsertOrReplace,
-            CommonUpdate,
-        )
-    })
-    ```
-- Flexible state management. It provides full functions of Golang.
-
-  Why do we need state management? Because the correctness of the generating SQL is guaranteed by the state. 
-  
-  For example, the index columns in a SQL like `ALTER TABLE t ADD INDEX idx(a, b);` are chosen randomly. This requires the embedded language to store the columns information of `t`. The metadata also including all available table names, all column names in each table, etc. 
-  
-  However, for scripting language like Perl/Lua, this can mess things up if the there are a lot of metadata to track:
- 
-  ```lua
-   T = {
-        cols = {},
-        col_types = {},
-        cur_col = nil,
-        indices = {},
-    }
-
-    T.next_idx = function() return G.c_index_num.seq:next() end
-    T.next_col = function() return G.c_column_num.seq:next() end
-    T.cols[#T.cols+1] = util.col('c_int', G.c_int.rand)
-    T.cols[#T.cols+1] = util.col('c_str', G.c_str.rand)
-    T.cols[#T.cols+1] = util.col('c_datetime', G.c_datetime.rand)
-
-  ...
-  
-  add_column:
-    alter table t add column {
-        local new_col_type = T.new_rand_col_types()
-        local col_name = sprintf('col_%d', T.next_col());
-        T.cols[#T.cols+1] = util.col(col_name, new_col_type.rand)
-        printf('%s %s', col_name, new_col_type.name)
-    }
-  ```
-  We need to maintain many arrays/maps carefully. What's more, if there is a syntax error or semantic/logic error, it is hard to debug due to the lack of syntax highlight support and the debug information.
-  
-- Ability to interact with foreign data. For randgen/go-randgen, the generating process is isolated. 
-  
-  Sometimes the users may need to generate SQL dynamically according to the database status or some given complex conditions. It is not convenient to achieve them in a scripting language. On the other hand, managing information in a modular way with Golang is easier.
-
-## Concepts
-
-- **Fn**: a rule that defines how to generate a part of string. We can define the `Fn`s in this way:
-    ```go
-    fn_name = NewFn(func(state *State) Fn {
-        /* assumption check */
-        /* initialization and preprocess */
-        return Or(
-            /* fn body */
-            sub_fn1,
-            sub_fn2,
-            ...
-        )
-    })
-    ```
-
-    Evaluating a `Fn` produces a string:
-    ```go
-    state := NewState()
-    sqlPart := fn_name.Eval(state)
-    ```
-    ```go
-    func (f Fn) Eval(state *State) string { ... }
-    ``` 
-    
-    When a `Fn` is being evaluated, the sub-`Fn`s are also evaluated. Each `Fn` builds its own string by using both information about itself and sub-`Fn`s. Finally, a string is concatenated bottom-up and returned.
-
-- **Fn combinator**: A function that accepts zero or more `Fn`s and returns exactly one `Fn`. It is used to keep `Fn`s readable, there are many combinators that have corresponding notations in Yacc. Here are a few combinators:
-  - `Or(...fn)`: Chooses one branch in the sub-`Fn`s, like notation `|` in Yacc.
-  - `And(...fn)`: Concatenates all the sub-`Fn`s.
-  - `Str(fn)`: Indicates a terminal/leaf `Fn`.
-  - `If(cond, ...fn)`: Only generates the sub-`Fn`s if the condition is satisfied.
-  - `Repeat(fn, sepFn)`: Concatenates the result of `fn` with the seperation `Fn` `sepFn`. The repeating times is decided by `Fn.Repeat`(with type `Interval{lower:int, upper:int}`).
-
-- **Fn weight**: the probability to select this branch. It is useful in `Or()` combinator. Each `Fn` has an attribute `weight`. You can set the default value through `SetW()`. For example,
-    ```go
-    return Or(
-        dmlStmt.SetW(12),
-        ddlStmt.SetW(3),
-        splitRegion.SetW(2),
-        commonAnalyze.SetW(1),
-        ...
-    ),
-    ```
-  The ratio of selecting probability of `[dmlStmt : ddlStmt : splitRegion : commonAnalyze]` is `[12 : 3 : 2 : 1]`.
-
-- **Fn repeat**: the repeating times of a `Fn` in `Repeat()` combinator. Each `Fn` has an attribute `repeat`. You can set the default value through `SetR()`. For example,
-    ```go
-    var ColumnDefinitions = NewFn(func(state *State) Fn {
-        // ...
-        return Repeat(ColumnDefinition.SetR(1, 10), Str(","))
-    })
-    ```
-  The `ColumnDefinition` Fn can repeat `[1, 10]` times during evaluation.
-
-- **State**: the place where stores all the metadata, and it provides convenient functions to retrieve/mutate them. The meta data includes:
-    - database state(tables, columns, indexes),
-    - configurations to control `Fn`'s behavior, and
-    - intermediate information during evaluation.
-    
-    For database state, here is an example of state interaction:
-    ```go
-    var CreateTable = NewFn(func(state *State) Fn {
-        tbl := GenNewTable()
-        state.AppendTable(tbl)  // <--------------------- mutate
-        // ...
-        return And(
-			Str("create table"),
-			Str(tbl.name),
-			Str("("),
-			definitions,
-			Str(")"),
-			OptIf(rand.Intn(5) == 0, partitionDef),
-        )
-    })
-    ```
-    ```go
-    var AnalyzeTable = NewFn(func(state *State) Fn {
-        tbl := state.GetRandTable() // <--------------------- retrieve
-        return And(Str("analyze table"), Str(tbl.name))
-    })
-    ```
-    When we generating a `CREATE TABLE` SQL, a table entity `*Table` is also put to the state. The function `GetRandTable()` is used to get a random table from the state.
-
-    For configurations, here is an example to 
-
-- **Messeging between Fns**: there are 2 ways to pass the information between `Fn`s: 
-  - Nested definition
-  - Scoping mechanism
-
-  for most `Fn`s, the requirement of message passing can be satisfied with *nested* definitions. For example, we have the production dependency `createTable -> definitions -> idxDefs -> idxDef`. We need to modify the state during generating `idxDef` by appending a new index to the current table(`currentTable.Append(newIndex)`). To reference the entity `currentTable`, we can define them in a nested block:
-    ```go
-    createTable = NewFn("createTable", func() Fn {
-        tbl := GenNewTable(state.AllocGlobalID(ScopeKeyTableUniqID)) // <------ `tbl` referenced
-        state.AppendTable(tbl)
-        // ...
-        definitions = NewFn("definitions", func() Fn {
-            // ...
-            idxDefs = NewFn("idxDefs", func() Fn {
-                return Or(
-                    idxDef,
-                    And(idxDef, Str(","), idxDefs).SetW(2),
-                )
-            })
-            idxDef = NewFn("idxDef", func() Fn {
-                idx := GenNewIndex(state.AllocGlobalID(ScopeKeyIndexUniqID), tbl)
-                tbl.AppendIndex(idx) // -------------------------------------> referencing `tbl`
-            // ...
-    ```
-
-  > Advanced usage: one drawback of this approach is the disruption to the readability and reusability. If we really need to reuse a production, the `scoping` functions of state come into rescue. They are:
-  > - `(s *State) CreateScope()`: Create a new scope. Similar to entering the blocks (`{}`) in Golang.
-  > - `(s *State) DestroyScope()`: Destroy the innermost scope. Similar to leaving the blocks in Golang.
-  > - `(s *State) Store(key ScopeKeyType, val ScopeObj)`: Attach an entity to the scope.
-  > - `(s *State) Search(key ScopeKeyType) ScopeObj`: Search an entity with a given key.
-  >
-  > The `CreateScope` and `DestroyScope` can be automated through the `ProductionListener` provided by `generater_lib.go`(which is a hook being called before and after the `Fn` evaluation). Thus, we only need to `Store()` the entity in the parent production, then `Search()` the entity in children productions.
-
-## Directory structure
-
-```bash
-sqlgen
-├── db_constant.go
-├── db_generator.go     # A collection of functions that generate random values, like column types, column values and others
-├── db_mutator.go       # A collection of functions that **modify** the state
-├── db_printer.go       # A collection of functions that help printing the target string
-├── db_retriever.go     # A collection of functions that **read** the state
-├── db_transformer.go
-├── db_type.go
-├── db_util.go
-├── declarations.go     # Production declarations
-├── example_test.go
-├── generator_lib.go    # Production combinators
-├── generator_types.go  # Basic struct types
-└── start.go            # Yacc-style grammar file
-```
-
-## Coding style
-
-Here are some suggestions to keep the code clean:
-
-- Name each function regularly. 
-  - the state-mutate functions start with `Set`/`Append`/`Remove`; 
-  - the state-retrieve functions start with `Get`; 
-  - the generating functions have the pattern `Gen...()`; 
-  - the format functions have the pattern `Print...()`;
-  - the random entity/value producing functions have the pattern `Rand...()`.
-- Put the functions to different files according to their intend.
-- `Assert` the assumptions explicitly.
-- DRY(Do not Repeat Yourself).
-- Avoid passing information through global variables.
-
-## How to add a new production
-
-For the productions with easy syntax, only 4 steps are required normally:
-  - Put the declaration to `declarations.go`.
-  - Write the production body. Combinators like `And()`, `Or()` and `Strs()` may be helpful.
-  - Insert the new production to another existing & used production body.
-  - Test it in `example_test.go`. One may need to adjust the weight through `SetW()` to increase the probability to generate.
-
-For the productions with a lot of constraints or complex conditions, answering the following questions and coding step by step should help:
-
-- Does this production involve a new entity? If yes, define it in `db_types.go` and provide corresponding retrieve/mutate functions.
-- Do you expect to control the generating strategy with some arguments? If yes, put it in the config `ControlOption` and don't forget to update `DefaultControlOption()`.
-- What are the constraints of this production? Consider using `If()` or `OptIf()`. If necessary, the Golang keyword `if` with multiple `return` statements may be a good replacement.
-- What is the message passing flow? Consider using *nested* definitions over scoping mechanism.
-- Does it require complex transformation? If yes, do the transformation work in `db_transformer.go`.
-- Does it need to be printed in a special way? If yes, do the format work in `db_printer.go`.
-- Need to make it generate multiple SQLs at a time? Use `InjectTodoSQL()`. It can append custom strings to the queue in the generator.
-- Does it require the cleanup work? Here is a signature of a hook: `(p *PostListener) Register(fnName string, fn func())`. A custom function can be registered to a production, it will be called after the production is generated.

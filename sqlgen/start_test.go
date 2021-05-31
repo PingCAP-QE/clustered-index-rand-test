@@ -1,6 +1,7 @@
 package sqlgen_test
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ func (s *testSuite) SetUpSuite(c *C) {
 
 func (s *testSuite) TestStart(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	for i := 0; i < 300; i++ {
 		res := sqlgen.Start.Eval(state)
 		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
@@ -31,8 +33,21 @@ func (s *testSuite) TestStart(c *C) {
 	}
 }
 
+func (s *testSuite) TestConfigKeyUnitFirstColumnIndexable(c *C) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 300)
+	state.StoreConfig(sqlgen.ConfigKeyUnitFirstColumnIndexable, struct{}{})
+	for i := 0; i < 300; i++ {
+		res := sqlgen.CreateTable.Eval(state)
+		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
+		c.Assert(len(res), Greater, 0, Commentf("i = %d", i))
+	}
+}
+
 func (s *testSuite) TestCreateColumnTypes(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 100)
 	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, []sqlgen.ColumnType{sqlgen.ColumnTypeInt})
 	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
@@ -47,6 +62,7 @@ func (s *testSuite) TestCreateColumnTypes(c *C) {
 
 func (s *testSuite) TestCreateTableLike(c *C) {
 	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
 	_ = sqlgen.CreateTable.Eval(state)
 	for i := 0; i < 100; i++ {
 		_ = sqlgen.CreateTableLike.Eval(state)
@@ -67,5 +83,53 @@ func (s *testSuite) TestCreateTableLike(c *C) {
 			state.DestroyScope()
 		}
 	}
-	state.CheckIntegrity(state)
+}
+
+func (s *testSuite) TestAlterColumnPosition(c *C) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	_ = sqlgen.CreateTable.Eval(state)
+	state.CreateScope()
+	state.Store(sqlgen.ScopeKeyCurrentTables, state.GetAllTables())
+	defer state.DestroyScope()
+	for i := 0; i < 10; i++ {
+		_ = sqlgen.InsertInto.Eval(state)
+	}
+	for i := 0; i < 100; i++ {
+		_ = sqlgen.AlterColumn.Eval(state)
+	}
+	// TODO: implement the type-value compatibility check.
+	t := state.GetRandTable()
+	for _, c := range t.Columns {
+		fmt.Printf("%s ", c.Tp)
+	}
+	fmt.Println()
+	for _, v := range t.GetRandRow(nil) {
+		fmt.Printf("%s ", v)
+	}
+	fmt.Println()
+}
+
+func (s *testSuite) TestConfigKeyUnitAvoidAlterPKColumn(c *C) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	state.SetRepeat(sqlgen.IndexDefinition, 1, 1)
+	state.StoreConfig(sqlgen.ConfigKeyUnitAvoidAlterPKColumn, struct{}{})
+	_ = sqlgen.CreateTable.Eval(state)
+	tbl := state.GetRandTable()
+	pk := tbl.GetRandomIndex()
+	c.Assert(pk.Tp, Equals, sqlgen.IndexTypePrimary)
+	colsWithPK := tbl.FilterColumns(func(c *sqlgen.Column) bool {
+		return pk.ContainsColumn(c)
+	})
+	state.CreateScope()
+	state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tbl})
+	for i := 0; i < 30; i++ {
+		sqlgen.AlterColumn.Eval(state)
+	}
+	for _, pkCol := range colsWithPK {
+		c.Assert(tbl.Columns.ContainColumn(pkCol), IsTrue)
+	}
 }

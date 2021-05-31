@@ -55,11 +55,54 @@ func RandomGroups(ss []string, groupCount int) [][]string {
 	return groups
 }
 
-func ConcatColumns(col1, col2 []*Column) []*Column {
-	ret := make([]*Column, 0, len(col1)+len(col2))
-	ret = append(ret, col1...)
-	ret = append(ret, col2...)
+func ConcatColumnPairs(t1, t2 *Table, col1, col2 []*Column) TableColumnPairs {
+	ret := make(TableColumnPairs, 0, len(col1)+len(col2))
+	for _, c := range col1 {
+		ret = append(ret, TableColumnPair{t: t1, c: c})
+	}
+	for _, c := range col2 {
+		ret = append(ret, TableColumnPair{t: t2, c: c})
+	}
 	return ret
+}
+
+type SeqGetter = func(idx int) interface{}
+type SeqSetter = func(idx int, v interface{})
+
+// AppendHead sets [1, 2, 3, 4] to [2, 3, 4, 1].
+func AppendHead(beg, end int, get SeqGetter, set SeqSetter) {
+	if beg == end {
+		return
+	}
+	first := get(beg)
+	for i := beg; i < end; i++ {
+		set(i, get(i+1))
+	}
+	set(end, first)
+}
+
+// PrependTail sets [1, 2, 3, 4] to [4, 1, 2, 3].
+func PrependTail(beg, end int, get SeqGetter, set SeqSetter) {
+	if beg == end {
+		return
+	}
+	next := get(beg)
+	for i := beg + 1; i < end+1; i++ {
+		old := get(i)
+		set(i, next)
+		next = old
+	}
+	set(beg, next)
+}
+
+func Move(srcIdx, destIdx int, get SeqGetter, set SeqSetter) {
+	if srcIdx == destIdx {
+		return
+	} else if srcIdx < destIdx {
+		AppendHead(srcIdx, destIdx, get, set)
+	} else {
+		PrependTail(destIdx, srcIdx, get, set)
+	}
 }
 
 // FilterColumns filters the columns inplace.

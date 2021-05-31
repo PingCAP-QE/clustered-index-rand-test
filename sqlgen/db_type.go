@@ -27,8 +27,9 @@ type Table struct {
 	ID      int
 	Name    string
 	AsName  string
-	Columns []*Column
+	Columns Columns
 	Indices []*Index
+	Collate CollationType
 
 	containsPK        bool // to ensure at most 1 pk in each table
 	values            [][]string
@@ -50,18 +51,16 @@ type Column struct {
 	arg2       int      // optional
 	args       []string // for ColumnTypeSet and ColumnTypeEnum
 
-	defaultVal     string
-	isNotNull      bool
-	relatedIndices map[int]struct{}
-	relatedTableID int
-	collate        CollationType
+	defaultVal string
+	isNotNull  bool
+	collate    CollationType
 }
 
 type Index struct {
 	Id           int
 	Name         string
 	Tp           IndexType
-	Columns      []*Column
+	Columns      Columns
 	ColumnPrefix []int
 }
 
@@ -83,6 +82,9 @@ func NewState() *State {
 	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
+	s.StoreConfig(ConfigKeyUnitAvoidAlterPKColumn, struct{}{})
+	s.StoreConfig(ConfigKeyUnitLimitIndexKeyLength, struct{}{})
+	s.StoreConfig(ConfigKeyUnitAvoidDropPrimaryKey, struct{}{})
 	// s.AppendHook(NewFnHookTxnWrap(20))
 	s.AutoSeed()
 	return s
@@ -102,17 +104,6 @@ func (s ScopeObj) ToTables() Tables {
 
 func (s ScopeObj) ToColumn() *Column {
 	return s.obj.(*Column)
-}
-
-func (s ScopeObj) ToColumnTypes() []ColumnType {
-	return s.obj.([]ColumnType)
-}
-
-func (s ScopeObj) ToColumnTypesOrDefault(defau1t []ColumnType) []ColumnType {
-	if s.obj == nil {
-		return defau1t
-	}
-	return s.ToColumnTypes()
 }
 
 func (s ScopeObj) ToIndex() *Index {
@@ -158,6 +149,10 @@ func (s ScopeObj) ToColumns() []*Column {
 
 func (s ScopeObj) ToPrepare() *Prepare {
 	return s.obj.(*Prepare)
+}
+
+func (s ScopeObj) ToTableColumnPairs() TableColumnPairs {
+	return s.obj.(TableColumnPairs)
 }
 
 func (s *State) CreateScope() {

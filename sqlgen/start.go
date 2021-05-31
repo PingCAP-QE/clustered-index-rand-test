@@ -29,6 +29,7 @@ var Start = NewFn(func(state *State) Fn {
 		CreateTable.SetW(13),
 		CreateTableLike.SetW(6),
 		Query.SetW(20),
+		QueryPrepare.SetW(2),
 		DMLStmt.SetW(20),
 		DDLStmt.SetW(5),
 		SplitRegion.SetW(1),
@@ -47,9 +48,8 @@ var DMLStmt = NewFn(func(state *State) Fn {
 		return None
 	}
 	return Or(
-		QueryPrepare.SetW(1),
 		CommonDelete.SetW(1),
-		CommonInsertOrReplace.SetW(1),
+		CommonInsertOrReplace.SetW(3),
 		CommonUpdate.SetW(1),
 	)
 })
@@ -97,7 +97,7 @@ var FlashBackTable = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	state.InjectTodoSQL(fmt.Sprintf("flashback table %s", tbl.Name))
+	state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ flashback table %s", tbl.Name))
 	return Or(
 		Strs("drop table", tbl.Name),
 		Strs("truncate table", tbl.Name),
@@ -127,7 +127,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	state.AppendTable(tbl)
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	if state.Roll(ConfigKeyProbabilityTiFlashTable, 0) {
-		state.InjectTodoSQL(fmt.Sprintf("alter table %s set tiflash replica 1", tbl.Name))
+		state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ alter table %s set tiflash replica 1", tbl.Name))
 		state.InjectTodoSQL(fmt.Sprintf("select sleep(20)"))
 	}
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
@@ -137,8 +137,20 @@ var CreateTable = NewFn(func(state *State) Fn {
 		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
+	eTableOption := TableOptions.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
-	return Strs("create table", tbl.Name, "(", eColDefs, eIdxDefs, ")", ePartitionDef)
+	if eIdxDefs == "" {
+		return Strs("create table", tbl.Name, "(", eColDefs, ")",
+			eTableOption, ePartitionDef)
+	} else {
+		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
+			eTableOption, ePartitionDef)
+	}
+})
+
+var TableOptions = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	return Strs("collate", tbl.Collate.String())
 })
 
 var ColumnDefinitions = NewFn(func(state *State) Fn {
@@ -149,11 +161,10 @@ var ColumnDefinitions = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinition = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
-		return None
-	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := state.GenNewColumn()
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().CreateTableOrDefault()
+	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
 	return And(Str(col.Name), Str(PrintColumnType(col)))
 })
@@ -162,25 +173,15 @@ var IndexDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
-	if RandomBool() {
-		return Empty
-	}
-	return And(
-		Str(","),
-		Repeat(IndexDefinition.SetR(1, 4), Str(",")),
-	)
+	return Repeat(IndexDefinition.SetR(0, 4), Str(","))
 })
 
 var IndexDefinition = NewFn(func(state *State) Fn {
-	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
-		return None
-	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := state.GenNewIndex(tbl)
-	if idx.IsUnique() && state.Exists(ScopeKeyCurrentPartitionColumn) {
-		partitionedCol := state.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
-		// all partitioned Columns should be contained in every unique/primary index.
-		idx.AppendColumnIfNotExists(partitionedCol)
+	if idx == nil {
+		// TODO: add warning log.
+		return Empty
 	}
 	tbl.AppendIndex(idx)
 	return And(
@@ -311,9 +312,10 @@ var CommonSelect = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
-	cols := tbl.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
+	cols := tbl.Columns.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	state.Store(ScopeKeyCurrentOrderByColumns, tbl.GetRandColumnsNonEmpty)
+	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
 		prepare := state.Search(ScopeKeyCurrentPrepare).ToPrepare()
@@ -333,7 +335,6 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	pkCols := tbl.GetUniqueKeyColumns()
-	groupByCols := tbl.GetRandColumns()
 	return And(
 		Str("select"), HintAggToCop, AggFunction, Str("aggCol"),
 		Str("from"),
@@ -341,11 +342,17 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		Str("from"), Str(tbl.Name), Str("where"), Predicates,
 		If(len(pkCols) != 0, Strs("order by", PrintColumnNamesWithoutPar(pkCols, ""))),
 		Str(") ordered_tbl"),
-		If(len(groupByCols) > 0, Strs("group by", PrintColumnNamesWithoutPar(groupByCols, ""))),
+		GroupByColumnsOpt,
 		Opt(Str("order by aggCol")),
 		Opt(Strs("limit", RandomNum(1, 1000))),
 		ForUpdateOpt,
 	)
+})
+
+var GroupByColumnsOpt = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
+	return Opt(Strs("group by", PrintColumnNamesWithoutPar(cols, "")))
 })
 
 var AggFunction = NewFn(func(state *State) Fn {
@@ -460,13 +467,12 @@ var OrderByLimit = NewFn(func(state *State) Fn {
 	if lobCfg == ConfigKeyEnumLOBNone {
 		return Empty
 	}
-	cols := state.Search(ScopeKeyCurrentOrderByColumns).ToColumns()
-	tbs := state.GetRelatedTables(cols)
+	tblColPairs := state.Search(ScopeKeyCurrentOrderByColumns).ToTableColumnPairs()
 	switch lobCfg {
 	case ConfigKeyEnumLOBOrderBy:
-		return Strs("order by", PrintQualifiedColumnNames(tbs, cols))
+		return Strs("order by", PrintQualifiedColumnNames(tblColPairs))
 	case ConfigKeyEnumLOBLimitOrderBy:
-		return Strs("order by", PrintQualifiedColumnNames(tbs, cols), "limit", RandomNum(1, 1000))
+		return Strs("order by", PrintQualifiedColumnNames(tblColPairs), "limit", RandomNum(1, 1000))
 	default:
 		NeverReach()
 		return Empty
@@ -478,7 +484,7 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	var cols []*Column
 	if state.ExistsConfig(ConfigKeyUnitNonStrictTransTable) {
-		cols = tbl.GetRandColumnsNonEmpty()
+		cols = tbl.Columns.GetRandColumnsNonEmpty()
 	} else {
 		cols = tbl.GetRandColumnsIncludedDefaultValue()
 	}
@@ -567,7 +573,7 @@ var AssignClause = NewFn(func(state *State) Fn {
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	cols := tbl.GetRandColumnsNonEmpty()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
 	return Strs(
 		"on duplicate key update",
 		PrintRandomAssignments(cols),
@@ -577,7 +583,8 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 var CommonUpdate = NewFn(func(state *State) Fn {
 	tbls := state.GetRandTableOrCTEs()
 	state.Store(ScopeKeyCurrentTables, tbls)
-	state.Store(ScopeKeyCurrentOrderByColumns, tbls[rand.Intn(len(tbls))].GetRandColumnsNonEmpty())
+	tbl := tbls[rand.Intn(len(tbls))]
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
 	return And(
 		Str("update"),
 		Join(",", func(x interface{}) string {
@@ -608,7 +615,8 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		col = tbls[rand.Intn(len(tbls))].GetRandColumn()
 	}
 	state.Store(ScopeKeyCurrentTables, tbls)
-	state.Store(ScopeKeyCurrentOrderByColumns, tbls[rand.Intn(len(tbls))].GetRandColumnsNonEmpty())
+	tbl := tbls[rand.Intn(len(tbls))]
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
 
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
@@ -713,9 +721,16 @@ var Predicate = NewFn(func(state *State) Fn {
 		return Repeat(randVal.SetR(1, 5), Str(","))
 	})
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
-	return Or(
+	pre := Or(
 		And(Str(colName), CompareSymbol, randVal),
 		And(Str(colName), Str("in"), Str("("), randColVals, Str(")")),
+		And(Str("IsNull("), Str(colName), Str(")")),
+		And(Str(colName), Str("between"), randVal, Str("and"), randVal),
+		And(Str(colName), Str("not in"), Str("("), randColVals, Str(")")),
+	)
+	return Or(
+		pre,
+		And(Str("not("), pre, Str(")")),
 	)
 })
 
@@ -755,7 +770,15 @@ var DropIndex = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := tbl.GetRandomIndex()
+	if idx.Tp == IndexTypePrimary && state.ExistsConfig(ConfigKeyUnitAvoidDropPrimaryKey) {
+		// we are not support drop primary when it's clustered.
+		return None
+	}
 	tbl.RemoveIndex(idx)
+	if idx.Tp == IndexTypePrimary {
+		tbl.containsPK = false
+		return Strs("alter table", tbl.Name, "drop primary key")
+	}
 	return Strs(
 		"alter table", tbl.Name,
 		"drop index", idx.Name,
@@ -764,7 +787,9 @@ var DropIndex = NewFn(func(state *State) Fn {
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := state.GenNewColumn()
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().AddColumnOrDefault()
+	col := state.GenNewColumnWithType(tps...)
 	tbl.AppendColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -789,19 +814,60 @@ var DropColumn = NewFn(func(state *State) Fn {
 })
 
 var AlterColumn = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	col := tbl.GetRandColumn()
+	if state.ExistsConfig(ConfigKeyUnitAvoidAlterPKColumn) {
+		col = tbl.GetRandNonPKColumn()
+		if col == nil {
+			return None
+		}
+	}
+	tps := state.SearchConfig(ConfigKeyArrayAllowColumnTypes).
+		ToConfigAllowedColumnTypes().ModifyColumnOrDefault()
+	newCol := state.GenNewColumnWithType(tps...)
+	tbl.ReplaceColumn(col, newCol)
+	state.Store(ScopeKeyCurrentModifyColumn, newCol)
+	if RandomBool() {
+		newCol.Name = col.Name
+		return And(Str("alter table"), Str(tbl.Name), Str("modify column"),
+			Str(col.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
+	}
+	return And(Str("alter table"), Str(tbl.Name), Str("change column"),
+		Str(col.Name), Str(newCol.Name), Str(PrintColumnType(newCol)), ColumnPositionOpt)
+})
+
+var ColumnPositionOpt = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(
-		MustHaveKey(ScopeKeyCurrentTables)) {
+		MustHaveKey(ScopeKeyCurrentTables),
+		MustHaveKey(ScopeKeyCurrentModifyColumn)) {
+		return None
+	}
+	return Or(
+		Empty,
+		ColumnPositionFirst,
+		ColumnPositionAfter,
+	)
+})
+
+var ColumnPositionFirst = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	col := state.Search(ScopeKeyCurrentModifyColumn).ToColumn()
+	tbl.MoveColumnToFirst(col)
+	return Str("first")
+})
+
+var ColumnPositionAfter = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(MoreThan1Columns) {
 		return None
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	col := tbl.GetRandColumn()
-	newCol := state.GenNewColumn()
-	tbl.ReplaceColumn(col, newCol)
-	if RandomBool() {
-		newCol.Name = col.Name
-		return Strs("alter table", tbl.Name, "modify column", col.Name, PrintColumnType(newCol))
-	}
-	return Strs("alter table", tbl.Name, "change column", col.Name, newCol.Name, PrintColumnType(newCol))
+	col := state.Search(ScopeKeyCurrentModifyColumn).ToColumn()
+	restCols := tbl.FilterColumns(func(c *Column) bool {
+		return c.ID != col.ID
+	})
+	afterCol := restCols[rand.Intn(len(restCols))]
+	tbl.MoveColumnAfterColumn(col, afterCol)
+	return Strs("after", afterCol.Name)
 })
 
 var MultiTableSelect = NewFn(func(state *State) Fn {
@@ -817,7 +883,7 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 		state.Store(ScopeKeyJoinPreferIndex, struct{}{})
 	}
 
-	orderByCols := ConcatColumns(tbl1.Columns, tbl2.Columns)
+	orderByCols := ConcatColumnPairs(tbl1, tbl2, tbl1.Columns, tbl2.Columns)
 	state.Store(ScopeKeyCurrentOrderByColumns, orderByCols)
 	return Or(
 		And(
@@ -855,10 +921,10 @@ var SemiJoinStmt = NewFn(func(state *State) Fn {
 	var cols1, cols2 []*Column
 	if state.Exists(ScopeKeyJoinPreferIndex) {
 		cols1 = t1.FilterColumns(func(c *Column) bool {
-			return len(c.relatedIndices) > 0
+			return c.ColumnHasIndex(t1)
 		})
 		cols2 = t2.FilterColumns(func(c *Column) bool {
-			return len(c.relatedIndices) > 0
+			return c.ColumnHasIndex(t2)
 		})
 	}
 	if len(cols1) == 0 {
@@ -868,7 +934,7 @@ var SemiJoinStmt = NewFn(func(state *State) Fn {
 		cols2 = t2.Columns
 	}
 	c1, c2 := RandomCompatibleColumnPair(cols1, cols2)
-	state.Store(ScopeKeyCurrentOrderByColumns, t1.Columns)
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(t1, t1.Columns))
 	// TODO: Support exists subquery.
 	return And(
 		Str("select"), HintTiFlash, HintJoin,
@@ -894,9 +960,9 @@ var JoinPredicate = NewFn(func(state *State) Fn {
 		col2 = t2.GetRandColumn()
 	}
 	return And(
-		Str(col1.QualifiedName(state)),
+		Str(PrintQualifiedColumnName(t1, col1)),
 		CompareSymbol,
-		Str(col2.QualifiedName(state)),
+		Str(PrintQualifiedColumnName(t2, col2)),
 	)
 })
 
@@ -930,9 +996,9 @@ var JoinHintWithIndex = NewFn(func(state *State) Fn {
 	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
 	t1, t2 := tbls[0], tbls[1]
 	return Or(
-		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, "*/"),
-		Strs("/*+ inl_hash_join(", t1.Name, ",", t2.Name, "*/"),
-		Strs("/*+ inl_merge_join(", t1.Name, ",", t2.Name, "*/"),
+		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, ") */"),
+		Strs("/*+ inl_hash_join(", t1.Name, ",", t2.Name, ") */"),
+		Strs("/*+ inl_merge_join(", t1.Name, ",", t2.Name, ") */"),
 	)
 })
 

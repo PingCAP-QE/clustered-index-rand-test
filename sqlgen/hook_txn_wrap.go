@@ -11,7 +11,7 @@ type FnHookTxnWrap struct {
 
 const txnStartWrapName = "txnWrappedStart"
 
-func (s *FnHookTxnWrap) BeforeEvaluate(fn Fn) Fn {
+func (s *FnHookTxnWrap) BeforeEvaluate(state *State, fn Fn) Fn {
 	if fn.Info == Start.Info {
 		return fn
 	}
@@ -52,7 +52,7 @@ func (s *FnHookTxnWrap) startTxn() string {
 	return chosenFn.Eval(nil)
 }
 
-func (s *FnHookTxnWrap) AfterEvaluate(fn Fn, result string) string {
+func (s *FnHookTxnWrap) AfterEvaluate(state *State, fn Fn, result string) string {
 	if fn.Info != txnStartWrapName {
 		return result
 	}

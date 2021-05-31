@@ -15,6 +15,7 @@ func (s *State) GenNewTable() *Table {
 	id := s.AllocGlobalID(ScopeKeyTableUniqID)
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
+	newTbl.Collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -25,6 +26,27 @@ func (s *State) GenNewCTE() *Table {
 		ID:   -1, // we do not use the id in CTE
 		Name: fmt.Sprintf("cte_%d", id),
 	}
+}
+
+func (s *State) Clone() *State {
+	if len(s.scope) != 1 {
+		log.Printf("Clone failed with len(s.scope): %d != 1, it's in the middle state", len(s.scope))
+		return nil
+	}
+	s1 := *s
+	s1.tables = make([]*Table, 0, len(s.tables))
+	for _, tbl := range s.tables {
+		s1.tables = append(s1.tables, tbl.Clone(nil, nil, nil))
+	}
+	s1.scope = make([]map[ScopeKeyType]ScopeObj, 0, len(s.scope))
+	for _, v := range s.scope {
+		temp := map[ScopeKeyType]ScopeObj{}
+		for k, v := range v {
+			temp[k] = v
+		}
+		s1.scope = append(s1.scope, temp)
+	}
+	return &s1
 }
 
 func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
@@ -67,36 +89,37 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	if !col.Tp.DisallowDefaultValue() && RandomBool() {
 		col.defaultVal = col.RandomValue()
 	}
-	col.relatedIndices = map[int]struct{}{}
 	return col
-}
-
-func (s *State) GenNewColumn() *Column {
-	tps := s.SearchConfig(ConfigKeyArrayAllowColumnTypes).ToColumnTypesOrDefault(ColumnTypeAllTypes)
-	return s.GenNewColumnWithType(tps...)
 }
 
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	var totalCols []*Column
-	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
-		// Make sure the first column is not bit || enum || set.
-		firstColCandidates := tbl.FilterColumns(func(c *Column) bool {
-			return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
+	totalCols := tbl.Columns.Clone()
+	keySizeLimit := DefaultKeySizeLimit
+	if pkIdx := tbl.GetPrimaryKeyIndex(); pkIdx != nil && s.ExistsConfig(ConfigKeyUnitLimitIndexKeyLength) {
+		pkColSize := pkIdx.Columns.EstimateSizeInBytes()
+		keySizeLimit -= pkColSize
+		totalCols = totalCols.FilterColumns(func(c *Column) bool {
+			return c.EstimateSizeInBytes() < keySizeLimit
 		})
-		if len(firstColCandidates) == 0 {
-			totalCols = tbl.GetRandColumnsNonEmpty()
-		} else {
-			totalCols = append(totalCols, firstColCandidates[rand.Intn(len(firstColCandidates))])
-			totalCols = append(totalCols, tbl.GetRandColumns()...)
+		if len(totalCols) == 0 {
+			return nil
 		}
-	} else {
-		totalCols = tbl.GetRandColumnsNonEmpty()
 	}
-	idx.Columns = LimitIndexColumnSize(totalCols)
+	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
+		totalCols = ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols)
+	} else {
+		totalCols = totalCols.GetRandColumnsNonEmpty()
+	}
+	idx.Columns = LimitIndexColumnSize(totalCols, keySizeLimit)
 	idx.ColumnPrefix = GenPrefixLen(s, totalCols)
-	idx.Tp = GenIndexType(tbl, idx)
+	idx.Tp = GenIndexType(s, tbl, idx)
+	if idx.IsUnique() && s.Exists(ScopeKeyCurrentPartitionColumn) {
+		partitionedCol := s.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+		// all partitioned Columns should be contained in every unique/primary index.
+		idx.AppendColumnIfNotExists(partitionedCol)
+	}
 	return idx
 }
 
@@ -112,20 +135,26 @@ func GenPrefixLen(state *State, cols []*Column) []int {
 	return prefixLens
 }
 
-func LimitIndexColumnSize(cols []*Column) []*Column {
+func LimitIndexColumnSize(cols []*Column, sizeLimit int) []*Column {
 	maxIdx, keySize := len(cols), 0
 	for i, c := range cols {
 		keySize += c.EstimateSizeInBytes()
-		if keySize > DefaultKeySize {
-			maxIdx = i - 1
+		if keySize > sizeLimit {
+			maxIdx = i
 			break
 		}
 	}
+	Assert(maxIdx > 0)
 	return cols[:maxIdx]
 }
 
-func GenIndexType(tbl *Table, idx *Index) IndexType {
-	if !tbl.containsPK && !idx.HasDefaultNullColumn() {
+func GenIndexType(s *State, tbl *Table, idx *Index) IndexType {
+	partColDefNull := false
+	if s.Exists(ScopeKeyCurrentPartitionColumn) {
+		partitionedCol := s.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
+		partColDefNull = partitionedCol.defaultVal == "null"
+	}
+	if !tbl.containsPK && !idx.HasDefaultNullColumn() && !partColDefNull {
 		tbl.containsPK = true
 		return IndexTypePrimary
 	} else {

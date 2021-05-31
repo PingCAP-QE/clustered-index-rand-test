@@ -113,16 +113,20 @@ func Repeat(fn Fn, sep Fn) Fn {
 		var resStr strings.Builder
 		count := randGenRepeatCount(state, fn)
 		for i := 0; i < count; i++ {
-			if i != 0 {
+			res := fn.Eval(state)
+			Assert(!state.invalid)
+			s := strings.Trim(res, " ")
+			if len(s) == 0 {
+				continue
+			}
+			resStr.WriteString(s)
+			if i < count-1 {
 				sepRes := sep.Eval(state)
 				Assert(!state.invalid)
 				resStr.WriteString(" ")
 				resStr.WriteString(sepRes)
 				resStr.WriteString(" ")
 			}
-			res := fn.Eval(state)
-			Assert(!state.invalid)
-			resStr.WriteString(strings.Trim(res, " "))
 		}
 		return resStr.String()
 	}
