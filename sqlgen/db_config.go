@@ -10,6 +10,7 @@ const (
 	ConfigKeyProbabilityTiFlashTable                // value example: 50*Percent
 	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
 	ConfigKeyUnitFirstColumnIndexable               // value example: struct{}{}
+	ConfigKeyUnitLimitIndexKeyLength                // value example: struct{}{}
 	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
 	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
 	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}

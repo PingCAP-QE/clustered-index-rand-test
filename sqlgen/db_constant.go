@@ -293,7 +293,7 @@ const (
 	ScopeKeyCTEAsNameID
 )
 
-const DefaultKeySize = 3072
+const DefaultKeySizeLimit = 3072
 
 const SelectOutFileDir = "/tmp/tidb_tp_test_outfile"
 

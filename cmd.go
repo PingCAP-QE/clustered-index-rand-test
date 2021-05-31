@@ -49,6 +49,7 @@ func checkSyntaxCmd() *cobra.Command {
 
 			state := sqlgen.NewState()
 			queries := generatePlainSQLs(state, stmtCount)
+			//queries := generateCreateTables(state, stmtCount)
 
 			for i, query := range queries {
 				if debug {
@@ -210,6 +211,18 @@ func generatePlainSQLs(state *sqlgen.State, count int) []string {
 	sqls := make([]string, 0, count)
 	for i := 0; i < count; i++ {
 		sqls = append(sqls, sqlgen.Start.Eval(state))
+	}
+	return sqls
+}
+
+func generateCreateTables(state *sqlgen.State, count int) []string {
+	sqls := make([]string, 0, count+1)
+	sqls = append(sqls, "set @@tidb_enable_clustered_index=1")
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, count)
+	state.StoreConfig(sqlgen.ConfigKeyUnitLimitIndexKeyLength, struct{}{})
+	state.SetWeight(sqlgen.SwitchClustered, 0)
+	for i := 0; i < count; i++ {
+		sqls = append(sqls, sqlgen.CreateTable.Eval(state))
 	}
 	return sqls
 }

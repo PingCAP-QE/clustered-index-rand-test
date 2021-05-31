@@ -371,6 +371,14 @@ func (cols Columns) ContainColumn(c *Column) bool {
 	return false
 }
 
+func (cols Columns) EstimateSizeInBytes() int {
+	total := 0
+	for _, c := range cols {
+		total += c.EstimateSizeInBytes()
+	}
+	return total
+}
+
 func (c *Column) ColumnHasIndex(t *Table) bool {
 	for _, idx := range t.Indices {
 		if idx.ContainsColumn(c) {

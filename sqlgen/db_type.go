@@ -65,7 +65,7 @@ type Index struct {
 	Id           int
 	Name         string
 	Tp           IndexType
-	Columns      []*Column
+	Columns      Columns
 	ColumnPrefix []int
 }
 
