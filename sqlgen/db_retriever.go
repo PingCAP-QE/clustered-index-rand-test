@@ -22,11 +22,11 @@ func (s *State) GetRandTableOrCTE() *Table {
 func (s *State) GetRandTableOrCTEs() Tables {
 	tbls := make([]*Table, 0)
 	for _, t := range s.tables {
-		tbls = append(tbls, &(*t))
+		tbls = append(tbls, t)
 	}
 	for _, cte := range s.ctes {
 		for _, c := range cte {
-			tbls = append(tbls, &(*c))
+			tbls = append(tbls, c)
 		}
 	}
 
