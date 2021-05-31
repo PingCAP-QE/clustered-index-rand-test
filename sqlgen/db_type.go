@@ -87,7 +87,6 @@ func NewState() *State {
 	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
-	s.AppendHook(NewFnHookPred().Build([]Fn{DDLStmt, FlashBackTable, CreateTable, CreateTableLike, SplitRegion}))
 	// s.AppendHook(NewFnHookTxnWrap(20))
 	return s
 }
