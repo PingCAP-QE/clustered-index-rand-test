@@ -70,6 +70,8 @@ const (
 	ColumnTypeTime
 	ColumnTypeDatetime
 	ColumnTypeTimestamp
+
+	ColumnTypeMax
 )
 
 type ColumnTypes []ColumnType
