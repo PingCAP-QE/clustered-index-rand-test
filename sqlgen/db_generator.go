@@ -28,6 +28,10 @@ func (s *State) GenNewCTE() *CTE {
 }
 
 func (s *State) Clone() *State {
+	if len(s.scope) != 1 {
+		log.Printf("Clone failed with len(s.scope): %d != 1, it's in the middle state", len(s.scope))
+		return nil
+	}
 	s1 := *s
 	s1.tables = make([]*Table, 0, len(s.tables))
 	for _, tbl := range s.tables {

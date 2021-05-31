@@ -87,6 +87,7 @@ func NewState() *State {
 	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
+	s.AppendHook(NewFnHookHint(s))
 	// s.AppendHook(NewFnHookTxnWrap(20))
 	return s
 }
