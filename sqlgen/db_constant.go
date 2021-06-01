@@ -38,7 +38,7 @@ func (c *Column) EstimateSizeInBytes() int {
 		return 8
 	case ColumnTypeTimestamp:
 		return 4
-	case ColumnTypeJson:
+	case ColumnTypeJSON:
 		return c.arg1
 	}
 	panic(fmt.Sprintf("unknown column type %d", c.Tp))
@@ -72,7 +72,7 @@ const (
 	ColumnTypeTime
 	ColumnTypeDatetime
 	ColumnTypeTimestamp
-	ColumnTypeJson
+	ColumnTypeJSON
 
 	ColumnTypeMax
 )
@@ -112,7 +112,7 @@ var ColumnTypeAllTypes = ColumnTypes{
 	ColumnTypeTime,
 	ColumnTypeDatetime,
 	ColumnTypeTimestamp,
-	ColumnTypeJson,
+	ColumnTypeJSON,
 }
 
 var ColumnTypeIntegerTypes = ColumnTypes{
@@ -214,7 +214,7 @@ func (c ColumnType) IsPointGetableType() bool {
 // BLOB/TEXT/JSON column can't have a default value.
 func (c ColumnType) DisallowDefaultValue() bool {
 	// ERROR 1101 (42000): BLOB/TEXT/JSON column 'a' can't have a default value
-	return c == ColumnTypeText || c == ColumnTypeBlob || c == ColumnTypeJson
+	return c == ColumnTypeText || c == ColumnTypeBlob || c == ColumnTypeJSON
 }
 
 func (c ColumnType) String() string {
@@ -263,7 +263,7 @@ func (c ColumnType) String() string {
 		return "datetime"
 	case ColumnTypeTimestamp:
 		return "timestamp"
-	case ColumnTypeJson:
+	case ColumnTypeJSON:
 		return "json"
 	default:
 		return fmt.Sprintf("unknown: %d", c)

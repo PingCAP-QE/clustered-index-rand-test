@@ -94,10 +94,9 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	totalCols := tbl.Columns.Clone()
 	// json column can't be used as index column.
-	totalCols = totalCols.FilterColumns(func(c *Column) bool {
-		return c.Tp != ColumnTypeJson
+	totalCols := tbl.Columns.FilterColumns(func(c *Column) bool {
+		return c.Tp != ColumnTypeJSON
 	})
 	if len(totalCols) == 0 {
 		return nil
@@ -254,7 +253,7 @@ func (c *Column) ZeroValue() string {
 		return fmt.Sprintf("'2000-01-01'")
 	case ColumnTypeTime:
 		return fmt.Sprintf("'00:00:00'")
-	case ColumnTypeJson:
+	case ColumnTypeJSON:
 		return "NULL"
 	default:
 		return "invalid data type"
@@ -336,7 +335,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return RandDates(count)
 	case ColumnTypeTime:
 		return RandTimes(count)
-	case ColumnTypeJson:
+	case ColumnTypeJSON:
 		return RandJsons(count)
 	default:
 		log.Fatalf("invalid column type %v", c.Tp)
@@ -344,34 +343,34 @@ func (c *Column) RandomValuesAsc(count int) []string {
 	}
 }
 
-type JsonType uint8
+type JSONType uint8
 
 const (
-	TypeCodeObject JsonType = iota
-	TypeCodeArray
-	TypeCodeLiteral
-	TypeCodeInt64
-	TypeCodeUint64
-	TypeCodeFloat64
-	TypeCodeString
+	JSONTypeCodeObject JSONType = iota
+	JSONTypeCodeArray
+	JSONTypeCodeLiteral
+	JSONTypeCodeInt64
+	JSONTypeCodeUint64
+	JSONTypeCodeFloat64
+	JSONTypeCodeString
 )
 
-var jMap = map[JsonType][]string{}
+var jMap = map[JSONType][]string{}
 
 func init() {
-	jMap[TypeCodeObject] = []string{"\"{\"obj0\": 10}\"", "\"{\"obj1\": {\"sub_obj0\":100}}\""}
-	jMap[TypeCodeArray] = []string{"\"[-1, 0, 1]\"", "\"[3, 2, 1]\"", "\"[1, 1, 1]\""}
-	jMap[TypeCodeLiteral] = []string{"\"null\"", "\"true\"", "\"false\""}
-	jMap[TypeCodeInt64] = []string{"\"-22\"", "\"33\"", "\"-44\""}
-	jMap[TypeCodeUint64] = []string{"\"55\"", "\"66\"", "\"77\""}
-	jMap[TypeCodeFloat64] = []string{"\"323232323.3232323232\"", "\"12121212.1212121212\""}
-	jMap[TypeCodeString] = []string{"\"\"json string1\"\"", "\"\"json string2\"\"", "\"\"json string3\"\""}
+	jMap[JSONTypeCodeObject] = []string{"\"{\"obj0\": 10}\"", "\"{\"obj1\": {\"sub_obj0\":100}}\""}
+	jMap[JSONTypeCodeArray] = []string{"\"[-1, 0, 1]\"", "\"[3, 2, 1]\"", "\"[1, 1, 1]\""}
+	jMap[JSONTypeCodeLiteral] = []string{"\"null\"", "\"true\"", "\"false\""}
+	jMap[JSONTypeCodeInt64] = []string{"\"-22\"", "\"33\"", "\"-44\""}
+	jMap[JSONTypeCodeUint64] = []string{"\"55\"", "\"66\"", "\"77\""}
+	jMap[JSONTypeCodeFloat64] = []string{"\"323232323.3232323232\"", "\"12121212.1212121212\""}
+	jMap[JSONTypeCodeString] = []string{"\"\"json string1\"\"", "\"\"json string2\"\"", "\"\"json string3\"\""}
 }
 
 func RandJsons(count int) []string {
 	res := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		jsonType := JsonType(rand.Intn(len(jMap)))
+		jsonType := JSONType(rand.Intn(len(jMap)))
 		length := len(jMap[jsonType])
 		res = append(res, jMap[jsonType][rand.Intn(length)])
 	}
