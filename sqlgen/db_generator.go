@@ -242,7 +242,7 @@ func (p *Prepare) GenAssignments() []string {
 
 func (c *Column) ZeroValue() string {
 	switch c.Tp {
-	case ColumnTypeTinyInt, ColumnTypeSmallInt, ColumnTypeMediumInt, ColumnTypeInt, ColumnTypeBigInt, ColumnTypeBoolean:
+	case ColumnTypeTinyInt, ColumnTypeSmallInt, ColumnTypeMediumInt, ColumnTypeInt, ColumnTypeBigInt, ColumnTypeBoolean, ColumnTypeYear:
 		return "0"
 	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal, ColumnTypeBit:
 		return "0"
@@ -336,6 +336,8 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return RandDates(count)
 	case ColumnTypeTime:
 		return RandTimes(count)
+	case ColumnTypeYear:
+		return RandYear(count)
 	case ColumnTypeJSON:
 		return RandJsons(count)
 	default:
@@ -464,6 +466,10 @@ func RandEnums(args []string, count int) []string {
 		result[i] = fmt.Sprintf("'%s'", args[nums[i]])
 	}
 	return result
+}
+
+func RandYear(count int)[]string{
+	return RandGoTimes(count, "2006")
 }
 
 func RandDates(count int) []string {

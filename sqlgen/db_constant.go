@@ -10,7 +10,7 @@ func (c *Column) EstimateSizeInBytes() int {
 	switch c.Tp {
 	case ColumnTypeInt:
 		return 4
-	case ColumnTypeBoolean, ColumnTypeTinyInt:
+	case ColumnTypeBoolean, ColumnTypeTinyInt, ColumnTypeYear:
 		return 1
 	case ColumnTypeSmallInt:
 		return 2
@@ -72,6 +72,7 @@ const (
 	ColumnTypeTime
 	ColumnTypeDatetime
 	ColumnTypeTimestamp
+	ColumnTypeYear
 	ColumnTypeJSON
 
 	ColumnTypeMax
@@ -112,6 +113,7 @@ var ColumnTypeAllTypes = ColumnTypes{
 	ColumnTypeTime,
 	ColumnTypeDatetime,
 	ColumnTypeTimestamp,
+	ColumnTypeYear,
 	ColumnTypeJSON,
 }
 
@@ -263,6 +265,8 @@ func (c ColumnType) String() string {
 		return "datetime"
 	case ColumnTypeTimestamp:
 		return "timestamp"
+	case ColumnTypeYear:
+		return "year"
 	case ColumnTypeJSON:
 		return "json"
 	default:
