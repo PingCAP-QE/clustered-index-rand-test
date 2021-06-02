@@ -172,9 +172,15 @@ func (s *testSuite) TestExampleColumnTypeChangeWithGivenTypes(c *C) {
 	}
 	for i := 0; i < 20; i++ {
 		state.CreateScope()
-		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{state.GetRandTable()})
+		randTable := state.GetRandTable()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{randTable})
 		query := sqlgen.AlterColumn.Eval(state)
-		c.Assert(strings.Contains(query, "tinyint"), IsTrue, Commentf("%s", query))
-		state.DestroyScope()
+		if len(query) == 0 {
+			c.Assert(randTable.GetRandNonPKColumn(), IsNil)
+			state.SetValid(true)
+		} else {
+			c.Assert(strings.Contains(query, "tinyint"), IsTrue, Commentf("%s", query))
+			state.DestroyScope()
+		}
 	}
 }

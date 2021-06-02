@@ -326,3 +326,11 @@ func (s *State) GetCTECount() int {
 
 	return c
 }
+
+func (s *State) IsValid() bool {
+	return !s.invalid
+}
+
+func (s *State) SetValid(valid bool) {
+	s.invalid = !valid
+}

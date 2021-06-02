@@ -21,5 +21,6 @@ func (h *FnHookReplacer) BeforeEvaluate(state *State, fn Fn) Fn {
 func NewFnHookReplacer() *FnHookReplacer {
 	return &FnHookReplacer{
 		FnHookDefault: NewFnHookDefault("replacer"),
+		dict:          map[string]Fn{},
 	}
 }

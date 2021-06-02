@@ -13,7 +13,7 @@ func (d *FnHookPred) BeforeEvaluate(state *State, fn Fn) Fn {
 }
 
 func (d *FnHookPred) AfterEvaluate(state *State, fn Fn, result string) string {
-	if state.invalid {
+	if state.IsValid() {
 		return result
 	}
 	for _, mf := range d.toMatchFns {

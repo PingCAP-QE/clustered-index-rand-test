@@ -32,7 +32,7 @@ func And(fns ...Fn) Fn {
 				resStr.WriteString(" ")
 			}
 			res := f.Eval(state)
-			Assert(!state.invalid)
+			Assert(state.IsValid())
 			resStr.WriteString(strings.Trim(res, " "))
 		}
 		return resStr.String()
@@ -48,14 +48,14 @@ func Or(fns ...Fn) Fn {
 			chosenFnIdx := randSelectByWeight(state, fns)
 			chosenFn := fns[chosenFnIdx]
 			result := chosenFn.Eval(state)
-			if !state.invalid {
+			if state.IsValid() {
 				return result
 			}
-			state.invalid = false
+			state.SetValid(true)
 			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
 		}
 		// Need backtracking.
-		state.invalid = true
+		state.SetValid(false)
 		return ""
 	}
 	return ret
@@ -114,7 +114,7 @@ func Repeat(fn Fn, sep Fn) Fn {
 		count := randGenRepeatCount(state, fn)
 		for i := 0; i < count; i++ {
 			res := fn.Eval(state)
-			Assert(!state.invalid)
+			Assert(state.IsValid())
 			s := strings.Trim(res, " ")
 			if len(s) == 0 {
 				continue
@@ -122,7 +122,7 @@ func Repeat(fn Fn, sep Fn) Fn {
 			resStr.WriteString(s)
 			if i < count-1 {
 				sepRes := sep.Eval(state)
-				Assert(!state.invalid)
+				Assert(state.IsValid())
 				resStr.WriteString(" ")
 				resStr.WriteString(sepRes)
 				resStr.WriteString(" ")
@@ -162,7 +162,7 @@ var Empty = NewFn(func(state *State) Fn {
 })
 
 var None = NewFn(func(state *State) Fn {
-	state.invalid = true
+	state.SetValid(false)
 	return Str("")
 })
 
