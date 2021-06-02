@@ -737,6 +737,10 @@ var AddIndex = NewFn(func(state *State) Fn {
 	}
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
 	idx := state.GenNewIndex(tbl)
+	if idx == nil {
+		// TODO: add warning log.
+		return Empty
+	}
 	tbl.AppendIndex(idx)
 
 	return Strs(
