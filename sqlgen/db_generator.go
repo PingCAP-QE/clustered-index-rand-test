@@ -20,9 +20,10 @@ func (s *State) GenNewTable() *Table {
 	return newTbl
 }
 
-func (s *State) GenNewCTE() *CTE {
+func (s *State) GenNewCTE() *Table {
 	id := s.AllocGlobalID(ScopeKeyCTEUniqID)
-	return &CTE{
+	return &Table{
+		ID:   -1, // we do not use the id in CTE
 		Name: fmt.Sprintf("cte_%d", id),
 	}
 }
@@ -94,7 +95,13 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
 	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
-	totalCols := tbl.Columns.Clone()
+	// json column can't be used as index column.
+	totalCols := tbl.Columns.FilterColumns(func(c *Column) bool {
+		return c.Tp != ColumnTypeJSON
+	})
+	if len(totalCols) == 0 {
+		return nil
+	}
 	keySizeLimit := DefaultKeySizeLimit
 	if pkIdx := tbl.GetPrimaryKeyIndex(); pkIdx != nil && s.ExistsConfig(ConfigKeyUnitLimitIndexKeyLength) {
 		pkColSize := pkIdx.Columns.EstimateSizeInBytes()
@@ -247,6 +254,8 @@ func (c *Column) ZeroValue() string {
 		return fmt.Sprintf("'2000-01-01'")
 	case ColumnTypeTime:
 		return fmt.Sprintf("'00:00:00'")
+	case ColumnTypeJSON:
+		return "NULL"
 	default:
 		return "invalid data type"
 	}
@@ -329,10 +338,46 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		return RandTimes(count)
 	case ColumnTypeYear:
 		return RandYear(count)
+	case ColumnTypeJSON:
+		return RandJsons(count)
 	default:
 		log.Fatalf("invalid column type %v", c.Tp)
 		return nil
 	}
+}
+
+type JSONType uint8
+
+const (
+	JSONTypeCodeObject JSONType = iota
+	JSONTypeCodeArray
+	JSONTypeCodeLiteral
+	JSONTypeCodeInt64
+	JSONTypeCodeUint64
+	JSONTypeCodeFloat64
+	JSONTypeCodeString
+)
+
+var jMap = map[JSONType][]string{}
+
+func init() {
+	jMap[JSONTypeCodeObject] = []string{"\"{\"obj0\": 10}\"", "\"{\"obj1\": {\"sub_obj0\":100}}\""}
+	jMap[JSONTypeCodeArray] = []string{"\"[-1, 0, 1]\"", "\"[3, 2, 1]\"", "\"[1, 1, 1]\""}
+	jMap[JSONTypeCodeLiteral] = []string{"\"null\"", "\"true\"", "\"false\""}
+	jMap[JSONTypeCodeInt64] = []string{"\"-22\"", "\"33\"", "\"-44\""}
+	jMap[JSONTypeCodeUint64] = []string{"\"55\"", "\"66\"", "\"77\""}
+	jMap[JSONTypeCodeFloat64] = []string{"\"323232323.3232323232\"", "\"12121212.1212121212\""}
+	jMap[JSONTypeCodeString] = []string{"\"\"json string1\"\"", "\"\"json string2\"\"", "\"\"json string3\"\""}
+}
+
+func RandJsons(count int) []string {
+	res := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		jsonType := JSONType(rand.Intn(len(jMap)))
+		length := len(jMap[jsonType])
+		res = append(res, jMap[jsonType][rand.Intn(length)])
+	}
+	return res
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

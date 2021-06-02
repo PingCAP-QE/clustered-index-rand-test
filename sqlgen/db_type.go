@@ -11,7 +11,7 @@ type State struct {
 	repeat map[string]Interval
 
 	tables []*Table
-	ctes   [][]*CTE
+	ctes   [][]*Table
 	scope  []map[ScopeKeyType]ScopeObj
 	config map[ConfigKeyType]ScopeObj
 
@@ -26,6 +26,7 @@ type State struct {
 type Table struct {
 	ID      int
 	Name    string
+	AsName  string
 	Columns Columns
 	Indices []*Index
 	Collate CollationType
@@ -53,12 +54,6 @@ type Column struct {
 	defaultVal string
 	isNotNull  bool
 	collate    CollationType
-}
-
-type CTE struct {
-	Name   string
-	AsName string
-	Cols   []*Column
 }
 
 type Index struct {
@@ -91,6 +86,7 @@ func NewState() *State {
 	s.StoreConfig(ConfigKeyUnitLimitIndexKeyLength, struct{}{})
 	s.StoreConfig(ConfigKeyUnitAvoidDropPrimaryKey, struct{}{})
 	// s.AppendHook(NewFnHookTxnWrap(20))
+	s.AutoSeed()
 	return s
 }
 
@@ -311,8 +307,8 @@ func (s *State) PickRandomCTEOrTableName() string {
 	return names[rand.Intn(len(names))]
 }
 
-func (s *State) GetRandomCTE() *CTE {
-	ctes := make([]*CTE, 0, 10)
+func (s *State) GetRandomCTE() *Table {
+	ctes := make([]*Table, 0, 10)
 	for _, cteL := range s.ctes {
 		for _, cte := range cteL {
 			ctes = append(ctes, cte)

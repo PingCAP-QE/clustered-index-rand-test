@@ -16,6 +16,7 @@ package sqlgen
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -144,6 +145,16 @@ func RepeatCount(fn Fn, cnt int, sep Fn) Fn {
 		}
 	}
 	return And(fns...)
+}
+
+func Join(sep string, f func(x interface{}) string, xs interface{}) Fn {
+	valueOf := reflect.ValueOf(xs)
+	strs := make([]string, 0, valueOf.Len())
+	for i := 0; i < valueOf.Len(); i++ {
+		strs = append(strs, f(valueOf.Index(i).Interface()))
+	}
+
+	return Str(strings.Join(strs, sep))
 }
 
 var Empty = NewFn(func(state *State) Fn {
