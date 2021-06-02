@@ -560,9 +560,15 @@ var MultipleRowVals = NewFn(func(state *State) Fn {
 })
 
 var AssignClause = NewFn(func(state *State) Fn {
-	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	randCol := tbl.GetRandColumn()
-	return Strs(randCol.Name, "=", randCol.RandomValue())
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	anotherTbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	return And(
+		Strs(tbl.Name, ".", tbl.GetRandColumn().Name, "="),
+		Or(
+			Str(tbl.GetRandColumn().RandomValue()),
+			Strs(anotherTbl.Name, ".", anotherTbl.GetRandColumn().Name),
+		),
+	)
 })
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
@@ -575,12 +581,16 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 })
 
 var CommonUpdate = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
-	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
-	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
+	tbls := state.GetRandTableOrCTEs()
+	state.Store(ScopeKeyCurrentTables, tbls)
+	tbl := tbls[rand.Intn(len(tbls))]
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
 	return And(
-		Str("update"), Str(tbl.Name), Str("set"),
+		Str("update"),
+		Join(",", func(x interface{}) string {
+			return x.(*Table).Name
+		}, tbls),
+		Str("set"),
 		Repeat(AssignClause.SetR(1, 3), Str(",")),
 		Str("where"),
 		Predicates,
@@ -597,24 +607,30 @@ var AnalyzeTable = NewFn(func(state *State) Fn {
 })
 
 var CommonDelete = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbls := state.GetRandTableOrCTEs()
 	var col *Column
 	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
-		col = tbl.GetRandIndexFirstColumn()
+		col = tbls[rand.Intn(len(tbls))].GetRandIndexFirstColumn()
 	} else {
-		col = tbl.GetRandColumn()
+		col = tbls[rand.Intn(len(tbls))].GetRandColumn()
 	}
-	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
-	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
+	state.Store(ScopeKeyCurrentTables, tbls)
+	tbl := tbls[rand.Intn(len(tbls))]
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
 
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
 
+	joins := Join(",", func(x interface{}) string {
+		return x.(*Table).Name
+	}, tbls)
+
 	return And(
-		Str("delete from"),
-		Str(tbl.Name),
+		Str("delete"),
+		joins,
+		Str("from"),
+		joins,
 		Str("where"),
 		Or(
 			And(Predicates),
@@ -1138,179 +1154,222 @@ var UnionOption = NewFn(func(state *State) Fn {
 	)
 })
 
-var CTEStartWrapper = NewFn(func(state *State) Fn {
-	var cteStart, simpleCTEQuery, withClause, cte, queryExpressionParens Fn
-	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
-	cteStart = NewFn(func(state *State) Fn {
-		state.IncCTEDeep()
-		return And(withClause, simpleCTEQuery)
-	})
-	simpleCTEQuery = NewFn(func(state *State) Fn {
-		parentCTEColCount := state.ParentCTEColCount()
-		ctes := state.PopCTE()
-		cteNames := make([]string, 0, len(ctes))
-		colNames := make([]string, 0, len(ctes)*2)
-		if rand.Intn(10) == 0 {
-			c := rand.Intn(len(ctes))
-			for i := 0; i < c; i++ {
-				ctes = append(ctes, ctes[rand.Intn(len(ctes))])
-			}
-		}
-		for i := range ctes {
-			ctes[i].AsName = fmt.Sprintf("cte_as_%d", state.AllocGlobalID(ScopeKeyCTEAsNameID))
-			cteNames = append(cteNames, fmt.Sprintf("%s as %s", ctes[i].Name, ctes[i].AsName))
-			for _, col := range ctes[i].Cols {
-				colNames = append(colNames, fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
-			}
-		}
+// a replacement to avoid initialization loop
+var CTEQueryStatementReplacement Fn
 
-		rand.Shuffle(len(colNames[1:]), func(i, j int) {
-			colNames[1+i], colNames[1+j] = colNames[1+j], colNames[1+i]
-		})
-		// todo: it can infer the cte or the common table
-		field := "*"
-		if parentCTEColCount != 0 {
-			field = strings.Join(colNames[:parentCTEColCount], ",")
-		}
-		return And(
-			Str("("),
-			Str("select"),
-			Str(field),
-			Str("from"),
-			Str(strings.Join(cteNames, ",")),
-			If(rand.Intn(10) == 0,
-				Strs("where exists ( select * from", cteNames[0], "where", colNames[0], "< 3 )"),
-			),
-			If(parentCTEColCount == 0,
-				And(
-					Str("order by"),
-					Str(strings.Join(colNames, ",")),
-				),
-			),
-			And(Str("limit"), Str(RandomNum(0, 20))),
-			Str(")"),
-		)
-	})
-
-	withClause = NewFn(func(state *State) Fn {
-		return And(
-			Str("with"),
-			Or(
-				If(ShouldValid(validSQLPercent), Str("recursive")),
-				Str("recursive"),
-			),
-			Repeat(cte.SetR(1, 3), Str(",")),
-		)
-	})
-
-	cte = NewFn(func(state *State) Fn {
-		cte := state.GenNewCTE()
-		colCnt := state.ParentCTEColCount()
-		if colCnt == 0 {
-			colCnt = 2
-		}
-		cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt))
-		for i := 0; i < colCnt+rand.Intn(4); i++ {
-			cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt, ColumnTypeChar))
-		}
-		if !ShouldValid(validSQLPercent) {
-			if RandomBool() && state.GetCTECount() != 0 {
-				cte.Name = state.GetRandomCTE().Name
-			} else {
-				cte.Name = state.GetRandTable().Name
-			}
-		}
-		state.PushCTE(cte)
-
-		return And(
-			Str(cte.Name),
-			Strs("(", PrintColumnNamesWithoutPar(cte.Cols, ""), ")"),
-			Str("AS"),
-			queryExpressionParens,
-		)
-	})
-
-	queryExpressionParens = NewFn(func(state *State) Fn {
-		cteSeedPart := NewFn(func(state *State) Fn {
-			tbl := state.GetRandTable()
-			currentCTE := state.CurrentCTE()
-			fields := make([]string, len(currentCTE.Cols)-1)
-			for i := range fields {
-				switch rand.Intn(3) {
-				case 0:
-					cols := tbl.FilterColumns(func(column *Column) bool {
-						return column.Tp == currentCTE.Cols[i+1].Tp
-					})
-					fields[i] = cols[rand.Intn(len(cols))].Name
-				case 1:
-					fields[i] = currentCTE.Cols[i+1].RandomValue()
-				case 2:
-					if ShouldValid(validSQLPercent) {
-						fields[i] = PrintConstantWithFunction(currentCTE.Cols[i+1].Tp)
-					} else {
-						fields[i] = fmt.Sprintf("a") // for unknown column
-					}
-				}
-			}
-
-			if !ShouldValid(validSQLPercent) {
-				fields = append(fields, "1")
-			}
-
-			return Or(
-				And(
-					Str("select 1,"),
-					Str(strings.Join(fields, ",")),
-					Str("from"),
-					Str(tbl.Name), // todo: it can refer the exist cte and the common table
-				).SetW(5),
-				cteStart,
-			)
-		})
-
-		cteRecursivePart := NewFn(func(state *State) Fn {
-			lastCTE := state.CurrentCTE()
-			if !ShouldValid(validSQLPercent) {
-				lastCTE = state.GetRandomCTE()
-			}
-			fields := append(make([]string, 0, len(lastCTE.Cols)), fmt.Sprintf("%s + 1", lastCTE.Cols[0].Name))
-			for _, col := range lastCTE.Cols[1:] {
-				fields = append(fields, PrintColumnWithFunction(col))
-			}
-			if !ShouldValid(validSQLPercent) {
-				rand.Shuffle(len(fields[1:]), func(i, j int) {
-					fields[1+i], fields[1+j] = fields[1+j], fields[1+i]
-				})
-				if rand.Intn(20) == 0 {
-					fields = append(fields, "1")
-				}
-			}
-
-			// todo: recursive part can be a function, const
-			return Or(
-				And(
-					Str("select"),
-					Str(strings.Join(fields, ",")),
-					Str("from"),
-					Str(lastCTE.Name), // todo: it also can be a cte
-					Str("where"),
-					Str(fmt.Sprintf("%s < %d", lastCTE.Cols[0].Name, 5)),
-					Opt(And(Str("limit"), Str(RandomNum(0, 20)))),
-				),
-			)
-		})
-
-		return And(
-			Str("("), cteSeedPart,
-			Opt(
-				And(
-					Str("UNION"),
-					UnionOption,
-					cteRecursivePart,
-				),
-			),
-			Str(")"))
-	})
-
-	return cteStart
+var CTEQueryStatement = NewFn(func(state *State) Fn {
+	return And(WithClause, SimpleCTEQuery)
 })
+
+var CTEDMLStatement = NewFn(func(state *State) Fn {
+	state.ctes = state.ctes[:0]
+	return And(
+		WithClause,
+		DMLStmt,
+	)
+})
+
+var SimpleCTEQuery = NewFn(func(state *State) Fn {
+	parentCTE := state.ParentCTE()
+	ctes := state.PopCTE()
+	if rand.Intn(10) == 0 {
+		c := rand.Intn(len(ctes))
+		for i := 0; i < c; i++ {
+			ctes = append(ctes, ctes[rand.Intn(len(ctes))])
+		}
+	}
+
+	rand.Shuffle(len(ctes), func(i, j int) {
+		ctes[j], ctes[i] = ctes[i], ctes[j]
+	})
+
+	//ctes = ctes[:rand.Intn(mathutil.Min(len(ctes), 2))+1]
+
+	cteNames := make([]string, 0, len(ctes))
+	colsInfo := make(map[ColumnType][]string)
+	colNames := make([]string, 0)
+	colNames = append(colNames, "1")
+	for i := range ctes {
+		ctes[i].AsName = fmt.Sprintf("cte_as_%d", state.AllocGlobalID(ScopeKeyCTEAsNameID))
+		cteNames = append(cteNames, fmt.Sprintf("%s as %s", ctes[i].Name, ctes[i].AsName))
+		for _, col := range ctes[i].Columns {
+			if _, ok := colsInfo[col.Tp]; !ok {
+				colsInfo[col.Tp] = make([]string, 0)
+			}
+			colsInfo[col.Tp] = append(colsInfo[col.Tp], fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
+			colNames = append(colNames, fmt.Sprintf("%s.%s", ctes[i].AsName, col.Name))
+		}
+	}
+
+	// todo: it can infer the cte or the common table
+	if parentCTE != nil {
+		colNames = colNames[:1]
+		for _, c := range parentCTE.Columns[1:] {
+			if _, ok := colsInfo[c.Tp]; ok {
+				colNames = append(colNames, colsInfo[c.Tp][rand.Intn(len(colsInfo[c.Tp]))])
+			} else {
+				colNames = append(colNames, PrintConstantWithFunction(c.Tp))
+			}
+		}
+	}
+	orderByFields := make([]string, len(colNames))
+	for i := range orderByFields {
+		orderByFields[i] = fmt.Sprintf("%d", i+1)
+	}
+	return And(
+		Str("("),
+		Str("select"),
+		Str(strings.Join(colNames, ",")),
+		Str("from"),
+		Str(strings.Join(cteNames, ",")),
+		If(rand.Intn(10) == 0,
+			And(
+				Str("where exists ("),
+				Query,
+				Str(")"),
+			),
+		),
+		If(parentCTE == nil,
+			And(
+				Str("order by"),
+				Str(strings.Join(orderByFields, ",")),
+			),
+		),
+		And(Str("limit"), Str(RandomNum(0, 20))),
+		Str(")"),
+	)
+})
+
+var WithClause = NewFn(func(state *State) Fn {
+	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
+	state.IncCTEDeep()
+	return And(
+		Str("with"),
+		Or(
+			If(ShouldValid(validSQLPercent), Str("recursive")),
+			Str("recursive"),
+		),
+		Repeat(CTEDefinition.SetR(1, 3), Str(",")),
+	)
+})
+
+var CTEDefinition = NewFn(func(state *State) Fn {
+	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
+	cte := state.GenNewCTE()
+	colCnt := state.ParentCTEColCount()
+	if colCnt == 0 {
+		colCnt = 2
+	}
+	cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt))
+	for i := 0; i < colCnt+rand.Intn(2); i++ {
+		cte.AppendColumn(state.GenNewColumnWithType(ColumnTypeInt, ColumnTypeChar))
+	}
+	if !ShouldValid(validSQLPercent) {
+		if RandomBool() && state.GetCTECount() != 0 {
+			cte.Name = state.GetRandomCTE().Name
+		} else {
+			cte.Name = state.GetRandTable().Name
+		}
+	}
+	state.PushCTE(cte)
+
+	return And(
+		Str(cte.Name),
+		Strs("(", PrintColumnNamesWithoutPar(cte.Columns, ""), ")"),
+		Str("AS"),
+		CTEExpressionParens,
+	)
+})
+
+var CTESeedPart = NewFn(func(state *State) Fn {
+	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
+	tbl := state.GetRandTable()
+	currentCTE := state.CurrentCTE()
+	fields := make([]string, len(currentCTE.Columns)-1)
+	for i := range fields {
+		switch rand.Intn(4) {
+		case 0, 3:
+			cols := tbl.FilterColumns(func(column *Column) bool {
+				return column.Tp == currentCTE.Columns[i+1].Tp
+			})
+			if len(cols) != 0 {
+				fields[i] = cols[rand.Intn(len(cols))].Name
+				continue
+			}
+			fallthrough
+		case 1:
+			fields[i] = currentCTE.Columns[i+1].RandomValue()
+		case 2:
+			if ShouldValid(validSQLPercent) {
+				fields[i] = PrintConstantWithFunction(currentCTE.Columns[i+1].Tp)
+			} else {
+				fields[i] = fmt.Sprintf("a") // for unknown column
+			}
+		}
+	}
+
+	if !ShouldValid(validSQLPercent) {
+		fields = append(fields, "1")
+	}
+
+	return Or(
+		And(
+			Str("select 1,"),
+			Str(strings.Join(fields, ",")),
+			Str("from"),
+			Str(tbl.Name), // todo: it can refer the exist cte and the common table
+		).SetW(5),
+		CTEQueryStatementReplacement,
+	)
+})
+
+var CTERecursivePart = NewFn(func(state *State) Fn {
+	validSQLPercent := state.SearchConfig(ConfigKeyCTEValidSQLPercent).ToIntOrDefault(75)
+	lastCTE := state.CurrentCTE()
+	if !ShouldValid(validSQLPercent) {
+		lastCTE = state.GetRandomCTE()
+	}
+	fields := append(make([]string, 0, len(lastCTE.Columns)), fmt.Sprintf("%s + 1", lastCTE.Columns[0].Name))
+	for _, col := range lastCTE.Columns[1:] {
+		fields = append(fields, PrintColumnWithFunction(col))
+	}
+	if !ShouldValid(validSQLPercent) {
+		rand.Shuffle(len(fields[1:]), func(i, j int) {
+			fields[1+i], fields[1+j] = fields[1+j], fields[1+i]
+		})
+		if rand.Intn(20) == 0 {
+			fields = append(fields, "1")
+		}
+	}
+
+	// todo: recursive part can be a function, const
+	return Or(
+		And(
+			Str("select"),
+			Str(strings.Join(fields, ",")),
+			Str("from"),
+			Str(lastCTE.Name), // todo: it also can be a cte
+			Str("where"),
+			Str(fmt.Sprintf("%s < %d", lastCTE.Columns[0].Name, 5)),
+			Opt(And(Str("limit"), Str(RandomNum(0, 20)))),
+		),
+	)
+})
+
+var CTEExpressionParens = NewFn(func(state *State) Fn {
+	return And(
+		Str("("),
+		CTESeedPart,
+		Opt(
+			And(
+				Str("UNION"),
+				UnionOption,
+				CTERecursivePart,
+			),
+		),
+		Str(")"))
+})
+
+func init() {
+	CTEQueryStatementReplacement = CTEQueryStatement
+}

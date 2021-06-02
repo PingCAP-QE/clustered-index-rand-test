@@ -97,18 +97,15 @@ func (s *testSuite) TestExampleCTE(c *C) {
 		sql := sqlgen.CreateTable.Eval(state)
 		fmt.Println(sql)
 	}
-	for _, tb := range state.GetAllTables() {
-		state.CreateScope()
-		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
-		for i := 0; i < rowCount; i++ {
-			sql := sqlgen.InsertInto.Eval(state)
-			fmt.Println(sql)
-		}
-		state.DestroyScope()
+
+	generateInsertInto(state, rowCount)
+
+	for i := 0; i < 100; i++ {
+		fmt.Println(sqlgen.CTEQueryStatement.Eval(state))
 	}
 
 	for i := 0; i < 100; i++ {
-		fmt.Println(sqlgen.CTEStartWrapper.Eval(state))
+		fmt.Println(sqlgen.CTEDMLStatement.Eval(state), ";")
 	}
 }
 
