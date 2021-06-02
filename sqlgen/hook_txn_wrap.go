@@ -7,6 +7,7 @@ type FnHookTxnWrap struct {
 	maxTxnStmtCount int
 	inTxn           bool
 	inflightStmts   int
+	state           *State
 }
 
 const txnStartWrapName = "txnWrappedStart"
@@ -49,7 +50,7 @@ func (s *FnHookTxnWrap) startTxn() string {
 			s.inflightStmts = 0
 		}
 	}
-	return chosenFn.Eval(nil)
+	return chosenFn.Eval(s.state)
 }
 
 func (s *FnHookTxnWrap) AfterEvaluate(state *State, fn Fn, result string) string {
@@ -90,12 +91,13 @@ func (s *FnHookTxnWrap) endTxn() string {
 	} else if s.inTxn {
 		s.inflightStmts++
 	}
-	return chosenFn.Eval(nil)
+	return chosenFn.Eval(s.state)
 }
 
-func NewFnHookTxnWrap(maxTxnStmtCount int) *FnHookTxnWrap {
+func NewFnHookTxnWrap(state *State, maxTxnStmtCount int) *FnHookTxnWrap {
 	return &FnHookTxnWrap{
 		FnHookDefault:   NewFnHookDefault("txn_wrap"),
 		maxTxnStmtCount: maxTxnStmtCount,
+		state:           state,
 	}
 }
