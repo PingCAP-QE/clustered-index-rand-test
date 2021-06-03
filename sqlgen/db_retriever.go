@@ -2,7 +2,10 @@ package sqlgen
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
+
+	"github.com/cznic/mathutil"
 )
 
 func (s *State) GetRandTable() *Table {
@@ -31,21 +34,10 @@ func (s *State) GetRandTableOrCTEs() Tables {
 	rand.Shuffle(len(tbls), func(i, j int) {
 		tbls[i], tbls[j] = tbls[j], tbls[i]
 	})
-	if len(tbls) > 10 {
-		tbls = tbls[:10]
-	}
+	tbls = tbls[:mathutil.Min(10, len(tbls))]
 	n := len(tbls)
-	cubicSum := func(n int) int {
-		return n * n * (n + 1) * (n + 1) / 4
-	}
-	x := rand.Intn(cubicSum(n))
-	for i := 0; i < n; i++ {
-		if cubicSum(i) <= x && x < cubicSum(i+1) {
-			return tbls[:n-i]
-		}
-	}
-	NeverReach()
-	return nil
+	x := rand.Intn(n * n * (n + 1) * (n + 1) / 4)
+	return tbls[:n-(int(math.Sqrt(2*math.Sqrt(float64(x))+0.25)-0.5))]
 }
 
 func (s *State) IncCTEDeep() {
