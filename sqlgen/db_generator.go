@@ -340,13 +340,13 @@ const (
 var jMap = map[JSONType][]string{}
 
 func init() {
-	jMap[JSONTypeCodeObject] = []string{"\"{\\\"obj0\\\": 10}\"", "\"{\\\"obj1\\\": {\\\"sub_obj0\\\":100}}\""}
-	jMap[JSONTypeCodeArray] = []string{"\"[-1, 0, 1]\"", "\"[3, 2, 1]\"", "\"[1, 1, 1]\""}
-	jMap[JSONTypeCodeLiteral] = []string{"\"null\"", "\"true\"", "\"false\""}
-	jMap[JSONTypeCodeInt64] = []string{"\"-22\"", "\"33\"", "\"-44\""}
-	jMap[JSONTypeCodeUint64] = []string{"\"55\"", "\"66\"", "\"77\""}
-	jMap[JSONTypeCodeFloat64] = []string{"\"323232323.3232323232\"", "\"12121212.1212121212\""}
-	jMap[JSONTypeCodeString] = []string{"\"\\\"json string1\\\"\"", "\"\\\"json string2\\\"\"", "\"\\\"json string3\\\"\""}
+	jMap[JSONTypeCodeObject] = []string{`"{\"obj0\": 10}"`, `"{\"obj1\": {\"sub_obj0\":100}}"`}
+	jMap[JSONTypeCodeArray] = []string{`"[-1, 0, 1]"`, `"[3, 2, 1]"`, `"[1, 1, 1]"`}
+	jMap[JSONTypeCodeLiteral] = []string{`"null"`, `"true"`, `"false"`}
+	jMap[JSONTypeCodeInt64] = []string{`"-22"`, `"33"`, `"-44"`}
+	jMap[JSONTypeCodeUint64] = []string{`"55"`, `"66"`, `"77"`}
+	jMap[JSONTypeCodeFloat64] = []string{`"323232323.3232323232"`, `"12121212.1212121212"`}
+	jMap[JSONTypeCodeString] = []string{`"\"json string1\""`, `"\"json string2\""`, `"\"json string3\""`}
 }
 
 func RandJsons(count int) []string {
