@@ -105,7 +105,7 @@ func (s *State) AppendPrepare(pre *Prepare) {
 func (s *State) RemovePrepare(p *Prepare) {
 	var pos int
 	for i := range s.prepareStmts {
-		if s.prepareStmts[i].Id == p.Id {
+		if s.prepareStmts[i].ID == p.ID {
 			pos = i
 			break
 		}
@@ -216,7 +216,7 @@ func (t *Table) AppendIndex(idx *Index) {
 func (t *Table) RemoveIndex(idx *Index) {
 	var pos int
 	for i := range t.Indices {
-		if t.Indices[i].Id == idx.Id {
+		if t.Indices[i].ID == idx.ID {
 			pos = i
 			break
 		}

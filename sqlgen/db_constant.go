@@ -92,14 +92,14 @@ func (tps ColumnTypes) Filter(pred func(tp ColumnType) bool) ColumnTypes {
 	ret := make(ColumnTypes, 0, len(tps)/2)
 	for _, tp := range tps {
 		if pred(tp) {
-			ret = append(ret, )
+			ret = append(ret, tp)
 		}
 	}
 	return ret
 }
 
 func (tps ColumnTypes) Concat(other ColumnTypes) ColumnTypes {
-	ret := make(ColumnTypes, 0, len(tps) + len(other))
+	ret := make(ColumnTypes, 0, len(tps)+len(other))
 	for _, tp := range tps {
 		ret = append(ret, tp)
 	}
@@ -107,6 +107,15 @@ func (tps ColumnTypes) Concat(other ColumnTypes) ColumnTypes {
 		ret = append(ret, tp)
 	}
 	return ret
+}
+
+func (tps ColumnTypes) Contain(targetTp ColumnType) bool {
+	for _, tp := range tps {
+		if targetTp == tp {
+			return true
+		}
+	}
+	return false
 }
 
 var ColumnTypeAllTypes = ColumnTypes{

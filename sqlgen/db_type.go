@@ -57,7 +57,7 @@ type Column struct {
 }
 
 type Index struct {
-	Id           int
+	ID           int
 	Name         string
 	Tp           IndexType
 	Columns      Columns
@@ -65,7 +65,7 @@ type Index struct {
 }
 
 type Prepare struct {
-	Id   int
+	ID   int
 	Name string
 	Args []func() string
 }

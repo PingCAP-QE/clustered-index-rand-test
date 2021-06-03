@@ -73,7 +73,7 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 
 func (s *State) GenNewIndex(tbl *Table) *Index {
 	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
-	idx := &Index{Id: id, Name: fmt.Sprintf("idx_%d", id)}
+	idx := &Index{ID: id, Name: fmt.Sprintf("idx_%d", id)}
 	// json column can't be used as index column.
 	totalCols := tbl.Columns.FilterColumns(func(c *Column) bool {
 		return c.Tp != ColumnTypeJSON
@@ -150,7 +150,7 @@ func GenIndexType(s *State, tbl *Table, idx *Index) IndexType {
 
 func GenNewPrepare(id int) *Prepare {
 	return &Prepare{
-		Id:   id,
+		ID:   id,
 		Name: fmt.Sprintf("prepare_%d", id),
 		Args: nil,
 	}

@@ -261,8 +261,10 @@ func (t *Table) CloneCreateTableLike(state *State) *Table {
 	for _, c := range newTable.Columns {
 		c.ID = state.AllocGlobalID(ScopeKeyColumnUniqID)
 	}
+	for _, idx := range newTable.Indices {
+		idx.ID = state.AllocGlobalID(ScopeKeyIndexUniqID)
+	}
 	newTable.containsPK = false
-	newTable.Indices = nil
 	newTable.values = nil
 	newTable.colForPrefixIndex = nil
 	return newTable
