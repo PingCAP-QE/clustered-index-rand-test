@@ -33,7 +33,7 @@ type Table struct {
 
 	containsPK        bool // to ensure at most 1 pk in each table
 	values            [][]string
-	colForPrefixIndex []*Column
+	colForPrefixIndex Columns
 
 	// childTables records tables that have the same structure.
 	// A table is also its childTables.
@@ -86,7 +86,6 @@ func NewState() *State {
 	s.StoreConfig(ConfigKeyUnitLimitIndexKeyLength, struct{}{})
 	s.StoreConfig(ConfigKeyUnitAvoidDropPrimaryKey, struct{}{})
 	// s.AppendHook(NewFnHookTxnWrap(20))
-	s.AutoSeed()
 	return s
 }
 

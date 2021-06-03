@@ -1,10 +1,5 @@
 package sqlgen
 
-import (
-	"math/rand"
-	"time"
-)
-
 func (s *State) PopOneTodoSQL() (string, bool) {
 	if len(s.todoSQLs) == 0 {
 		return "", false
@@ -116,14 +111,6 @@ func (s *State) RemovePrepare(p *Prepare) {
 		}
 	}
 	s.prepareStmts = append(s.prepareStmts[:pos], s.prepareStmts[pos+1:]...)
-}
-
-func (s *State) SetRandomSeed(seed int64) {
-	rand.Seed(seed)
-}
-
-func (s *State) AutoSeed() {
-	s.SetRandomSeed(time.Now().Unix())
 }
 
 func (t *Table) AppendColumn(c *Column) {

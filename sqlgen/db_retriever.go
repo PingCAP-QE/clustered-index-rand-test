@@ -31,20 +31,21 @@ func (s *State) GetRandTableOrCTEs() Tables {
 	rand.Shuffle(len(tbls), func(i, j int) {
 		tbls[i], tbls[j] = tbls[j], tbls[i]
 	})
-
+	if len(tbls) > 10 {
+		tbls = tbls[:10]
+	}
 	n := len(tbls)
 	cubicSum := func(n int) int {
 		return n * n * (n + 1) * (n + 1) / 4
 	}
-
 	x := rand.Intn(cubicSum(n))
 	for i := 0; i < n; i++ {
 		if cubicSum(i) <= x && x < cubicSum(i+1) {
 			return tbls[:n-i]
 		}
 	}
-
-	panic("never reachable")
+	NeverReach()
+	return nil
 }
 
 func (s *State) IncCTEDeep() {
@@ -261,52 +262,18 @@ func (t *Table) GetRandRowVal(col *Column) string {
 	return "GetRandRowVal: column not found"
 }
 
-func (t *Table) Clone(tblIDFn, colIDFn, idxIDFn func() int) *Table {
-	oldID2NewCol := make(map[int]*Column, len(t.Columns))
-	newCols := make([]*Column, 0, len(t.Columns))
-	for _, c := range t.Columns {
-		newCol := *c
-		newCol.ID = c.ID
-		if colIDFn != nil {
-			newCol.ID = colIDFn()
-		}
-		oldID2NewCol[c.ID] = &newCol
-		newCols = append(newCols, &newCol)
+func (t *Table) CloneCreateTableLike(state *State) *Table {
+	newTable := t.Clone()
+	newTable.ID = state.AllocGlobalID(ScopeKeyTableUniqID)
+	newTable.Name = fmt.Sprintf("tbl_%d", newTable.ID)
+	for _, c := range newTable.Columns {
+		c.ID = state.AllocGlobalID(ScopeKeyColumnUniqID)
 	}
-	newIdxs := make([]*Index, 0, len(t.Indices))
-	for _, idx := range t.Indices {
-		idxID := idx.Id
-		if idxIDFn != nil {
-			idxID = idxIDFn()
-		}
-		newIdx := &Index{
-			Id:           idxID,
-			Name:         idx.Name,
-			Tp:           idx.Tp,
-			ColumnPrefix: idx.ColumnPrefix,
-		}
-		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
-		for _, ic := range idx.Columns {
-			newCol, ok := oldID2NewCol[ic.ID]
-			Assert(ok)
-			newIdx.Columns = append(newIdx.Columns, newCol)
-		}
-		newIdxs = append(newIdxs, newIdx)
-	}
-	tblID := t.ID
-	if tblIDFn != nil {
-		tblID = tblIDFn()
-	}
-	newTable := *t
-	newTable.ID = tblID
-	newTable.Name = fmt.Sprintf("tbl_%d", tblID)
-	newTable.Columns = newCols
-	newTable.Indices = newIdxs
+	newTable.containsPK = false
+	newTable.Indices = nil
 	newTable.values = nil
-	newTable.childTables = []*Table{&newTable}
-	// TODO: DROP TABLE need to remove itself from children tables.
-	t.childTables = append(t.childTables, &newTable)
-	return &newTable
+	newTable.colForPrefixIndex = nil
+	return newTable
 }
 
 func (t *Table) GetRandColumns() []*Column {
@@ -380,7 +347,7 @@ func (cols Columns) FilterColumnsIndices(pred func(c *Column) bool) []int {
 	return restCols
 }
 
-func (cols Columns) Clone() Columns {
+func (cols Columns) Copy() Columns {
 	newCols := make([]*Column, len(cols))
 	for i, c := range cols {
 		newCols[i] = c
@@ -389,7 +356,7 @@ func (cols Columns) Clone() Columns {
 }
 
 func (cols Columns) GetRandNColumns(n int) Columns {
-	newCols := cols.Clone()
+	newCols := cols.Copy()
 	rand.Shuffle(len(newCols), func(i, j int) {
 		cols[i], cols[j] = cols[j], cols[i]
 	})
@@ -419,6 +386,15 @@ func (cols Columns) EstimateSizeInBytes() int {
 		total += c.EstimateSizeInBytes()
 	}
 	return total
+}
+
+func (cols Columns) IndexByID(id int) int {
+	for i, c := range cols {
+		if c.ID == id {
+			return i
+		}
+	}
+	return -1
 }
 
 func (c *Column) ColumnHasIndex(t *Table) bool {

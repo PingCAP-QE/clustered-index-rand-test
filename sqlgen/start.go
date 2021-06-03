@@ -6,17 +6,9 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/cznic/mathutil"
 )
-
-func NewGenerator(state *State) func() string {
-	rand.Seed(time.Now().UnixNano())
-	return func() string {
-		return Start.Eval(state)
-	}
-}
 
 var Start = NewFn(func(state *State) Fn {
 	if s, ok := state.PopOneTodoSQL(); ok {
@@ -587,9 +579,7 @@ var CommonUpdate = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
 	return And(
 		Str("update"),
-		Join(",", func(x interface{}) string {
-			return x.(*Table).Name
-		}, tbls),
+		Str(PrintTableNames(tbls)),
 		Str("set"),
 		Repeat(AssignClause.SetR(1, 3), Str(",")),
 		Str("where"),
@@ -622,15 +612,11 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
 
-	joins := Join(",", func(x interface{}) string {
-		return x.(*Table).Name
-	}, tbls)
-
 	return And(
 		Str("delete"),
-		joins,
+		Str(PrintTableNames(tbls)),
 		Str("from"),
-		joins,
+		Str(PrintTableNames(tbls)),
 		Str("where"),
 		Or(
 			And(Predicates),
@@ -1018,13 +1004,7 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 		return None
 	}
 	tbl := state.GetRandTable()
-	newTbl := tbl.Clone(func() int {
-		return state.AllocGlobalID(ScopeKeyTableUniqID)
-	}, func() int {
-		return state.AllocGlobalID(ScopeKeyColumnUniqID)
-	}, func() int {
-		return state.AllocGlobalID(ScopeKeyIndexUniqID)
-	})
+	newTbl := tbl.CloneCreateTableLike(state)
 	state.AppendTable(newTbl)
 	return Strs("create table", newTbl.Name, "like", tbl.Name)
 })

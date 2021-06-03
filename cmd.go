@@ -5,14 +5,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	"github.com/google/uuid"
+	"github.com/pingcap/log"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	. "github.com/zyguan/just"
 	"github.com/zyguan/sqlz"
@@ -32,11 +35,12 @@ func rootCmd() *cobra.Command {
 
 func checkSyntaxCmd() *cobra.Command {
 	var (
-		stmtCount int
-		seed      string
-		debug     bool
-		dsn       string
-		failfast  bool
+		stmtCount  int
+		seed       string
+		debug      bool
+		dsn        string
+		failfast   bool
+		outputFile string
 	)
 	cmd := &cobra.Command{
 		Use:           "check-syntax",
@@ -45,6 +49,7 @@ func checkSyntaxCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parseAndSetSeed(seed)
+			fileWriter := newFileWriter(outputFile)
 			conn := setUpDatabaseConnection(dsn)
 
 			state := sqlgen.NewState()
@@ -56,6 +61,7 @@ func checkSyntaxCmd() *cobra.Command {
 					fmt.Printf("-- statement seq: %d\n", i)
 					fmt.Println(query + ";")
 				}
+				fileWriter.writeSQL(query)
 				_, err := executeQuery(conn, query)
 				if err != nil {
 					errMsg := strings.ToLower(err.Error())
@@ -77,6 +83,7 @@ func checkSyntaxCmd() *cobra.Command {
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
 	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	cmd.Flags().BoolVar(&failfast, "failfast", false, "fail on any error")
+	cmd.Flags().StringVar(&outputFile, "out", "", "the file path to put the generated SQLs")
 	return cmd
 }
 
@@ -98,6 +105,44 @@ func parseAndSetSeed(seed string) int64 {
 	}
 	fmt.Printf("current seed: %d\n", seedInt)
 	return seedInt
+}
+
+type fileWriter struct {
+	file *os.File
+}
+
+func newFileWriter(path string) *fileWriter {
+	if len(path) == 0 {
+		return &fileWriter{}
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Error("newFileWriter.OpenFile", zap.Error(err))
+		return &fileWriter{}
+	}
+	prependSQLs := []string{
+		"drop database if exists test_syntax;",
+		"create database test_syntax;",
+		"use test_syntax",
+	}
+	for _, s := range prependSQLs {
+		_, err = file.WriteString(fmt.Sprintf("%s\n", s))
+		if err != nil {
+			log.Error("newFileWriter.prependSQLs", zap.Error(err))
+			return &fileWriter{}
+		}
+	}
+	return &fileWriter{file: file}
+}
+
+func (f *fileWriter) writeSQL(query string) {
+	if f.file == nil {
+		return
+	}
+	_, err := f.file.WriteString(fmt.Sprintf("%s;\n", query))
+	if err != nil {
+		log.Error("", zap.Error(err))
+	}
 }
 
 func abtestCmd() *cobra.Command {
@@ -251,9 +296,8 @@ func printCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			state := sqlgen.NewState()
-			gen := sqlgen.NewGenerator(state)
 			for i := 0; i < count; i++ {
-				fmt.Printf("%s;\n", gen())
+				fmt.Printf("%s;\n", sqlgen.Start.Eval(state))
 			}
 			return nil
 		},
