@@ -10,7 +10,7 @@ type State struct {
 	weight map[string]int
 	repeat map[string]Interval
 
-	tables []*Table
+	tables Tables
 	ctes   [][]*Table
 	scope  []map[ScopeKeyType]ScopeObj
 	config map[ConfigKeyType]ScopeObj

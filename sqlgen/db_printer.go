@@ -2,7 +2,6 @@ package sqlgen
 
 import (
 	"fmt"
-	"math/rand"
 	"strconv"
 	"strings"
 )
@@ -175,27 +174,6 @@ func PrintFullQualifiedColName(tbl *Table, cols []*Column) string {
 		}
 	}
 	return sb.String()
-}
-
-func PrintRandomWindow(tbl *Table) string {
-	hasPartition := rand.Intn(2) == 0
-	hasFrame := rand.Intn(2) == 0
-	var partitionClause, orderByClause, frameClause string
-	if hasPartition {
-		partitionClause = fmt.Sprintf("partition by %s", tbl.GetRandColumn().Name)
-	}
-	orderByClause = fmt.Sprintf("order by %s", PrintColumnNamesWithoutPar(tbl.Columns, ""))
-	if hasFrame {
-		frames := []string{
-			"current row",
-			fmt.Sprintf("%d preceding", rand.Intn(5)),
-			fmt.Sprintf("%d following", rand.Intn(5)),
-			fmt.Sprintf("%d preceding", rand.Intn(5)),
-			fmt.Sprintf("%d following", rand.Intn(5)),
-		}
-		frameClause = fmt.Sprintf("rows between %s and %s", frames[rand.Intn(len(frames))], frames[rand.Intn(len(frames))])
-	}
-	return fmt.Sprintf("(%s %s %s)", partitionClause, orderByClause, frameClause)
 }
 
 func PrintRandomAssignments(cols []*Column) string {

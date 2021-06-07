@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
-	"github.com/google/uuid"
 	"github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -141,7 +140,7 @@ func (f *fileWriter) writeSQL(query string) {
 	}
 	_, err := f.file.WriteString(fmt.Sprintf("%s;\n", query))
 	if err != nil {
-		log.Error("", zap.Error(err))
+		log.Error("fileWriter.writeSQL", zap.Error(err))
 	}
 }
 
@@ -211,8 +210,9 @@ func abtestCmd() *cobra.Command {
 func setUpDatabaseConnection(dsn string) *sql.Conn {
 	ctx := context.Background()
 	db := Try(sql.Open("mysql", dsn)).(*sql.DB)
-	dbName := "db" + strings.ReplaceAll(uuid.New().String(), "-", "_")
+	dbName := "sqlgen_test"
 	conn := Try(sqlz.Connect(ctx, db)).(*sql.Conn)
+	Try(conn.ExecContext(ctx, "drop database if exists "+dbName))
 	Try(conn.ExecContext(ctx, "create database "+dbName))
 	Try(conn.ExecContext(ctx, "use "+dbName))
 	return conn

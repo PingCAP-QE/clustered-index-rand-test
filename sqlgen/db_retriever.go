@@ -80,6 +80,22 @@ func (ts Tables) One() *Table {
 	return ts[0]
 }
 
+func (ts Tables) Copy() Tables {
+	newTables := make(Tables, len(ts))
+	for i := range ts {
+		newTables[i] = ts[i]
+	}
+	return newTables
+}
+
+func (ts Tables) PickN(n int) []*Table {
+	newTs := ts.Copy()
+	rand.Shuffle(len(newTs), func(i, j int) {
+		newTs[i], newTs[j] = newTs[j], newTs[i]
+	})
+	return newTs[:n]
+}
+
 func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
@@ -352,7 +368,7 @@ func (cols Columns) Copy() Columns {
 func (cols Columns) GetRandNColumns(n int) Columns {
 	newCols := cols.Copy()
 	rand.Shuffle(len(newCols), func(i, j int) {
-		cols[i], cols[j] = cols[j], cols[i]
+		newCols[i], newCols[j] = newCols[j], newCols[i]
 	})
 	return newCols[:n]
 }

@@ -379,7 +379,7 @@ var WindowSelect = NewFn(func(state *State) Fn {
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	return And(
 		Str("select"), HintTiFlash, HintIndexMerge, WindowFunction, Str("over w"),
-		Str("from"), Str(tbl.Name), Str("window w as"), Str(PrintRandomWindow(tbl)),
+		Str("from"), Str(tbl.Name), Str("window w as"), WindowClause,
 		Opt(And(
 			Str("order by"),
 			Str(PrintColumnNamesWithoutPar(tbl.Columns, "")),
@@ -390,6 +390,37 @@ var WindowSelect = NewFn(func(state *State) Fn {
 		Opt(Strs("limit", RandomNum(1, 1000))),
 		ForUpdateOpt,
 	)
+})
+
+var WindowClause = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
+		return None
+	}
+	return And(Str("("), Opt(WindowPartitionBy), WindowOrderBy, Opt(WindowFrame), Str(")"))
+})
+
+var WindowPartitionBy = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
+	return Strs("partition by", PrintColumnNamesWithoutPar(cols, ""))
+})
+
+var WindowOrderBy = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
+	return Strs("order by", PrintColumnNamesWithoutPar(cols, ""))
+})
+
+var WindowFrame = NewFn(func(state *State) Fn {
+	frames := []string{
+		fmt.Sprintf("%d preceding", rand.Intn(5)),
+		"current row",
+		fmt.Sprintf("%d following", rand.Intn(5)),
+	}
+	get := func(idx int) interface{} { return frames[idx] }
+	set := func(idx int, v interface{}) { frames[idx] = v.(string) }
+	Move(rand.Intn(len(frames)), 0, get, set)
+	return Strs("rows between", frames[1], "and", frames[2])
 })
 
 var WindowFunction = NewFn(func(state *State) Fn {
@@ -554,10 +585,11 @@ var MultipleRowVals = NewFn(func(state *State) Fn {
 var AssignClause = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	anotherTbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	col := tbl.GetRandColumn()
 	return And(
-		Strs(tbl.Name, ".", tbl.GetRandColumn().Name, "="),
+		Strs(tbl.Name, ".", col.Name, "="),
 		Or(
-			Str(tbl.GetRandColumn().RandomValue()),
+			Str(col.RandomValue()),
 			Strs(anotherTbl.Name, ".", anotherTbl.GetRandColumn().Name),
 		),
 	)
@@ -598,18 +630,19 @@ var AnalyzeTable = NewFn(func(state *State) Fn {
 
 var CommonDelete = NewFn(func(state *State) Fn {
 	tbls := state.GetRandTableOrCTEs()
-	var col *Column
-	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
-		col = tbls[rand.Intn(len(tbls))].GetRandIndexFirstColumn()
-	} else {
-		col = tbls[rand.Intn(len(tbls))].GetRandColumn()
-	}
 	state.Store(ScopeKeyCurrentTables, tbls)
-	tbl := tbls[rand.Intn(len(tbls))]
-	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
+	whereTbl := tbls[rand.Intn(len(tbls))]
+	var whereCol *Column
+	if state.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
+		whereCol = whereTbl.GetRandIndexFirstColumn()
+	} else {
+		whereCol = whereTbl.GetRandColumn()
+	}
+	orderByTbl := tbls[rand.Intn(len(tbls))]
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(orderByTbl, orderByTbl.Columns.GetRandColumnsNonEmpty()))
 
 	var randRowVal = NewFn(func(state *State) Fn {
-		return Str(col.RandomValue())
+		return Str(whereCol.RandomValue())
 	})
 
 	return And(
@@ -620,11 +653,13 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		Str("where"),
 		Or(
 			And(Predicates),
-			And(Str(col.Name), Str("in"),
+			And(
+				Str(PrintQualifiedColumnName(whereTbl, whereCol)),
+				Str("in"),
 				Str("("),
 				Repeat(randRowVal.SetR(1, 9), Str(",")),
 				Str(")")),
-			And(Str(col.Name), Str("is null")),
+			And(Str(whereCol.Name), Str("is null")),
 		),
 		Opt(OrderByLimit),
 	)
@@ -864,8 +899,8 @@ var MultiTableSelect = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(HasAtLeast2Tables) {
 		return None
 	}
-	tbl1 := state.GetRandTable()
-	tbl2 := state.GetRandTable()
+	tables := state.tables.PickN(2)
+	tbl1, tbl2 := tables[0], tables[1]
 	cols1 := tbl1.GetRandColumns()
 	cols2 := tbl2.GetRandColumns()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
@@ -1016,7 +1051,7 @@ var SelectIntoOutFile = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
 	_ = os.RemoveAll(SelectOutFileDir)
-	_ = os.Mkdir(SelectOutFileDir, 0644)
+	_ = os.Mkdir(SelectOutFileDir, 0755)
 	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
 	return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
 })

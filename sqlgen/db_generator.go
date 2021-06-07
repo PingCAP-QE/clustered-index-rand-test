@@ -111,10 +111,13 @@ func (s *State) GenNewIndex(tbl *Table) *Index {
 func GenPrefixLen(state *State, cols []*Column) []int {
 	prefixLens := make([]int, len(cols))
 	for i, c := range cols {
-		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() &&
+		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() && c.arg1 > 0 &&
 			state.Roll(ConfigKeyProbabilityIndexPrefix, 20*Percent)) {
-			maxPrefix := mathutil.Min(c.arg1, 5)
-			prefixLens[i] = 1 + rand.Intn(maxPrefix+1)
+			maxLength := mathutil.Min(c.arg1, 5)
+			if maxLength == 0 {
+				maxLength = 5
+			}
+			prefixLens[i] = 1 + rand.Intn(maxLength)
 		}
 	}
 	return prefixLens

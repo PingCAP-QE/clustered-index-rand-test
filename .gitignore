@@ -9,3 +9,4 @@
 *.sql
 *.log
 /bin
+clustered-index-rand-test
