@@ -37,7 +37,11 @@ func (s *State) GetRandTableOrCTEs() Tables {
 	tbls = tbls[:mathutil.Min(10, len(tbls))]
 	n := len(tbls)
 	x := rand.Intn(n * n * (n + 1) * (n + 1) / 4)
-	return tbls[:n-(int(math.Sqrt(2*math.Sqrt(float64(x))+0.25)-0.5))]
+	tbls = tbls[:n-(int(math.Sqrt(2*math.Sqrt(float64(x))+0.25)-0.5))]
+	if len(tbls) > 1 && !s.Roll(ConfigKeyProbabilityUpdateDeleteJoin, 100*Percent) {
+		tbls = tbls[:1]
+	}
+	return tbls
 }
 
 func (s *State) IncCTEDeep() {
