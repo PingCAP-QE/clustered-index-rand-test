@@ -333,6 +333,7 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		Str("(select"), HintTiFlash, HintIndexMerge, Str("*"),
 		Str("from"), Str(tbl.Name), Str("where"), Predicates,
 		If(len(pkCols) != 0, Strs("order by", PrintColumnNamesWithoutPar(pkCols, ""))),
+		If(len(pkCols) == 0, Strs("order by", PrintColumnNamesWithoutPar(tbl.Columns, ""))),
 		Str(") ordered_tbl"),
 		GroupByColumnsOpt,
 		Opt(Str("order by aggCol")),
