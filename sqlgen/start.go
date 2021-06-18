@@ -339,7 +339,7 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 		If(len(pkCols) == 0, Strs("order by", PrintColumnNamesWithoutPar(tbl.Columns, ""))),
 		Str(") ordered_tbl"),
 		GroupByColumnsOpt,
-		Opt(Str("order by aggCol")),
+		Str("order by aggCol"),
 	}
 	if !state.ExistsConfig(ConfigKeyStableOrderBy) {
 		fns = append(fns, Opt(Strs("limit", RandomNum(1, 1000))))
