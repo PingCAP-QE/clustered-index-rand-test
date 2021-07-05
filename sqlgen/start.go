@@ -307,6 +307,9 @@ var CommonSelect = NewFn(func(state *State) Fn {
 	cols := tbl.Columns.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
+	if state.ExistsConfig(ConfigKeyStableOrderBy) {
+		orderByCols = tbl.Columns
+	}
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 	if state.Exists(ScopeKeyCurrentPrepare) {
 		paramCols := SwapOutParameterizedColumns(cols)
@@ -327,18 +330,22 @@ var AggregationSelect = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
 	pkCols := tbl.GetUniqueKeyColumns()
-	return And(
+	fns := []Fn{
 		Str("select"), HintAggToCop, AggFunction, Str("aggCol"),
 		Str("from"),
 		Str("(select"), HintTiFlash, HintIndexMerge, Str("*"),
 		Str("from"), Str(tbl.Name), Str("where"), Predicates,
 		If(len(pkCols) != 0, Strs("order by", PrintColumnNamesWithoutPar(pkCols, ""))),
+		If(len(pkCols) == 0, Strs("order by", PrintColumnNamesWithoutPar(tbl.Columns, ""))),
 		Str(") ordered_tbl"),
 		GroupByColumnsOpt,
-		Opt(Str("order by aggCol")),
-		Opt(Strs("limit", RandomNum(1, 1000))),
-		ForUpdateOpt,
-	)
+		Str("order by aggCol"),
+	}
+	if !state.ExistsConfig(ConfigKeyStableOrderBy) {
+		fns = append(fns, Opt(Strs("limit", RandomNum(1, 1000))))
+	}
+	fns = append(fns, ForUpdateOpt)
+	return And(fns...)
 })
 
 var GroupByColumnsOpt = NewFn(func(state *State) Fn {
@@ -608,7 +615,11 @@ var CommonUpdate = NewFn(func(state *State) Fn {
 	tbls := state.GetRandTableOrCTEs()
 	state.Store(ScopeKeyCurrentTables, tbls)
 	tbl := tbls[rand.Intn(len(tbls))]
-	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, tbl.Columns.GetRandColumnsNonEmpty()))
+	cols := tbl.Columns.GetRandColumnsNonEmpty()
+	if state.ExistsConfig(ConfigKeyStableOrderBy) {
+		cols = tbl.Columns
+	}
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, cols))
 	return And(
 		Str("update"),
 		Str(PrintTableNames(tbls)),
@@ -639,7 +650,11 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		whereCol = whereTbl.GetRandColumn()
 	}
 	orderByTbl := tbls[rand.Intn(len(tbls))]
-	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(orderByTbl, orderByTbl.Columns.GetRandColumnsNonEmpty()))
+	cols := orderByTbl.Columns.GetRandColumnsNonEmpty()
+	if state.ExistsConfig(ConfigKeyStableOrderBy) {
+		cols = orderByTbl.Columns
+	}
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(orderByTbl, cols))
 
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(whereCol.RandomValue())
