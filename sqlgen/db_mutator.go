@@ -211,6 +211,11 @@ func (t *Table) columnOffset(col *Column) int {
 
 func (t *Table) AppendIndex(idx *Index) {
 	t.Indices = append(t.Indices, idx)
+	if idx.Tp == IndexTypePrimary {
+		for _, c := range idx.Columns {
+			c.isNotNull = true
+		}
+	}
 }
 
 func (t *Table) RemoveIndex(idx *Index) {
