@@ -16,6 +16,11 @@ func (s *State) GenNewTable() *Table {
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.Collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
+	if !s.ExistsConfig(ConfigKeyUnitCharsetAndCollationCombine) {
+		newTbl.Charset = newTbl.Collate.GetCharset()
+	} else {
+		newTbl.Charset = CharsetType(rand.Intn(int(CharsetTypeMax)-1) + 1)
+	}
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -32,8 +37,6 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = tps[rand.Intn(len(tps))]
-	// collate is only used if the type is string.
-	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
@@ -57,10 +60,20 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	if !col.Tp.RequiredFieldLength() && rand.Intn(5) == 0 {
 		col.arg1, col.arg2 = 0, 0
 	}
-	// Adjust collation. Set binary.
+	// Set collation
 	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
 		col.collate = CollationBinary
+	} else {
+		col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
 	}
+
+	// Set charset
+	if !s.ExistsConfig(ConfigKeyUnitCharsetAndCollationCombine) {
+		col.charset = col.collate.GetCharset()
+	} else {
+		col.charset = CharsetType(rand.Intn(int(CharsetTypeMax)-1) + 1)
+	}
+
 	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()
 	}

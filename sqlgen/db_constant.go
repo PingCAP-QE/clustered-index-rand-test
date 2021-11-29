@@ -175,6 +175,8 @@ const (
 	CollationUtf8mb4GeneralCI
 	CollationUtf8UnicodeCI
 	CollationUtf8mb4UnicodeCI
+	CollationGBKBin
+	CollationGBKChineseCI
 
 	CollationTypeMax
 )
@@ -195,6 +197,52 @@ func (c CollationType) String() string {
 		return "utf8_unicode_ci"
 	case CollationUtf8mb4UnicodeCI:
 		return "utf8mb4_unicode_ci"
+	case CollationGBKBin:
+		return "gbk_bin"
+	case CollationGBKChineseCI:
+		return "gbk_chinese_ci"
+	default:
+		return fmt.Sprintf("unknown: %d", c)
+	}
+}
+
+var CollationAndCharsetTable = map[CollationType]CharsetType{
+	CollationBinary:           CharsetBinary,
+	CollationUtf8Bin:          CharsetUtf8,
+	CollationUtf8mb4Bin:       CharsetUtf8mb4,
+	CollationUtf8GeneralCI:    CharsetUtf8,
+	CollationUtf8mb4GeneralCI: CharsetUtf8mb4,
+	CollationUtf8UnicodeCI:    CharsetUtf8,
+	CollationUtf8mb4UnicodeCI: CharsetUtf8mb4,
+	CollationGBKBin:           CharsetGBK,
+	CollationGBKChineseCI:     CharsetGBK,
+}
+
+func (c CollationType) GetCharset() CharsetType {
+	return CollationAndCharsetTable[c]
+}
+
+type CharsetType int64
+
+const (
+	CharsetBinary CharsetType = iota
+	CharsetUtf8
+	CharsetUtf8mb4
+	CharsetGBK
+
+	CharsetTypeMax
+)
+
+func (c CharsetType) String() string {
+	switch c {
+	case CharsetBinary:
+		return "binary"
+	case CharsetUtf8:
+		return "utf8"
+	case CharsetUtf8mb4:
+		return "utf8mb4"
+	case CharsetGBK:
+		return "gbk"
 	default:
 		return fmt.Sprintf("unknown: %d", c)
 	}

@@ -184,3 +184,16 @@ func (s *testSuite) TestExampleColumnTypeChangeWithGivenTypes(c *C) {
 		}
 	}
 }
+
+func (s *testSuite) TestCharsetAndCollationCombine(c *C) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, 100)
+	state.StoreConfig(sqlgen.ConfigKeyUnitCharsetAndCollationCombine, struct{}{})
+	for i := 0; i < 100; i++ {
+		res := sqlgen.CreateTable.Eval(state)
+		fmt.Println(res)
+		c.Assert(len(res) > 0, IsTrue, Commentf(state.LastBrokenAssumption()))
+		c.Assert(len(res), Greater, 0, Commentf("i = %d", i))
+	}
+}
