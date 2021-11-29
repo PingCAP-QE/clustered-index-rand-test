@@ -5,24 +5,23 @@ import "math/rand"
 type ConfigKeyType int64
 
 const (
-	ConfigKeyNone                           ConfigKeyType = iota
-	ConfigKeyProbabilityIndexPrefix                       // value example: 50*Percent
-	ConfigKeyProbabilityTiFlashTable                      // value example: 50*Percent
-	ConfigKeyUnitTiFlashQueryHint                         // value example: struct{}{}
-	ConfigKeyUnitFirstColumnIndexable                     // value example: struct{}{}
-	ConfigKeyUnitLimitIndexKeyLength                      // value example: struct{}{}
-	ConfigKeyUnitPKNeedClusteredHint                      // value example: struct{}{}
-	ConfigKeyUnitIndexMergeHint                           // value example: struct{}{}
-	ConfigKeyUnitIndexMergePredicate                      // value example: struct{}{}
-	ConfigKeyUnitNonStrictTransTable                      // value example: struct{}{}
-	ConfigKeyUnitAvoidAlterPKColumn                       // value example: struct{}{}
-	ConfigKeyUnitAvoidDropPrimaryKey                      // value example: struct{}{}
-	ConfigKeyUnitCharsetAndCollationCombine               // value example: struct{}{}
-	ConfigKeyStableOrderBy                                // value example: struct{}{}
-	ConfigKeyEnumLimitOrderBy                             // value should be "none", "order-by", "limit-order-by"
-	ConfigKeyArrayAllowColumnTypes                        // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
-	ConfigKeyIntMaxTableCount                             // value example: 10
-	ConfigKeyCTEValidSQLPercent                           // value example: [0,100]
+	ConfigKeyNone                     ConfigKeyType = iota
+	ConfigKeyProbabilityIndexPrefix                 // value example: 50*Percent
+	ConfigKeyProbabilityTiFlashTable                // value example: 50*Percent
+	ConfigKeyUnitTiFlashQueryHint                   // value example: struct{}{}
+	ConfigKeyUnitFirstColumnIndexable               // value example: struct{}{}
+	ConfigKeyUnitLimitIndexKeyLength                // value example: struct{}{}
+	ConfigKeyUnitPKNeedClusteredHint                // value example: struct{}{}
+	ConfigKeyUnitIndexMergeHint                     // value example: struct{}{}
+	ConfigKeyUnitIndexMergePredicate                // value example: struct{}{}
+	ConfigKeyUnitNonStrictTransTable                // value example: struct{}{}
+	ConfigKeyUnitAvoidAlterPKColumn                 // value example: struct{}{}
+	ConfigKeyUnitAvoidDropPrimaryKey                // value example: struct{}{}
+	ConfigKeyStableOrderBy                          // value example: struct{}{}
+	ConfigKeyEnumLimitOrderBy                       // value should be "none", "order-by", "limit-order-by"
+	ConfigKeyArrayAllowColumnTypes                  // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
+	ConfigKeyIntMaxTableCount                       // value example: 10
+	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
 )
 
 const (

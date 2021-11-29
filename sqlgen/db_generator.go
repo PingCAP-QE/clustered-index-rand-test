@@ -16,11 +16,7 @@ func (s *State) GenNewTable() *Table {
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.Collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	if !s.ExistsConfig(ConfigKeyUnitCharsetAndCollationCombine) {
-		newTbl.Charset = newTbl.Collate.GetCharset()
-	} else {
-		newTbl.Charset = CharsetType(rand.Intn(int(CharsetTypeMax)-1) + 1)
-	}
+	newTbl.Charset = newTbl.Collate.GetCharset()
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -68,11 +64,7 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	}
 
 	// Set charset
-	if !s.ExistsConfig(ConfigKeyUnitCharsetAndCollationCombine) {
-		col.charset = col.collate.GetCharset()
-	} else {
-		col.charset = CharsetType(rand.Intn(int(CharsetTypeMax)-1) + 1)
-	}
+	col.charset = col.collate.GetCharset()
 
 	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()
