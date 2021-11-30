@@ -165,6 +165,13 @@ var ColumnTypeTimeTypes = ColumnTypes{
 	ColumnTypeDate, ColumnTypeTime, ColumnTypeDatetime, ColumnTypeTimestamp,
 }
 
+type Collation struct {
+	ID            int
+	CharsetName   string
+	CollationName string
+	IsDefault     bool
+}
+
 type CollationType int64
 
 const (
@@ -175,29 +182,22 @@ const (
 	CollationUtf8mb4GeneralCI
 	CollationUtf8UnicodeCI
 	CollationUtf8mb4UnicodeCI
+	CollationGBKBin
+	CollationGBKChineseCI
 
 	CollationTypeMax
 )
 
-func (c CollationType) String() string {
-	switch c {
-	case CollationBinary:
-		return "binary"
-	case CollationUtf8Bin:
-		return "utf8_bin"
-	case CollationUtf8mb4Bin:
-		return "utf8mb4_bin"
-	case CollationUtf8GeneralCI:
-		return "utf8_general_ci"
-	case CollationUtf8mb4GeneralCI:
-		return "utf8mb4_general_ci"
-	case CollationUtf8UnicodeCI:
-		return "utf8_unicode_ci"
-	case CollationUtf8mb4UnicodeCI:
-		return "utf8mb4_unicode_ci"
-	default:
-		return fmt.Sprintf("unknown: %d", c)
-	}
+var Collations = map[CollationType]*Collation{
+	CollationGBKChineseCI:     {28, "gbk", "gbk_chinese_ci", true},
+	CollationUtf8GeneralCI:    {33, "utf8", "utf8_general_ci", false},
+	CollationUtf8mb4GeneralCI: {45, "utf8mb4", "utf8mb4_general_ci", false},
+	CollationUtf8mb4Bin:       {46, "utf8mb4", "utf8mb4_bin", true},
+	CollationBinary:           {63, "binary", "binary", true},
+	CollationUtf8Bin:          {83, "utf8", "utf8_bin", true},
+	CollationGBKBin:           {87, "gbk", "gbk_bin", false},
+	CollationUtf8UnicodeCI:    {192, "utf8", "utf8_unicode_ci", false},
+	CollationUtf8mb4UnicodeCI: {224, "utf8mb4", "utf8mb4_unicode_ci", false},
 }
 
 func (c ColumnType) IsStringType() bool {

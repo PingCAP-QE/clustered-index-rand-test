@@ -142,7 +142,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 
 var TableOptions = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().One()
-	return Strs("collate", tbl.Collate.String())
+	return Strs("charset", tbl.Collate.CharsetName, "collate", tbl.Collate.CollationName)
 })
 
 var ColumnDefinitions = NewFn(func(state *State) Fn {
