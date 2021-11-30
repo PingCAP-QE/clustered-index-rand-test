@@ -84,9 +84,9 @@ func PrintColumnType(c *Column) string {
 	}
 	if c.Tp.IsStringType() {
 		sb.WriteString(" charset ")
-		sb.WriteString(c.charset.String())
+		sb.WriteString(c.collate.CharsetName)
 		sb.WriteString(" collate ")
-		sb.WriteString(c.collate.String())
+		sb.WriteString(c.collate.CollationName)
 	}
 	if c.isUnsigned {
 		sb.WriteString(" unsigned")

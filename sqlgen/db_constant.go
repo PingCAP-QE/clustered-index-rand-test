@@ -165,6 +165,13 @@ var ColumnTypeTimeTypes = ColumnTypes{
 	ColumnTypeDate, ColumnTypeTime, ColumnTypeDatetime, ColumnTypeTimestamp,
 }
 
+type Collation struct {
+	ID            int
+	CharsetName   string
+	CollationName string
+	IsDefault     bool
+}
+
 type CollationType int64
 
 const (
@@ -181,71 +188,16 @@ const (
 	CollationTypeMax
 )
 
-func (c CollationType) String() string {
-	switch c {
-	case CollationBinary:
-		return "binary"
-	case CollationUtf8Bin:
-		return "utf8_bin"
-	case CollationUtf8mb4Bin:
-		return "utf8mb4_bin"
-	case CollationUtf8GeneralCI:
-		return "utf8_general_ci"
-	case CollationUtf8mb4GeneralCI:
-		return "utf8mb4_general_ci"
-	case CollationUtf8UnicodeCI:
-		return "utf8_unicode_ci"
-	case CollationUtf8mb4UnicodeCI:
-		return "utf8mb4_unicode_ci"
-	case CollationGBKBin:
-		return "gbk_bin"
-	case CollationGBKChineseCI:
-		return "gbk_chinese_ci"
-	default:
-		return fmt.Sprintf("unknown: %d", c)
-	}
-}
-
-var CollationAndCharsetTable = map[CollationType]CharsetType{
-	CollationBinary:           CharsetBinary,
-	CollationUtf8Bin:          CharsetUtf8,
-	CollationUtf8mb4Bin:       CharsetUtf8mb4,
-	CollationUtf8GeneralCI:    CharsetUtf8,
-	CollationUtf8mb4GeneralCI: CharsetUtf8mb4,
-	CollationUtf8UnicodeCI:    CharsetUtf8,
-	CollationUtf8mb4UnicodeCI: CharsetUtf8mb4,
-	CollationGBKBin:           CharsetGBK,
-	CollationGBKChineseCI:     CharsetGBK,
-}
-
-func (c CollationType) GetCharset() CharsetType {
-	return CollationAndCharsetTable[c]
-}
-
-type CharsetType int64
-
-const (
-	CharsetBinary CharsetType = iota
-	CharsetUtf8
-	CharsetUtf8mb4
-	CharsetGBK
-
-	CharsetTypeMax
-)
-
-func (c CharsetType) String() string {
-	switch c {
-	case CharsetBinary:
-		return "binary"
-	case CharsetUtf8:
-		return "utf8"
-	case CharsetUtf8mb4:
-		return "utf8mb4"
-	case CharsetGBK:
-		return "gbk"
-	default:
-		return fmt.Sprintf("unknown: %d", c)
-	}
+var Collations = map[CollationType]*Collation{
+	CollationGBKChineseCI:     {28, "gbk", "gbk_chinese_ci", true},
+	CollationUtf8GeneralCI:    {33, "utf8", "utf8_general_ci", false},
+	CollationUtf8mb4GeneralCI: {45, "utf8mb4", "utf8mb4_general_ci", false},
+	CollationUtf8mb4Bin:       {46, "utf8mb4", "utf8mb4_bin", true},
+	CollationBinary:           {63, "binary", "binary", true},
+	CollationUtf8Bin:          {83, "utf8", "utf8_bin", true},
+	CollationGBKBin:           {87, "gbk", "gbk_bin", false},
+	CollationUtf8UnicodeCI:    {192, "utf8", "utf8_unicode_ci", false},
+	CollationUtf8mb4UnicodeCI: {224, "utf8mb4", "utf8mb4_unicode_ci", false},
 }
 
 func (c ColumnType) IsStringType() bool {

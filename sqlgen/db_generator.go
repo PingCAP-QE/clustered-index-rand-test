@@ -15,8 +15,7 @@ func (s *State) GenNewTable() *Table {
 	id := s.AllocGlobalID(ScopeKeyTableUniqID)
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
-	newTbl.Collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
-	newTbl.Charset = newTbl.Collate.GetCharset()
+	newTbl.Collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -58,13 +57,10 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	}
 	// Set collation
 	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
-		col.collate = CollationBinary
+		col.collate = Collations[CollationBinary]
 	} else {
-		col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
+		col.collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
 	}
-
-	// Set charset
-	col.charset = col.collate.GetCharset()
 
 	if col.Tp.IsIntegerType() {
 		col.isUnsigned = RandomBool()

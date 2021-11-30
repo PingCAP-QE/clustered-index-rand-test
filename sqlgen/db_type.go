@@ -29,8 +29,7 @@ type Table struct {
 	AsName  string
 	Columns Columns
 	Indices []*Index
-	Charset CharsetType
-	Collate CollationType
+	Collate *Collation
 
 	containsPK        bool // to ensure at most 1 pk in each table
 	values            [][]string
@@ -54,8 +53,7 @@ type Column struct {
 
 	defaultVal string
 	isNotNull  bool
-	charset    CharsetType
-	collate    CollationType
+	collate    *Collation
 }
 
 type Index struct {
