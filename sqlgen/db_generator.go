@@ -304,7 +304,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		} else if length > 20 {
 			length = 20
 		}
-		return RandStrings(length, count)
+		return RandStrings(length, count, c.collate.CharsetName == "gbk")
 	case ColumnTypeText, ColumnTypeBlob:
 		length := c.arg1
 		if length == 0 {
@@ -312,7 +312,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		} else if length > 20 {
 			length = 20
 		}
-		return RandStrings(length, count)
+		return RandStrings(length, count, c.collate.CharsetName == "gbk")
 	case ColumnTypeEnum, ColumnTypeSet:
 		return RandEnums(c.args, count)
 	case ColumnTypeDate, ColumnTypeDatetime, ColumnTypeTimestamp:
@@ -363,12 +363,23 @@ func RandJsons(count int) []string {
 	return res
 }
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+var asciiRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\\~!@#$%^&*()_+=-")
 
-func RandStringRunes(n int) string {
+func RandStringRunes(n int, mixCNChar bool) string {
 	b := make([]rune, n)
 	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+		b[i] = asciiRunes[rand.Intn(len(asciiRunes))]
+		if mixCNChar && rand.Intn(3) == 0 {
+			b[i] = rune(int('\u4e00') + rand.Intn(int('\u9fff')-int('\u4e00')))
+		}
+	}
+	return string(b)
+}
+
+func RandGBKStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = rune(int('\u4e00') + rand.Intn(int('\u9fff')-int('\u4e00')))
 	}
 	return string(b)
 }
@@ -386,10 +397,10 @@ func RandNumRunes(n int) string {
 	return string(b)
 }
 
-func RandStrings(strLen int, count int) []string {
+func RandStrings(strLen int, count int, mixCNChar bool) []string {
 	result := make([]string, count)
 	for i := 0; i < count; i++ {
-		result[i] = fmt.Sprintf("'%s'", RandStringRunes(rand.Intn(strLen)))
+		result[i] = fmt.Sprintf("'%s'", RandStringRunes(rand.Intn(strLen), mixCNChar))
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i] < result[j]

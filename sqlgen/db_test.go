@@ -1,6 +1,7 @@
 package sqlgen_test
 
 import (
+	"fmt"
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	. "github.com/pingcap/check"
 )
@@ -24,4 +25,9 @@ func (s *testSuite) TestStateClear(c *C) {
 	low, up = state.GetRepeat(sqlgen.CreateTable)
 	c.Assert(low, Equals, 1)
 	c.Assert(up, Equals, 3)
+}
+
+func (s testSuite) TestRandGBKStrings(c *C) {
+	res := sqlgen.RandGBKStrings(10, 1)
+	fmt.Println(res[0])
 }

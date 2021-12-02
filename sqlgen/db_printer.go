@@ -83,8 +83,6 @@ func PrintColumnType(c *Column) string {
 		sb.WriteString(")")
 	}
 	if c.Tp.IsStringType() {
-		sb.WriteString(" charset ")
-		sb.WriteString(c.collate.CharsetName)
 		sb.WriteString(" collate ")
 		sb.WriteString(c.collate.CollationName)
 	}

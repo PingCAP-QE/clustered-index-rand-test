@@ -17,7 +17,7 @@ abtest: build
 		--dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200
 
 test-syntax: build
-	@bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' --count 200
+	@bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' --count 200 --debug
 
 gen: build
 	@bin/sqlgen print --count 200

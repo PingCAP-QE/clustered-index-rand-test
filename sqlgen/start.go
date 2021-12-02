@@ -1144,9 +1144,9 @@ var PrepareStmt = NewFn(func(state *State) Fn {
 		Str("prepare"),
 		Str(prepare.Name),
 		Str("from"),
-		Str(`"`),
+		Str(`"""`),
 		Query,
-		Str(`"`))
+		Str(`"""`))
 })
 
 var DeallocPrepareStmt = NewFn(func(state *State) Fn {
