@@ -21,6 +21,7 @@ const (
 	ConfigKeyArrayAllowColumnTypes                  // value example: ColumnTypes{ColumnTypeInt, ColumnTypeTinyInt}
 	ConfigKeyIntMaxTableCount                       // value example: 10
 	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
+	ConfigDefRecursiveExprDepth                     // value example: 3
 )
 
 const (

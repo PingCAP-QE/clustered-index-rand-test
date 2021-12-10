@@ -25,6 +25,7 @@ func rootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "sqlgen",
 	}
+	cmd.AddCommand(printIndexMergeCmd())
 	cmd.AddCommand(printCmd())
 	cmd.AddCommand(abtestCmd())
 	cmd.AddCommand(checkSyntaxCmd())
@@ -304,6 +305,67 @@ func printCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&count, "count", 1, "number of SQLs")
 	return cmd
+}
+
+func printIndexMergeCmd() *cobra.Command {
+	var queryCount int
+	var rowCount int
+	cmd := &cobra.Command{
+		Use:           "print_index_merge",
+		Short:         "Print SQL statements",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result := generateIndexMergeQuery(queryCount, rowCount)
+			for _, sql := range result {
+				fmt.Printf("%s;\n", sql)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&queryCount, "query_count", 1, "number of SQLs")
+	cmd.Flags().IntVar(&rowCount, "row_count", 1, "number of Rows")
+	return cmd
+}
+
+func generateIndexMergeQuery(queryCount int, rowCount int) []string {
+	result := make([]string, 0, queryCount)
+	state := sqlgen.NewState()
+	tblCount := 1
+	state.SetWeight(sqlgen.IndexDefinitions, 100)
+	state.SetRepeat(sqlgen.IndexDefinitions, 1, 10)
+	state.SetWeight(sqlgen.PartitionDefinition, 1)
+	state.StoreConfig(sqlgen.ConfigKeyUnitIndexMergeHint, struct{}{})
+	result = append(result, "set tidb_enable_index_merge = on;")
+	for i := 0; i < tblCount; i++ {
+		sql := sqlgen.CreateTable.Eval(state)
+		result = append(result, sql)
+	}
+	for _, tb := range state.GetAllTables() {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		for i := 0; i < rowCount; i++ {
+			sql := sqlgen.InsertInto.Eval(state)
+			result = append(result, sql)
+		}
+		state.DestroyScope()
+	}
+	for _, tb := range state.GetAllTables() {
+		state.CreateScope()
+		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		for i := 0; i < queryCount; i++ {
+			sql := sqlgen.IndexMergeQuery.Eval(state)
+			result = append(result, sql)
+		}
+		state.DestroyScope()
+	}
+
+	dropSqls := make([]string, 0, len(state.GetAllTables()))
+	for _, tbl := range state.GetAllTables() {
+		dropSqls = append(dropSqls, fmt.Sprintf("drop table if exists %s;", sqlgen.PrintTableNames(sqlgen.Tables{tbl})))
+	}
+	result = append(dropSqls, result...)
+	return result
 }
 
 func ValidateErrs(err1 error, err2 error) bool {

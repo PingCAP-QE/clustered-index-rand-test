@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/cznic/mathutil"
@@ -165,7 +166,7 @@ var IndexDefinitions = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
-	return Repeat(IndexDefinition.SetR(0, 4), Str(","))
+	return Repeat(IndexDefinition, Str(","))
 })
 
 var IndexDefinition = NewFn(func(state *State) Fn {
@@ -1388,3 +1389,228 @@ var CTEExpressionParens = NewFn(func(state *State) Fn {
 func init() {
 	CTEQueryStatementReplacement = CTEQueryStatement
 }
+
+var IndexMergeQuery = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None
+	}
+	return Or(
+		IndexMergeSingleSelect,
+		// IndexMergeUnionSelect,
+	)
+})
+
+var IndexMergeSingleSelect = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasTables) {
+		return None
+	}
+	tbl := state.GetRandTable()
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	state.Store(ScopeKeyCurrentSelectedColNum, 1+rand.Intn(len(tbl.Columns)))
+	return Or(
+		IndexMergeCommonSelect,
+		// IndexMergeAggregationSelect,
+		// IndexMergeWindowSelect,
+	)
+})
+
+var IndexMergeCommonSelect = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(
+		MustHaveKey(ScopeKeyCurrentTables),
+		MustHaveKey(ScopeKeyCurrentSelectedColNum)) {
+		return None
+	}
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	cols := tbl.Columns.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
+	state.Store(ScopeKeyCurrentTables, Tables{tbl})
+	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
+	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
+	return And(Str("select"), HintIndexMerge,
+		Str(PrintColumnNamesWithoutPar(cols, "*")),
+		Str("from"), Str(tbl.Name), Str("where"),
+		// IndexMergeMyPredicates, Opt(OrderByLimit), ForUpdateOpt,
+		IndexMergeMyPredicates, Opt(OrderByLimit), ForUpdateOpt,
+	)
+})
+
+var IndexMergeMyPredicates = NewFn(func(state *State) Fn {
+	return Or(
+		// A or B and C
+		And(IndexMergeMyPredicateUsingIndex, Str("or"),
+			IndexMergeMyPredicateUsingIndex, Str("and"), IndexMergeMyPredicateRandomExpr),
+		// (A or B) and C
+		And(Str("("), IndexMergeMyPredicateUsingIndex, Str("or"), IndexMergeMyPredicateUsingIndex, Str(")"),
+			Str("and"), IndexMergeMyPredicateRandomExpr),
+	)
+})
+
+var IndexMergeMyPredicateUsingIndex = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	randCol := tbl.GetRandIndexPrefixColumn()[0]
+	var randVal = NewFn(func(state *State) Fn {
+		var v string
+		prepare := state.Search(ScopeKeyCurrentPrepare)
+		if !prepare.IsNil() && rand.Intn(50) == 0 {
+			prepare.ToPrepare().AppendColumns(randCol)
+			v = "?"
+		} else if rand.Intn(3) == 0 || len(tbl.values) == 0 {
+			v = randCol.RandomValue()
+		} else {
+			v = tbl.GetRandRowVal(randCol)
+		}
+		return Str(v)
+	})
+	var randColVals = NewFn(func(state *State) Fn {
+		return Repeat(randVal.SetR(1, 5), Str(","))
+	})
+	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
+	pre := Or(
+		And(Str(colName), CompareSymbol, randVal),
+		And(Str(colName), Str("in"), Str("("), randColVals, Str(")")),
+		And(Str("IsNull("), Str(colName), Str(")")),
+		And(Str(colName), Str("between"), randVal, Str("and"), randVal),
+		And(Str(colName), Str("not in"), Str("("), randColVals, Str(")")),
+	)
+	return Or(
+		pre.SetW(10),
+		And(Str("not("), pre, Str(")")).SetW(1),
+	)
+})
+
+var IndexMergeMyPredicateRandomExpr = NewFn(func(state *State) Fn {
+	return Or(
+		ScalarFunc.SetW(10),
+		ExprCol.SetW(2),
+		ExprConst.SetW(1),
+	)
+})
+
+var ScalarFunc Fn
+var ScalarFuncString3Args Fn
+var ScalarFuncString2Args Fn
+var ScalarFuncString1Args Fn
+var ScalarFuncCommon Fn
+
+var stringFunc1Args = []string{
+	"ascii",
+	"bin",
+	"bit_length",
+	"char_length",
+	"character_length",
+	"length",
+	"ltrim",
+	"rtrim",
+	"reverse",
+	"quote",
+	"upper",
+	"lower",
+	"to_base64",
+	"hex",
+	"unhex",
+}
+
+var stringFunc2Args = []string{
+	"char",
+	"left",
+	"right",
+	"repeat",
+	"instr",
+}
+
+var stringFunc3Args = []string{
+	"substr",
+	"substring",
+	"mid",
+	"substring_index",
+	"replace",
+	"rpad",
+	"lpad",
+}
+
+var commonFuncVarArgs = []string{
+	"coalesce",
+	"greatest",
+	"least",
+	"interval",
+}
+
+func init() {
+	ScalarFunc = NewFn(func(state *State) Fn {
+		if state.DefRecursiveExprDepth < 0 {
+			state.DefRecursiveExprDepth = 5
+		}
+		return Or(
+			ScalarFuncString3Args,
+			ScalarFuncString2Args,
+			ScalarFuncString1Args,
+			ScalarFuncCommon,
+		)
+	})
+
+	// Common Function
+	ScalarFuncCommon = NewFn(func(state *State) Fn {
+		state.RecursiveExprDepth++
+		defer func() { state.RecursiveExprDepth-- }()
+
+		funcName := commonFuncVarArgs[rand.Intn(len(commonFuncVarArgs))]
+		funcName += "("
+		if state.RecursiveExprDepth > state.DefRecursiveExprDepth {
+			return And(Str(funcName), ExprCol, Str(","), ExprCol, Str(","), ExprCol, Str(")"))
+		}
+		return And(Str(funcName), ScalarFunc, Str(","), ExprCol, Str(","), ExprCol, Str(")"))
+	})
+
+	// String Functions - 3 args
+	ScalarFuncString3Args = NewFn(func(state *State) Fn {
+		state.RecursiveExprDepth++
+		defer func() { state.RecursiveExprDepth-- }()
+
+		arg1 := strconv.Itoa(rand.Intn(10))
+		arg2 := strconv.Itoa(rand.Intn(10))
+		funcName := stringFunc3Args[rand.Intn(len(stringFunc3Args))]
+		funcName += "("
+		if state.RecursiveExprDepth > state.DefRecursiveExprDepth {
+			return And(Str(funcName), ExprCol, Str(","), Str(arg1), Str(","), Str(arg2), Str(")"))
+		}
+		return And(Str(funcName), ScalarFunc, Str(","), Str(arg1), Str(","), Str(arg2), Str(")"))
+	})
+
+	// String Functions - 2 args
+	ScalarFuncString2Args = NewFn(func(state *State) Fn {
+		state.RecursiveExprDepth++
+		defer func() { state.RecursiveExprDepth-- }()
+
+		arg1 := strconv.Itoa(rand.Intn(10))
+		if state.RecursiveExprDepth > state.DefRecursiveExprDepth {
+			return And(Str("left("), ScalarFunc, Str(", "), Str(arg1), Str(")"))
+		}
+		return And(Str("left("), ExprCol, Str(", "), Str(arg1), Str(")"))
+	})
+
+	// String Functions - 1 args
+	ScalarFuncString1Args = NewFn(func(state *State) Fn {
+		state.RecursiveExprDepth++
+		defer func() { state.RecursiveExprDepth-- }()
+
+		funcName := stringFunc1Args[rand.Intn(len(stringFunc1Args))]
+		funcName = funcName + "("
+		if state.RecursiveExprDepth > state.DefRecursiveExprDepth {
+			return And(Str(funcName), ExprCol, Str(")"))
+		}
+		return And(Str(funcName), ScalarFunc, Str(")"))
+	})
+}
+
+var ExprCol = NewFn(func(state *State) Fn {
+	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	randCol := tbl.GetRandColumn()
+	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
+	return Str(colName)
+})
+
+var ExprConst = NewFn(func(state *State) Fn {
+	return Or(
+		Str(RandomNums(-128, 255, 1)[0]),
+		Str(RandStrings(10, 1)[0]),
+	)
+})

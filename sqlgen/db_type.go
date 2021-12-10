@@ -21,6 +21,9 @@ type State struct {
 	invalid              bool
 	fnStack              string
 	lastBrokenAssumption string
+
+	RecursiveExprDepth    int
+	DefRecursiveExprDepth int
 }
 
 type Table struct {
@@ -76,9 +79,10 @@ type ScopeObj struct {
 
 func NewState() *State {
 	s := &State{
-		weight: make(map[string]int),
-		repeat: make(map[string]Interval),
-		config: make(map[ConfigKeyType]ScopeObj),
+		weight:                make(map[string]int),
+		repeat:                make(map[string]Interval),
+		config:                make(map[ConfigKeyType]ScopeObj),
+		DefRecursiveExprDepth: -1,
 	}
 	s.CreateScope() // create a root scope.
 	s.AppendHook(NewFnHookScope(s))
