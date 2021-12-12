@@ -22,8 +22,12 @@ type State struct {
 	fnStack              string
 	lastBrokenAssumption string
 
-	RecursiveExprDepth    int
-	DefRecursiveExprDepth int
+	// We have recursive expr callers.
+	RecursiveExprDepth            int
+	DefRecursiveExprDepth         int
+	// To avoid situations like: where c1 < 10 or c1 < 10.
+	// To use index merge the indexes must be different.
+	alreadyChosenColForIndexMerge map[int]bool
 }
 
 type Table struct {

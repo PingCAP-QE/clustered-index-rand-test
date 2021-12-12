@@ -1428,17 +1428,19 @@ var IndexMergeCommonSelect = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	cols := tbl.Columns.GetRandNColumns(state.Search(ScopeKeyCurrentSelectedColNum).ToInt())
 	state.Store(ScopeKeyCurrentTables, Tables{tbl})
-	orderByCols := tbl.Columns.GetRandColumnsNonEmpty()
+	// order by all columns in case different results.
+	orderByCols := tbl.Columns
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
 	return And(Str("select"), HintIndexMerge,
 		Str(PrintColumnNamesWithoutPar(cols, "*")),
 		Str("from"), Str(tbl.Name), Str("where"),
 		// IndexMergeMyPredicates, Opt(OrderByLimit), ForUpdateOpt,
-		IndexMergeMyPredicates, Opt(OrderByLimit), ForUpdateOpt,
+		IndexMergeMyPredicates, OrderByLimit, ForUpdateOpt,
 	)
 })
 
 var IndexMergeMyPredicates = NewFn(func(state *State) Fn {
+	state.alreadyChosenColForIndexMerge = make(map[int]bool)
 	return Or(
 		// A or B and C
 		And(IndexMergeMyPredicateUsingIndex, Str("or"),
@@ -1452,6 +1454,14 @@ var IndexMergeMyPredicates = NewFn(func(state *State) Fn {
 var IndexMergeMyPredicateUsingIndex = NewFn(func(state *State) Fn {
 	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
 	randCol := tbl.GetRandIndexPrefixColumn()[0]
+	for i := 0; i < len(tbl.Columns); i++ {
+		if _, ok := state.alreadyChosenColForIndexMerge[randCol.ID]; !ok {
+			state.alreadyChosenColForIndexMerge[randCol.ID] = true
+			break
+		} else {
+			randCol = tbl.GetRandIndexPrefixColumn()[0]
+		}
+	}
 	var randVal = NewFn(func(state *State) Fn {
 		var v string
 		prepare := state.Search(ScopeKeyCurrentPrepare)

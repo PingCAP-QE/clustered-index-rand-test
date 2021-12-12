@@ -334,8 +334,35 @@ func generateIndexMergeQuery(queryCount int, rowCount int) []string {
 	tblCount := 1
 	state.SetWeight(sqlgen.IndexDefinitions, 100)
 	state.SetRepeat(sqlgen.IndexDefinitions, 1, 10)
-	state.SetWeight(sqlgen.PartitionDefinition, 1)
+	state.SetWeight(sqlgen.PartitionDefinition, 0)
+	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, sqlgen.ColumnTypes{
+		sqlgen.ColumnTypeInt,
+		sqlgen.ColumnTypeTinyInt,
+		sqlgen.ColumnTypeSmallInt,
+		sqlgen.ColumnTypeMediumInt,
+		sqlgen.ColumnTypeBigInt,
+		sqlgen.ColumnTypeBoolean,
+		sqlgen.ColumnTypeFloat,
+		sqlgen.ColumnTypeDouble,
+		sqlgen.ColumnTypeDecimal,
+		// ColumnTypeBit,
+		sqlgen.ColumnTypeChar,
+		sqlgen.ColumnTypeVarchar,
+		sqlgen.ColumnTypeText,
+		// ColumnTypeBlob,
+		sqlgen.ColumnTypeBinary,
+		sqlgen.ColumnTypeVarBinary,
+		// ColumnTypeEnum,
+		// ColumnTypeSet,
+		sqlgen.ColumnTypeDate,
+		sqlgen.ColumnTypeTime,
+		sqlgen.ColumnTypeDatetime,
+		sqlgen.ColumnTypeTimestamp,
+		sqlgen.ColumnTypeYear,
+		// ColumnTypeJSON,
+	})
 	state.StoreConfig(sqlgen.ConfigKeyUnitIndexMergeHint, struct{}{})
+	state.StoreConfig(sqlgen.ConfigKeyEnumLimitOrderBy, sqlgen.ConfigKeyEnumLOBOrderBy)
 	result = append(result, "set tidb_enable_index_merge = on;")
 	for i := 0; i < tblCount; i++ {
 		sql := sqlgen.CreateTable.Eval(state)
