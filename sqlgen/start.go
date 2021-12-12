@@ -177,6 +177,11 @@ var IndexDefinition = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	tbl.AppendIndex(idx)
+	if pkIdx := tbl.GetPrimaryKeyIndex(); pkIdx != nil {
+		for _, col := range pkIdx.Columns {
+			col.isPartOfPk = true
+		}
+	}
 	return And(
 		Str(PrintIndexType(idx)), Str("key"), Str(idx.Name),
 		Str("("), Str(PrintIndexColumnNames(idx)), Str(")"),

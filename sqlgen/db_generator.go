@@ -244,7 +244,7 @@ func (c *Column) ZeroValue() string {
 }
 
 func (c *Column) RandomValue() string {
-	if !c.isNotNull && rand.Intn(30) == 0 {
+	if !c.isNotNull && !c.isPartOfPk && rand.Intn(30) == 0 {
 		return "null"
 	}
 	return c.RandomValuesAsc(1)[0]

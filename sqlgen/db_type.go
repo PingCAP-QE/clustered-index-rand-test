@@ -57,6 +57,7 @@ type Column struct {
 	defaultVal string
 	isNotNull  bool
 	collate    CollationType
+	isPartOfPk bool
 }
 
 type Index struct {
