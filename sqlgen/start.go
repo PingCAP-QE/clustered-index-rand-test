@@ -128,6 +128,14 @@ var CreateTable = NewFn(func(state *State) Fn {
 	var partCol *Column
 	if state.GetWeight(PartitionDefinition) != 0 {
 		partCol = tbl.GetRandColumnForPartition()
+		if partCol == nil && state.GetWeight(PartitionDefinition) == 100 {
+			for {
+				partCol = tbl.GetRandColumnForPartition()
+				if partCol == nil {
+					break
+				}
+			}
+		}
 	}
 	if partCol != nil {
 		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
@@ -199,7 +207,6 @@ var PartitionDefinition = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	return Or(
-		Empty,
 		PartitionDefinitionHash,
 		PartitionDefinitionRange,
 		PartitionDefinitionList,

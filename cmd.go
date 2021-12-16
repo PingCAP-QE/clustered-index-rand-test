@@ -335,7 +335,7 @@ func generateIndexMergeQuery(tblCount int, queryCount int, rowCount int) []strin
 	state := sqlgen.NewState()
 	state.SetWeight(sqlgen.IndexDefinitions, 100)
 	state.SetRepeat(sqlgen.IndexDefinitions, 1, 10)
-	state.SetWeight(sqlgen.PartitionDefinition, 0)
+	state.SetWeight(sqlgen.PartitionDefinition, 100)
 	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, sqlgen.ColumnTypes{
 		sqlgen.ColumnTypeInt,
 		sqlgen.ColumnTypeTinyInt,
