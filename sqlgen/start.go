@@ -125,7 +125,10 @@ var CreateTable = NewFn(func(state *State) Fn {
 	}
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
 	eColDefs := ColumnDefinitions.Eval(state)
-	partCol := tbl.GetRandColumnForPartition()
+	var partCol *Column
+	if state.GetWeight(PartitionDefinition) != 0 {
+		partCol = tbl.GetRandColumnForPartition()
+	}
 	if partCol != nil {
 		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
@@ -248,7 +251,7 @@ var InsertInto = NewFn(func(state *State) Fn {
 	vals := tbl.GenRandValues(tbl.Columns)
 	tbl.AppendRow(vals)
 	return And(
-		Str("insert into"),
+		Str("insert ignore into"),
 		Str(tbl.Name),
 		Str("values"),
 		Str("("),
@@ -1521,7 +1524,7 @@ var stringFunc1Args = []string{
 	"lower",
 	"to_base64",
 	"hex",
-	"unhex",
+	//"unhex",
 }
 
 var stringFunc2Args = []string{

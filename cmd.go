@@ -308,6 +308,7 @@ func printCmd() *cobra.Command {
 }
 
 func printIndexMergeCmd() *cobra.Command {
+	var tblCount int
 	var queryCount int
 	var rowCount int
 	cmd := &cobra.Command{
@@ -316,22 +317,22 @@ func printIndexMergeCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result := generateIndexMergeQuery(queryCount, rowCount)
+			result := generateIndexMergeQuery(tblCount, queryCount, rowCount)
 			for _, sql := range result {
 				fmt.Printf("%s;\n", sql)
 			}
 			return nil
 		},
 	}
+	cmd.Flags().IntVar(&tblCount, "tbl_count", 1, "number of Tables")
 	cmd.Flags().IntVar(&queryCount, "query_count", 1, "number of SQLs")
 	cmd.Flags().IntVar(&rowCount, "row_count", 1, "number of Rows")
 	return cmd
 }
 
-func generateIndexMergeQuery(queryCount int, rowCount int) []string {
+func generateIndexMergeQuery(tblCount int, queryCount int, rowCount int) []string {
 	result := make([]string, 0, queryCount)
 	state := sqlgen.NewState()
-	tblCount := 1
 	state.SetWeight(sqlgen.IndexDefinitions, 100)
 	state.SetRepeat(sqlgen.IndexDefinitions, 1, 10)
 	state.SetWeight(sqlgen.PartitionDefinition, 0)
@@ -341,28 +342,33 @@ func generateIndexMergeQuery(queryCount int, rowCount int) []string {
 		sqlgen.ColumnTypeSmallInt,
 		sqlgen.ColumnTypeMediumInt,
 		sqlgen.ColumnTypeBigInt,
-		sqlgen.ColumnTypeBoolean,
-		sqlgen.ColumnTypeFloat,
-		sqlgen.ColumnTypeDouble,
 		sqlgen.ColumnTypeDecimal,
-		// ColumnTypeBit,
 		sqlgen.ColumnTypeChar,
 		sqlgen.ColumnTypeVarchar,
-		sqlgen.ColumnTypeText,
+
+		// sqlgen.ColumnTypeBoolean,
+		// sqlgen.ColumnTypeText,
+		// sqlgen.ColumnTypeBinary,
+		// sqlgen.ColumnTypeVarBinary,
+		// sqlgen.ColumnTypeDate,
+		// sqlgen.ColumnTypeTime,
+		// sqlgen.ColumnTypeDatetime,
+		// sqlgen.ColumnTypeTimestamp,
+		// sqlgen.ColumnTypeYear,
+		// sqlgen.ColumnTypeFloat,
+		// sqlgen.ColumnTypeDouble,
+
+		// ColumnTypeBit,
 		// ColumnTypeBlob,
-		sqlgen.ColumnTypeBinary,
-		sqlgen.ColumnTypeVarBinary,
 		// ColumnTypeEnum,
 		// ColumnTypeSet,
-		sqlgen.ColumnTypeDate,
-		sqlgen.ColumnTypeTime,
-		sqlgen.ColumnTypeDatetime,
-		sqlgen.ColumnTypeTimestamp,
-		sqlgen.ColumnTypeYear,
 		// ColumnTypeJSON,
 	})
 	state.StoreConfig(sqlgen.ConfigKeyUnitIndexMergeHint, struct{}{})
 	state.StoreConfig(sqlgen.ConfigKeyEnumLimitOrderBy, sqlgen.ConfigKeyEnumLOBOrderBy)
+	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, tblCount*2)
+	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
+	state.SetRepeat(sqlgen.IndexDefinition, 1, 10)
 	result = append(result, "set tidb_enable_index_merge = on;")
 	for i := 0; i < tblCount; i++ {
 		sql := sqlgen.CreateTable.Eval(state)
@@ -387,11 +393,8 @@ func generateIndexMergeQuery(queryCount int, rowCount int) []string {
 		state.DestroyScope()
 	}
 
-	dropSqls := make([]string, 0, len(state.GetAllTables()))
-	for _, tbl := range state.GetAllTables() {
-		dropSqls = append(dropSqls, fmt.Sprintf("drop table if exists %s;", sqlgen.PrintTableNames(sqlgen.Tables{tbl})))
-	}
-	result = append(dropSqls, result...)
+	dropSQL := "drop table if exists " + sqlgen.PrintTableNames(state.GetAllTables())
+	result = append([]string{dropSQL}, result...)
 	return result
 }
 

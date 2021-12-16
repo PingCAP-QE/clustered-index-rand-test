@@ -147,6 +147,15 @@ var ColumnTypeAllTypes = ColumnTypes{
 	ColumnTypeJSON,
 }
 
+func IsColumnTypeIntegerTypes(tp ColumnType) bool {
+	for _, intTP := range ColumnTypeIntegerTypes {
+		if tp == intTP {
+			return true
+		}
+	}
+	return false
+}
+
 var ColumnTypeIntegerTypes = ColumnTypes{
 	ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt,
 	ColumnTypeMediumInt, ColumnTypeBigInt, ColumnTypeBoolean,

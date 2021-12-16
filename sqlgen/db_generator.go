@@ -92,14 +92,33 @@ func (s *State) GenNewIndex(tbl *Table) *Index {
 			return nil
 		}
 	}
+	idx.Tp = GenIndexType(s, tbl, idx)
 	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
 		totalCols = ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols)
 	} else {
-		totalCols = totalCols.GetRandColumnsNonEmpty()
+		// If it is a primary key, there is a 75% chance that it is not a federated index.
+		// The purpose is to generate a clustered index
+		if idx.Tp == IndexTypePrimary {
+			N := len(totalCols)
+			tmpIdxs := make([]int, N)
+			for i := 0; i < N; i++ {
+				tmpIdxs[i] = i
+			}
+			rand.Shuffle(len(tmpIdxs), func(i, j int) { tmpIdxs[i], tmpIdxs[j] = tmpIdxs[j], tmpIdxs[i] })
+			var tmpCols Columns
+			for _, tmpIdx := range tmpIdxs {
+				tmpCols = Columns{totalCols[tmpIdx]}
+				if IsColumnTypeIntegerTypes(tmpCols[0].Tp) {
+					break
+				}
+			}
+			totalCols = tmpCols
+		} else {
+			totalCols = totalCols.GetRandColumnsNonEmpty()
+		}
 	}
 	idx.Columns = LimitIndexColumnSize(totalCols, keySizeLimit)
 	idx.ColumnPrefix = GenPrefixLen(s, totalCols)
-	idx.Tp = GenIndexType(s, tbl, idx)
 	if idx.IsUnique() && s.Exists(ScopeKeyCurrentPartitionColumn) {
 		partitionedCol := s.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
 		// all partitioned Columns should be contained in every unique/primary index.
