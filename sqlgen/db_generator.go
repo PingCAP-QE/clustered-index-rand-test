@@ -33,7 +33,10 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = tps[rand.Intn(len(tps))]
 	// collate is only used if the type is string.
-	col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
+	if !s.ExistsConfig(ConfigKeyUnitIndexMergeHint) {
+		// Don't care collate when test index merge.
+		col.collate = CollationType(rand.Intn(int(CollationTypeMax)-1) + 1)
+	}
 	switch col.Tp {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:

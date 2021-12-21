@@ -17,6 +17,16 @@ func PrintTableNames(tbs []*Table) string {
 	return sb.String()
 }
 
+func PrintHintIndexMergeForMultipleTbls(tbs []*Table) string {
+	var sb strings.Builder
+	for _, t := range tbs {
+		sb.WriteString(" /*+ use_index_merge( ")
+		sb.WriteString(t.Name)
+		sb.WriteString(" ) */ ")
+	}
+	return sb.String()
+}
+
 func PrintQualifiedColumnNames(tableColPairs TableColumnPairs) string {
 	var sb strings.Builder
 	for i, pair := range tableColPairs {
@@ -82,10 +92,10 @@ func PrintColumnType(c *Column) string {
 		}
 		sb.WriteString(")")
 	}
-	if c.Tp.IsStringType() {
-		sb.WriteString(" collate ")
-		sb.WriteString(c.collate.String())
-	}
+	// if c.Tp.IsStringType() {
+	// 	sb.WriteString(" collate ")
+	// 	sb.WriteString(c.collate.String())
+	// }
 	if c.isUnsigned {
 		sb.WriteString(" unsigned")
 	}

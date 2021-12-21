@@ -126,7 +126,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
 	eColDefs := ColumnDefinitions.Eval(state)
 	var partCol *Column
-	if state.GetWeight(PartitionDefinition) != 0 {
+	if rand.Intn(100) < state.GetWeight(PartitionDefinition) {
 		partCol = tbl.GetRandColumnForPartition()
 		if partCol == nil && state.GetWeight(PartitionDefinition) == 100 {
 			for {
@@ -141,14 +141,16 @@ var CreateTable = NewFn(func(state *State) Fn {
 		state.Store(ScopeKeyCurrentPartitionColumn, partCol)
 	}
 	ePartitionDef := PartitionDefinition.Eval(state)
-	eTableOption := TableOptions.Eval(state)
+	// eTableOption := TableOptions.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
 	if eIdxDefs == "" {
 		return Strs("create table", tbl.Name, "(", eColDefs, ")",
-			eTableOption, ePartitionDef)
+			ePartitionDef)
+		// eTableOption, ePartitionDef)
 	} else {
 		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
-			eTableOption, ePartitionDef)
+			ePartitionDef)
+		// eTableOption, ePartitionDef)
 	}
 })
 
@@ -477,9 +479,9 @@ var HintIndexMerge = NewFn(func(state *State) Fn {
 	if !state.CheckAssumptions(MustHaveKey(ScopeKeyCurrentTables)) {
 		return None
 	}
-	tbls := state.Search(ScopeKeyCurrentTables).ToTables()
+	tbl := state.Search(ScopeKeyCurrentIndexMergeTbl).ToTable()
 	return If(state.ExistsConfig(ConfigKeyUnitIndexMergeHint),
-		Strs("/*+ use_index_merge(", PrintTableNames(tbls), ") */"),
+		Strs("/*+ use_index_merge(", PrintTableNames(Tables{tbl}), ") */"),
 	)
 })
 
@@ -1410,8 +1412,44 @@ var IndexMergeQuery = NewFn(func(state *State) Fn {
 		return None
 	}
 	return Or(
-		IndexMergeSingleSelect,
-		// IndexMergeUnionSelect,
+		// IndexMergeSingleSelect,
+		IndexMergeMultiTableSelect,
+	)
+})
+
+var IndexMergeMultiTableSelect = NewFn(func(state *State) Fn {
+	if !state.CheckAssumptions(HasAtLeast2Tables) {
+		return None
+	}
+	tables := state.tables.PickN(2)
+	tbl1, tbl2 := tables[0], tables[1]
+	cols1 := tbl1.GetRandColumns()
+	cols2 := tbl2.GetRandColumns()
+	state.Store(ScopeKeyCurrentTables, Tables{tbl1, tbl2})
+	if RandomBool() {
+		state.Store(ScopeKeyJoinPreferIndex, struct{}{})
+	}
+
+	orderByCols := ConcatColumnPairs(tbl1, tbl2, tbl1.Columns, tbl2.Columns)
+	state.Store(ScopeKeyCurrentOrderByColumns, orderByCols)
+	state.Store(ScopeKeyCurrentIndexMergeTbl, Tables{tbl1, tbl2}.PickOne())
+	return Or(
+		And(
+			Str("select"), HintIndexMerge, HintJoin,
+			Str(PrintFullQualifiedColName(tbl1, cols1)),
+			Str(","),
+			Str(PrintFullQualifiedColName(tbl2, cols2)),
+			Str("from"),
+			Str(tbl1.Name),
+			Or(Str("left join"), Str("join"), Str("right join")),
+			Str(tbl2.Name),
+			And(Str("on"), Repeat(JoinPredicate.SetR(1, 5), AndOr)),
+			And(Str("where")),
+			IndexMergeMyPredicates,
+			OrderByLimit,
+			ForUpdateOpt,
+		),
+		// SemiJoinStmt,
 	)
 })
 
@@ -1441,6 +1479,8 @@ var IndexMergeCommonSelect = NewFn(func(state *State) Fn {
 	// order by all columns in case different results.
 	orderByCols := tbl.Columns
 	state.Store(ScopeKeyCurrentOrderByColumns, NewTableColumnPairs1ToN(tbl, orderByCols))
+
+	state.Store(ScopeKeyCurrentIndexMergeTbl, tbl)
 	return And(Str("select"), HintIndexMerge,
 		Str(PrintColumnNamesWithoutPar(cols, "*")),
 		Str("from"), Str(tbl.Name), Str("where"),
@@ -1462,7 +1502,7 @@ var IndexMergeMyPredicates = NewFn(func(state *State) Fn {
 })
 
 var IndexMergeMyPredicateUsingIndex = NewFn(func(state *State) Fn {
-	tbl := state.Search(ScopeKeyCurrentTables).ToTables().PickOne()
+	tbl := state.Search(ScopeKeyCurrentIndexMergeTbl).ToTable()
 	randCol := tbl.GetRandIndexPrefixColumn()[0]
 	for i := 0; i < len(tbl.Columns); i++ {
 		if _, ok := state.alreadyChosenColForIndexMerge[randCol.ID]; !ok {

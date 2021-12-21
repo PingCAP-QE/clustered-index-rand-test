@@ -343,6 +343,7 @@ const (
 	ScopeKeyPrepareID
 	ScopeKeyCTEUniqID
 	ScopeKeyCTEAsNameID
+	ScopeKeyCurrentIndexMergeTbl
 )
 
 const DefaultKeySizeLimit = 3072

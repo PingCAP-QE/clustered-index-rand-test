@@ -335,7 +335,7 @@ func generateIndexMergeQuery(tblCount int, queryCount int, rowCount int) []strin
 	state := sqlgen.NewState()
 	state.SetWeight(sqlgen.IndexDefinitions, 100)
 	state.SetRepeat(sqlgen.IndexDefinitions, 1, 10)
-	state.SetWeight(sqlgen.PartitionDefinition, 100)
+	state.SetWeight(sqlgen.PartitionDefinition, 1)
 	state.StoreConfig(sqlgen.ConfigKeyArrayAllowColumnTypes, sqlgen.ColumnTypes{
 		sqlgen.ColumnTypeInt,
 		sqlgen.ColumnTypeTinyInt,
@@ -365,7 +365,7 @@ func generateIndexMergeQuery(tblCount int, queryCount int, rowCount int) []strin
 		// ColumnTypeJSON,
 	})
 	state.StoreConfig(sqlgen.ConfigKeyUnitIndexMergeHint, struct{}{})
-	state.StoreConfig(sqlgen.ConfigKeyEnumLimitOrderBy, sqlgen.ConfigKeyEnumLOBOrderBy)
+	state.StoreConfig(sqlgen.ConfigKeyEnumLimitOrderBy, sqlgen.ConfigKeyEnumLOBLimitOrderBy)
 	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, tblCount*2)
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	state.SetRepeat(sqlgen.IndexDefinition, 1, 10)
