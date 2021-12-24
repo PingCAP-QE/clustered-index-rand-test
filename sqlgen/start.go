@@ -1498,6 +1498,10 @@ var IndexMergeMyPredicates = NewFn(func(state *State) Fn {
 		// (A or B) and C
 		And(Str("("), IndexMergeMyPredicateUsingIndex, Str("or"), IndexMergeMyPredicateUsingIndex, Str(")"),
 			Str("and"), IndexMergeMyPredicateRandomExpr),
+		// (A or B) and (C or D) and E
+		And(Str("("), IndexMergeMyPredicateUsingIndex, Str("or"), IndexMergeMyPredicateUsingIndex, Str(")"), Str("and"),
+			Str("("), IndexMergeMyPredicateUsingIndex, Str("or"), IndexMergeMyPredicateUsingIndex, Str(")"),
+			Str("and"), IndexMergeMyPredicateRandomExpr),
 	)
 })
 

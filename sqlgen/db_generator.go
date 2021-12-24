@@ -111,9 +111,9 @@ func (s *State) GenNewIndex(tbl *Table) *Index {
 			var tmpCols Columns
 			for _, tmpIdx := range tmpIdxs {
 				tmpCols = Columns{totalCols[tmpIdx]}
-				if IsColumnTypeIntegerTypes(tmpCols[0].Tp) {
-					break
-				}
+				// if IsColumnTypeIntegerTypes(tmpCols[0].Tp) {
+				// 	break
+				// }
 			}
 			totalCols = tmpCols
 		} else {
