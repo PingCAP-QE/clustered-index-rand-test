@@ -2,9 +2,11 @@ package sqlgen
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"log"
+	"math/rand"
 	"runtime/debug"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 type TableColumnPair struct {
@@ -46,6 +48,8 @@ func Assert(cond bool, targets ...interface{}) {
 
 type Columns []*Column
 
+type Indexes []*Index
+
 func NeverReach(msgs ...string) Fn {
 	debug.PrintStack()
 	if len(msgs) > 0 {
@@ -54,4 +58,14 @@ func NeverReach(msgs ...string) Fn {
 	}
 	log.Fatal("assertion failed: should not reach here")
 	return defaultFn()
+}
+
+func PickOneTable(tbs interface{}) *Table {
+	switch v := tbs.(type) {
+	case []*Table:
+		return v[rand.Intn(len(v))]
+	case *Table:
+		return v
+	}
+	panic("not a table or tables")
 }

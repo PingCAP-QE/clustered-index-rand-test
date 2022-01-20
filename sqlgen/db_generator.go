@@ -12,7 +12,7 @@ import (
 )
 
 func (s *State) GenNewTable() *Table {
-	id := s.AllocGlobalID(ScopeKeyTableUniqID)
+	id := s.alloc.AllocTableID()
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.Collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
@@ -21,7 +21,7 @@ func (s *State) GenNewTable() *Table {
 }
 
 func (s *State) GenNewCTE() *Table {
-	id := s.AllocGlobalID(ScopeKeyCTEUniqID)
+	id := s.alloc.AllocCTEID()
 	return &Table{
 		ID:   -1, // we do not use the id in CTE
 		Name: fmt.Sprintf("cte_%d", id),
@@ -29,7 +29,7 @@ func (s *State) GenNewCTE() *Table {
 }
 
 func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
-	id := s.AllocGlobalID(ScopeKeyColumnUniqID)
+	id := s.alloc.AllocColumnID()
 	col := &Column{ID: id, Name: fmt.Sprintf("col_%d", id)}
 	col.Tp = tps[rand.Intn(len(tps))]
 	switch col.Tp {
@@ -72,48 +72,10 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	return col
 }
 
-func (s *State) GenNewIndex(tbl *Table) *Index {
-	id := s.AllocGlobalID(ScopeKeyIndexUniqID)
-	idx := &Index{ID: id, Name: fmt.Sprintf("idx_%d", id)}
-	// json column can't be used as index column.
-	totalCols := tbl.Columns.FilterColumns(func(c *Column) bool {
-		return c.Tp != ColumnTypeJSON
-	})
-	if len(totalCols) == 0 {
-		return nil
-	}
-	keySizeLimit := DefaultKeySizeLimit
-	if pkIdx := tbl.GetPrimaryKeyIndex(); pkIdx != nil && s.ExistsConfig(ConfigKeyUnitLimitIndexKeyLength) {
-		pkColSize := pkIdx.Columns.EstimateSizeInBytes()
-		keySizeLimit -= pkColSize
-		totalCols = totalCols.FilterColumns(func(c *Column) bool {
-			return c.EstimateSizeInBytes() < keySizeLimit
-		})
-		if len(totalCols) == 0 {
-			return nil
-		}
-	}
-	if s.ExistsConfig(ConfigKeyUnitFirstColumnIndexable) {
-		totalCols = ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols)
-	} else {
-		totalCols = totalCols.GetRandColumnsNonEmpty()
-	}
-	idx.Columns = LimitIndexColumnSize(totalCols, keySizeLimit)
-	idx.ColumnPrefix = GenPrefixLen(s, totalCols)
-	idx.Tp = GenIndexType(s, tbl, idx)
-	if idx.IsUnique() && s.Exists(ScopeKeyCurrentPartitionColumn) {
-		partitionedCol := s.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
-		// all partitioned Columns should be contained in every unique/primary index.
-		idx.AppendColumnIfNotExists(partitionedCol)
-	}
-	return idx
-}
-
 func GenPrefixLen(state *State, cols []*Column) []int {
 	prefixLens := make([]int, len(cols))
 	for i, c := range cols {
-		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() && c.arg1 > 0 &&
-			state.Roll(ConfigKeyProbabilityIndexPrefix, 20*Percent)) {
+		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() && c.arg1 > 0 && RandomBool()) {
 			maxLength := mathutil.Min(c.arg1, 5)
 			if maxLength == 0 {
 				maxLength = 5
@@ -138,18 +100,7 @@ func LimitIndexColumnSize(cols []*Column, sizeLimit int) []*Column {
 }
 
 func GenIndexType(s *State, tbl *Table, idx *Index) IndexType {
-	partColDefNull := false
-	if s.Exists(ScopeKeyCurrentPartitionColumn) {
-		partitionedCol := s.Search(ScopeKeyCurrentPartitionColumn).ToColumn()
-		partColDefNull = partitionedCol.defaultVal == "null"
-	}
-	if !tbl.containsPK && !idx.HasDefaultNullColumn() && !partColDefNull {
-		tbl.containsPK = true
-		return IndexTypePrimary
-	} else {
-		// Exclude primary key type.
-		return IndexType(rand.Intn(int(IndexTypePrimary)))
-	}
+	return IndexType(rand.Intn(int(IndexTypePrimary + 1)))
 }
 
 func GenNewPrepare(id int) *Prepare {
@@ -363,7 +314,7 @@ func RandJsons(count int) []string {
 	return res
 }
 
-var asciiRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\\~!@#$%^&*()_+=-")
+var asciiRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~!@#$%^&*()_+=-")
 
 func RandStringRunes(n int, mixCNChar bool) string {
 	b := make([]rune, n)

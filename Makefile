@@ -12,9 +12,9 @@ test: build
 	@go test ./...
 
 abtest: build
-	@bin/sqlgen check-syntax \
+	@bin/sqlgen abtest \
 		--dsn1 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
-		--dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200
+		--dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200 --debug
 
 test-syntax: build
 	@bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' --count 200 --debug

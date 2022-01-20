@@ -7,14 +7,15 @@ type FnHookScope struct {
 }
 
 func (s *FnHookScope) BeforeEvaluate(state *State, fn Fn) Fn {
-	state.CreateScope()
-	state.Store(ScopeKeyCurrentFn, fn.Info)
-	state.fnStack = state.GetCurrentStack()
+	state.env.Enter()
+	state.env.FnInfo = fn.Info
+	state.fnStack = state.env.GetCurrentStack()
 	return fn
 }
 
 func (s *FnHookScope) AfterEvaluate(state *State, fn Fn, result string) string {
-	state.DestroyScope()
+	state.env.Leave()
+	state.CheckIntegrity()
 	return result
 }
 

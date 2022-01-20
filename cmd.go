@@ -5,18 +5,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"go.uber.org/zap"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/PingCAP-QE/clustered-index-rand-test/cases"
+	"go.uber.org/zap"
+
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 	"github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	. "github.com/zyguan/just"
 	"github.com/zyguan/sqlz"
 	"github.com/zyguan/sqlz/resultset"
 )
@@ -97,11 +98,14 @@ func parseAndSetSeed(seed string) int64 {
 	var seedInt int64
 	if seed == "now" {
 		seedInt = time.Now().Unix()
-		rand.Seed(seedInt)
 	} else {
-		seedInt = int64(Try(strconv.Atoi(seed)).(int))
-		rand.Seed(seedInt)
+		var err error
+		seedInt, err = strconv.ParseInt(seed, 10, 64)
+		if err != nil {
+			panic(err)
+		}
 	}
+	rand.Seed(seedInt)
 	fmt.Printf("current seed: %d\n", seedInt)
 	return seedInt
 }
@@ -165,7 +169,7 @@ func abtestCmd() *cobra.Command {
 			conn1 := setUpDatabaseConnection(dsn1)
 			conn2 := setUpDatabaseConnection(dsn2)
 
-			state := sqlgen.NewState()
+			state := cases.NewGBKState()
 			queries := generateInitialSQLs(state)
 			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
 
@@ -209,18 +213,40 @@ func abtestCmd() *cobra.Command {
 
 func setUpDatabaseConnection(dsn string) *sql.Conn {
 	ctx := context.Background()
-	db := Try(sql.Open("mysql", dsn)).(*sql.DB)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		panic(err)
+	}
 	dbName := "sqlgen_test"
-	conn := Try(sqlz.Connect(ctx, db)).(*sql.Conn)
-	Try(conn.ExecContext(ctx, "drop database if exists "+dbName))
-	Try(conn.ExecContext(ctx, "create database "+dbName))
-	Try(conn.ExecContext(ctx, "use "+dbName))
+	conn, err := sqlz.Connect(ctx, db)
+	if err != nil {
+		panic(err)
+	}
+	_, err = conn.ExecContext(ctx, "drop database if exists "+dbName)
+	if err != nil {
+		panic(err)
+	}
+	_, err = conn.ExecContext(ctx, "create database "+dbName)
+	if err != nil {
+		panic(err)
+	}
+	_, err = conn.ExecContext(ctx, "use "+dbName)
+	if err != nil {
+		panic(err)
+	}
+	_, err = conn.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
+	if err != nil {
+		panic(err)
+	}
 	return conn
 }
 
 func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
 	ctx := context.Background()
-	Try(conn.PingContext(ctx))
+	err := conn.PingContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -240,19 +266,17 @@ func generateInitialSQLs(state *sqlgen.State) []string {
 		sqls = append(sqls, query)
 	}
 	for _, tb := range state.GetAllTables() {
-		state.CreateScope()
-		state.Store(sqlgen.ScopeKeyCurrentTables, sqlgen.Tables{tb})
+		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
 			query := sqlgen.InsertInto.Eval(state)
 			sqls = append(sqls, query)
 		}
-		state.DestroyScope()
 	}
 	return sqls
 }
 
 func generatePlainSQLs(state *sqlgen.State, count int) []string {
-	state.Clear(sqlgen.StateClearOptionAll)
+	state.Env().Clean()
 	sqls := make([]string, 0, count)
 	for i := 0; i < count; i++ {
 		sqls = append(sqls, sqlgen.Start.Eval(state))
@@ -263,8 +287,7 @@ func generatePlainSQLs(state *sqlgen.State, count int) []string {
 func generateCreateTables(state *sqlgen.State, count int) []string {
 	sqls := make([]string, 0, count+1)
 	sqls = append(sqls, "set @@tidb_enable_clustered_index=1")
-	state.StoreConfig(sqlgen.ConfigKeyIntMaxTableCount, count)
-	state.StoreConfig(sqlgen.ConfigKeyUnitLimitIndexKeyLength, struct{}{})
+	state.Config().SetMaxTable(count)
 	state.SetWeight(sqlgen.SwitchClustered, 0)
 	for i := 0; i < count; i++ {
 		sqls = append(sqls, sqlgen.CreateTable.Eval(state))

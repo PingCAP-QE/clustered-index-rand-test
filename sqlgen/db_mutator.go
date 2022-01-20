@@ -24,19 +24,8 @@ func (s *State) SetRepeat(prod Fn, lower int, upper int) {
 	s.repeat[prod.Info] = Interval{lower, upper}
 }
 
-func (s *State) AppendHook(hook FnEvaluateHook) {
-	s.hooks = append(s.hooks, hook)
-}
-
-func (s *State) RemoveHook(hookInfo string) {
-	filled := 0
-	for _, h := range s.hooks {
-		if h.Info() != hookInfo {
-			s.hooks[filled] = h
-			filled++
-		}
-	}
-	s.hooks = s.hooks[:filled]
+func (s *State) SetPrerequisite(fn Fn, pred func(*State) bool) {
+	s.prereq[fn.Info] = pred
 }
 
 func (s *State) AppendTable(tbl *Table) {
@@ -117,6 +106,22 @@ func (t *Table) AppendColumn(c *Column) {
 	t.Columns = append(t.Columns, c)
 	for i := range t.values {
 		t.values[i] = append(t.values[i], c.ZeroValue())
+	}
+}
+
+func (t *Table) ModifyColumn(oldCol, newCol *Column) {
+	for i, c := range t.Columns {
+		if c.ID == oldCol.ID {
+			t.Columns[i] = newCol
+			break
+		}
+	}
+	for _, idx := range t.Indices {
+		for j, idxCol := range idx.Columns {
+			if idxCol.ID == oldCol.ID {
+				idx.Columns[j] = newCol
+			}
+		}
 	}
 }
 
@@ -231,6 +236,11 @@ func (t *Table) RemoveIndex(idx *Index) {
 
 func (t *Table) AppendRow(row []string) {
 	t.values = append(t.values, row)
+}
+
+func (i *Index) AppendColumn(col *Column, prefix int) {
+	i.Columns = append(i.Columns, col)
+	i.ColumnPrefix = append(i.ColumnPrefix, prefix)
 }
 
 func (i *Index) AppendColumnIfNotExists(cols ...*Column) {

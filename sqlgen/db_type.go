@@ -2,25 +2,24 @@ package sqlgen
 
 import (
 	"math/rand"
-	"strings"
 )
 
 type State struct {
-	hooks  []FnEvaluateHook
+	hooks  *Hooks
 	weight map[string]int
 	repeat map[string]Interval
+	prereq map[string]func(*State) bool
 
 	tables Tables
 	ctes   [][]*Table
-	scope  []map[ScopeKeyType]ScopeObj
-	config map[ConfigKeyType]ScopeObj
+	alloc  *IDAllocator
+
+	env *Env
 
 	prepareStmts []*Prepare
 
-	todoSQLs             []string
-	invalid              bool
-	fnStack              string
-	lastBrokenAssumption string
+	todoSQLs []string
+	fnStack  string
 }
 
 type Table struct {
@@ -28,10 +27,11 @@ type Table struct {
 	Name    string
 	AsName  string
 	Columns Columns
-	Indices []*Index
+	Indices Indexes
 	Collate *Collation
 
-	containsPK        bool // to ensure at most 1 pk in each table
+	tiflashReplica int
+
 	values            [][]string
 	colForPrefixIndex Columns
 
@@ -70,181 +70,56 @@ type Prepare struct {
 	Args []func() string
 }
 
-type ScopeObj struct {
-	obj interface{}
-}
-
 func NewState() *State {
 	s := &State{
+		hooks:  &Hooks{},
 		weight: make(map[string]int),
 		repeat: make(map[string]Interval),
-		config: make(map[ConfigKeyType]ScopeObj),
+		prereq: make(map[string]func(*State) bool),
+		alloc:  &IDAllocator{},
+		env:    &Env{},
 	}
-	s.CreateScope() // create a root scope.
-	s.AppendHook(NewFnHookScope(s))
-	s.StoreConfig(ConfigKeyUnitAvoidAlterPKColumn, struct{}{})
-	s.StoreConfig(ConfigKeyUnitLimitIndexKeyLength, struct{}{})
-	s.StoreConfig(ConfigKeyUnitAvoidDropPrimaryKey, struct{}{})
-	// s.AppendHook(NewFnHookTxnWrap(20))
+	s.hooks.Append(NewFnHookScope(s))
 	return s
 }
 
-func (s ScopeObj) IsNil() bool {
-	return s.obj == nil
+func (s *State) Hook() *Hooks {
+	return s.hooks
 }
 
-func (s ScopeObj) ToTable() *Table {
-	return s.obj.(*Table)
+func (s *State) Env() *Env {
+	return s.env
 }
 
-func (s ScopeObj) ToTables() Tables {
-	return s.obj.(Tables)
+func (s *State) Config() *ConfigurableState {
+	return (*ConfigurableState)(s)
 }
 
-func (s ScopeObj) ToColumn() *Column {
-	return s.obj.(*Column)
-}
-
-func (s ScopeObj) ToIndex() *Index {
-	return s.obj.(*Index)
-}
-
-func (s ScopeObj) ToInt() int {
-	return s.obj.(int)
-}
-
-func (s ScopeObj) ToBool() bool {
-	return s.obj.(bool)
-}
-
-func (s ScopeObj) ToBoolOrDefault(d bool) bool {
-	if s.obj == nil {
-		return d
+func (s *State) ReplaceRule(fn Fn, newFn Fn) {
+	replacer := s.hooks.Find(HookNameReplacer)
+	if replacer == nil {
+		replacer = NewFnHookReplacer()
+		s.hooks.Append(replacer)
 	}
-	return s.obj.(bool)
+	replacer.(*FnHookReplacer).Replace(fn, newFn)
 }
 
-func (s ScopeObj) ToString() string {
-	return s.obj.(string)
-}
-
-func (s ScopeObj) ToIntOrDefault(defau1t int) int {
-	if s.obj == nil {
-		return defau1t
-	}
-	return s.ToInt()
-}
-
-func (s ScopeObj) ToStringOrDefault(defau1t string) string {
-	if s.obj == nil {
-		return defau1t
-	}
-	return s.ToString()
-}
-
-func (s ScopeObj) ToColumns() []*Column {
-	return s.obj.([]*Column)
-}
-
-func (s ScopeObj) ToPrepare() *Prepare {
-	return s.obj.(*Prepare)
-}
-
-func (s ScopeObj) ToTableColumnPairs() TableColumnPairs {
-	return s.obj.(TableColumnPairs)
-}
-
-func (s *State) CreateScope() {
-	s.scope = append(s.scope, make(map[ScopeKeyType]ScopeObj))
-}
-
-func (s *State) DestroyScope() {
-	if len(s.scope) == 0 {
+func (s *State) CleanReplaceRule(fn Fn) {
+	replacer := s.hooks.Find(HookNameReplacer)
+	if replacer == nil {
 		return
 	}
-	s.scope = s.scope[:len(s.scope)-1]
-}
-
-func (s *State) Store(key ScopeKeyType, val interface{}) {
-	obj := ScopeObj{val}
-	Assert(!obj.IsNil(), "storing a nil object")
-	current := s.scope[len(s.scope)-1]
-	current[key] = obj
-}
-
-func (s *State) StoreConfig(key ConfigKeyType, val interface{}) {
-	obj := ScopeObj{val}
-	Assert(!obj.IsNil(), "storing a nil object")
-	s.config[key] = obj
-}
-
-func (s *State) StoreInRoot(key ScopeKeyType, val interface{}) {
-	s.scope[0][key] = ScopeObj{val}
-}
-
-func (s *State) Search(key ScopeKeyType) ScopeObj {
-	for i := len(s.scope) - 1; i >= 0; i-- {
-		current := s.scope[i]
-		if v, ok := current[key]; ok {
-			return v
-		}
-	}
-	return ScopeObj{}
-}
-
-func (s *State) Roll(key ConfigKeyType, defaultVal int) bool {
-	baseline := s.config[key].ToIntOrDefault(defaultVal)
-	return rand.Intn(ProbabilityMax) < baseline
+	replacer.(*FnHookReplacer).RemoveReplace(fn)
 }
 
 func (s *State) GetWeight(fn Fn) int {
+	if !s.GetPrerequisite(fn)(s) {
+		return 0
+	}
 	if w, ok := s.weight[fn.Info]; ok {
 		return w
 	}
 	return fn.Weight
-}
-
-func (s *State) Clear(option ...StateClearOption) {
-	for _, opt := range option {
-		switch opt {
-		case StateClearOptionWeight:
-			s.weight = map[string]int{}
-		case StateClearOptionRepeat:
-			s.repeat = map[string]Interval{}
-		case StateClearOptionConfig:
-			s.config = map[ConfigKeyType]ScopeObj{}
-		case StateClearOptionScope:
-			s.scope = nil
-			s.CreateScope()
-		case StateClearOptionAll:
-			s.weight = map[string]int{}
-			s.repeat = map[string]Interval{}
-			s.config = map[ConfigKeyType]ScopeObj{}
-			s.scope = nil
-			s.CreateScope()
-		}
-	}
-}
-
-func (s *State) GetCurrentStack() string {
-	var sb strings.Builder
-	for i := 0; i < len(s.scope); i++ {
-		if i > 0 {
-			sb.WriteString("-")
-		}
-		sb.WriteString("'")
-		if currentFn, ok := s.scope[i][ScopeKeyCurrentFn]; ok {
-			sb.WriteString(currentFn.ToString())
-		} else {
-			sb.WriteString("root")
-		}
-		sb.WriteString("'")
-	}
-	return sb.String()
-}
-
-func (s *State) LastBrokenAssumption() string {
-	return s.lastBrokenAssumption
 }
 
 func (s *State) GetRepeat(fn Fn) (lower int, upper int) {
@@ -252,6 +127,18 @@ func (s *State) GetRepeat(fn Fn) (lower int, upper int) {
 		return w.lower, w.upper
 	}
 	return fn.Repeat.lower, fn.Repeat.upper
+}
+
+func (s *State) GetPrerequisite(fn Fn) func(state *State) bool {
+	if p, ok := s.prereq[fn.Info]; ok {
+		return p
+	}
+	if fn.Prerequisite != nil {
+		return fn.Prerequisite
+	}
+	return func(state *State) bool {
+		return true
+	}
 }
 
 func (s *State) RemoveRepeat(fn Fn) {
@@ -264,31 +151,6 @@ func (s *State) RemoveWeight(fn Fn) {
 	if _, ok := s.weight[fn.Info]; ok {
 		delete(s.weight, fn.Info)
 	}
-}
-
-func (s *State) ExistsConfig(key ConfigKeyType) bool {
-	_, ok := s.config[key]
-	return ok
-}
-
-func (s *State) SearchConfig(key ConfigKeyType) ScopeObj {
-	return s.config[key]
-}
-
-func (s *State) Exists(key ScopeKeyType) bool {
-	return !s.Search(key).IsNil()
-}
-
-func (s *State) AllocGlobalID(key ScopeKeyType) int {
-	var result int
-
-	if v, ok := s.scope[0][key]; ok {
-		result = v.ToInt()
-	} else {
-		result = 0
-	}
-	s.scope[0][key] = ScopeObj{result + 1}
-	return result
 }
 
 func (s *State) PickRandomCTEOrTableName() string {
@@ -326,10 +188,25 @@ func (s *State) GetCTECount() int {
 	return c
 }
 
-func (s *State) IsValid() bool {
-	return !s.invalid
+// QueryState represent an intermediate state during a query generation.
+type QueryState struct {
+	SelectedCols map[*Table]QueryStateColumns
+	IsWindow     bool
+	FieldNumHint int
 }
 
-func (s *State) SetValid(valid bool) {
-	s.invalid = !valid
+type QueryStateColumns struct {
+	Columns
+	Attr []string
+}
+
+func (q QueryState) GetRandTable() *Table {
+	idx := rand.Intn(len(q.SelectedCols))
+	for t := range q.SelectedCols {
+		if idx == 0 {
+			return t
+		}
+		idx--
+	}
+	return nil
 }

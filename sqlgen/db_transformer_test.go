@@ -1,18 +1,20 @@
 package sqlgen_test
 
 import (
+	"testing"
+
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func (s testSuite) TestMove(c *C) {
+func TestMove(t *testing.T) {
 	var result []int
 	get := func(i int) interface{} { return result[i] }
 	set := func(i int, v interface{}) { result[i] = v.(int) }
 	testMove := func(src, dest int, expected []int) {
 		result = []int{1, 2, 3, 4, 5}
 		sqlgen.Move(src, dest, get, set)
-		c.Assert(result, DeepEquals, expected, Commentf("src: %d, dest: %d", src, dest))
+		require.Equal(t, expected, result)
 	}
 	testMove(2, 0, []int{3, 1, 2, 4, 5})
 	testMove(3, 1, []int{1, 4, 2, 3, 5})

@@ -1,5 +1,7 @@
 package sqlgen
 
+import "reflect"
+
 var _ IntegrityChecker = (*State)(nil)
 var _ IntegrityChecker = (*Table)(nil)
 var _ IntegrityChecker = (*Column)(nil)
@@ -25,21 +27,33 @@ func (t *Table) CheckIntegrity() {
 		Assert(idx != nil)
 		idx.CheckIntegrity()
 		for _, idxCol := range idx.Columns {
-			t.Columns.ContainColumn(idxCol)
+			Assert(t.Columns.ContainColumn(idxCol))
 		}
 	}
 }
 
 func (c *Column) CheckIntegrity() {
+	Assert(c != nil)
+	Assert(len(c.Name) != 0)
 }
 
 func (i *Index) CheckIntegrity() {
-	distinctMap := make(map[int]struct{})
-	for _, idxCol := range i.Columns {
-		Assert(idxCol != nil)
-		if _, ok := distinctMap[idxCol.ID]; ok {
-			NeverReach("index column duplicate")
+	Assert(len(i.Name) > 0)
+	Assert(len(i.Columns) > 0)
+}
+
+func NotNil(object interface{}) {
+	if object == nil {
+		panic("param is not initialized")
+	}
+	value := reflect.ValueOf(object)
+	kind := value.Kind()
+	for _, k := range []reflect.Kind{
+		reflect.Chan, reflect.Func,
+		reflect.Interface, reflect.Map,
+		reflect.Ptr, reflect.Slice} {
+		if k == kind && value.IsNil() {
+			panic("param is not initialized")
 		}
-		distinctMap[idxCol.ID] = struct{}{}
 	}
 }

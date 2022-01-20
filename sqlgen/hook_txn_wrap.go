@@ -28,14 +28,14 @@ func (s *FnHookTxnWrap) BeforeEvaluate(state *State, fn Fn) Fn {
 
 func (s *FnHookTxnWrap) startTxn() string {
 	fns := []Fn{
-		Empty.SetW(1),
+		Empty.W(1),
 		And(
 			Str("begin"),
 			Or(
 				Str("pessimistic"),
 				Str("optimistic"),
 			),
-		).SetW(1),
+		).W(1),
 	}
 	var chosenFn Fn
 	if s.inTxn {

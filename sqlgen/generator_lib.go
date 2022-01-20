@@ -16,7 +16,6 @@ package sqlgen
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,11 +27,11 @@ func And(fns ...Fn) Fn {
 	ret.Gen = func(state *State) string {
 		var resStr strings.Builder
 		for i, f := range fns {
+			Assert(state.GetPrerequisite(f)(state))
 			if i != 0 {
 				resStr.WriteString(" ")
 			}
 			res := f.Eval(state)
-			Assert(state.IsValid())
 			resStr.WriteString(strings.Trim(res, " "))
 		}
 		return resStr.String()
@@ -44,19 +43,10 @@ func Or(fns ...Fn) Fn {
 	ret := defaultFn()
 	ret.Info = "Or"
 	ret.Gen = func(state *State) string {
-		for len(fns) > 0 {
-			chosenFnIdx := randSelectByWeight(state, fns)
-			chosenFn := fns[chosenFnIdx]
-			result := chosenFn.Eval(state)
-			if state.IsValid() {
-				return result
-			}
-			state.SetValid(true)
-			fns = append(fns[:chosenFnIdx], fns[chosenFnIdx+1:]...)
-		}
-		// Need backtracking.
-		state.SetValid(false)
-		return ""
+		Assert(len(fns) > 0)
+		chosenFnIdx := randSelectByWeight(state, fns)
+		chosenFn := fns[chosenFnIdx]
+		return chosenFn.Eval(state)
 	}
 	return ret
 }
@@ -113,20 +103,20 @@ func Repeat(fn Fn, sep Fn) Fn {
 		var resStr strings.Builder
 		count := randGenRepeatCount(state, fn)
 		for i := 0; i < count; i++ {
+			if !state.GetPrerequisite(fn)(state) {
+				break
+			}
 			res := fn.Eval(state)
-			Assert(state.IsValid())
-			s := strings.Trim(res, " ")
+			s := strings.Trim(res, " \n\t")
 			if len(s) == 0 {
 				continue
 			}
-			resStr.WriteString(s)
-			if i < count-1 {
+			if i != 0 {
 				sepRes := sep.Eval(state)
-				Assert(state.IsValid())
 				resStr.WriteString(" ")
 				resStr.WriteString(sepRes)
-				resStr.WriteString(" ")
 			}
+			resStr.WriteString(s)
 		}
 		return resStr.String()
 	}
@@ -147,22 +137,18 @@ func RepeatCount(fn Fn, cnt int, sep Fn) Fn {
 	return And(fns...)
 }
 
-func Join(sep string, f func(x interface{}) string, xs interface{}) Fn {
-	valueOf := reflect.ValueOf(xs)
-	strs := make([]string, 0, valueOf.Len())
-	for i := 0; i < valueOf.Len(); i++ {
-		strs = append(strs, f(valueOf.Index(i).Interface()))
+func Join(fns []Fn, sep Fn) Fn {
+	ret := make([]Fn, 0, 2*len(fns)-1)
+	for i, f := range fns {
+		if i != 0 {
+			ret = append(ret, sep)
+		}
+		ret = append(ret, f)
 	}
-
-	return Str(strings.Join(strs, sep))
+	return And(ret...)
 }
 
 var Empty = NewFn(func(state *State) Fn {
-	return Str("")
-})
-
-var None = NewFn(func(state *State) Fn {
-	state.SetValid(false)
 	return Str("")
 })
 
@@ -176,6 +162,10 @@ func Opt(fn Fn) Fn {
 		return fn.Eval(state)
 	}
 	return ret
+}
+
+func Num(v int) string {
+	return strconv.FormatInt(int64(v), 10)
 }
 
 func RandomNum(low, high int64) string {

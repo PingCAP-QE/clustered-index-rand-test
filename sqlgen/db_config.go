@@ -2,6 +2,14 @@ package sqlgen
 
 import "math/rand"
 
+type ConfigurableState State
+
+func (s *ConfigurableState) SetMaxTable(count int) {
+	NoTooMuchTables = func(s *State) bool {
+		return len(s.tables) < count
+	}
+}
+
 type ConfigKeyType int64
 
 const (
@@ -24,64 +32,8 @@ const (
 	ConfigKeyCTEValidSQLPercent                     // value example: [0,100]
 )
 
-const (
-	ConfigKeyEnumLOBNone         = "none"
-	ConfigKeyEnumLOBOrderBy      = "order-by"
-	ConfigKeyEnumLOBLimitOrderBy = "limit-order-by"
-)
-
 const Percent = 1
 const ProbabilityMax = 100 * Percent
-
-type ConfigAllowedColumnTypes struct {
-	Default      ColumnTypes
-	CreateTable  ColumnTypes
-	AddColumn    ColumnTypes
-	ModifyColumn ColumnTypes
-}
-
-func NewConfigAllowColumnTypes() *ConfigAllowedColumnTypes {
-	return &ConfigAllowedColumnTypes{Default: ColumnTypeAllTypes.Clone()}
-}
-
-func (c *ConfigAllowedColumnTypes) CreateTableOrDefault() ColumnTypes {
-	if len(c.CreateTable) == 0 {
-		return c.Default
-	}
-	return c.CreateTable
-}
-
-func (c *ConfigAllowedColumnTypes) AddColumnOrDefault() ColumnTypes {
-	if len(c.AddColumn) == 0 {
-		return c.Default
-	}
-	return c.AddColumn
-}
-
-func (c *ConfigAllowedColumnTypes) ModifyColumnOrDefault() ColumnTypes {
-	if len(c.ModifyColumn) == 0 {
-		return c.Default
-	}
-	return c.ModifyColumn
-}
-
-func (s ScopeObj) ToConfigAllowedColumnTypes() *ConfigAllowedColumnTypes {
-	cfg := NewConfigAllowColumnTypes()
-	if s.IsNil() {
-		return cfg
-	}
-	switch v := s.obj.(type) {
-	case ColumnTypes:
-		cfg.Default = v
-	case []ColumnType:
-		cfg.Default = v
-	case *ConfigAllowedColumnTypes:
-		cfg = v
-	default:
-		NeverReach()
-	}
-	return cfg
-}
 
 func ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols Columns) Columns {
 	// Make sure the first column is not bit || enum || set.
@@ -89,7 +41,7 @@ func ConfigKeyUnitFirstColumnIndexableGenColumns(totalCols Columns) Columns {
 		return c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum && c.Tp != ColumnTypeSet
 	})
 	if len(firstColCandidates) == 0 {
-		totalCols = totalCols.GetRandColumnsNonEmpty()
+		totalCols = totalCols.GetRandNonEmpty()
 	} else {
 		firstColIdx := firstColCandidates[rand.Intn(len(firstColCandidates))]
 		totalCols[0], totalCols[firstColIdx] = totalCols[firstColIdx], totalCols[0]
