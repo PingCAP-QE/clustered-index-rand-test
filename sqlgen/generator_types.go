@@ -18,10 +18,11 @@ import (
 )
 
 type Fn struct {
-	Gen    func(state *State) string
-	Info   string
-	Weight int
-	Repeat Interval
+	Gen          func(state *State) string
+	Info         string
+	Weight       int
+	Repeat       Interval
+	Prerequisite func(state *State) bool
 }
 
 func defaultFn() Fn {
@@ -48,27 +49,34 @@ func (f Fn) Equal(other Fn) bool {
 	return f.Info == other.Info
 }
 
-func (f Fn) SetW(weight int) Fn {
+func (f Fn) W(weight int) Fn {
 	newFn := f
 	newFn.Weight = weight
 	return newFn
 }
 
-func (f Fn) SetR(low, high int) Fn {
+func (f Fn) R(low, high int) Fn {
 	newFn := f
 	newFn.Repeat = Interval{lower: low, upper: high}
 	return newFn
 }
 
-func (f Fn) SetRI(fixed int) Fn {
+func (f Fn) P(fns ...func(state *State) bool) Fn {
 	newFn := f
-	newFn.Repeat = Interval{lower: fixed, upper: fixed}
+	newFn.Prerequisite = func(state *State) bool {
+		for _, pre := range fns {
+			if !pre(state) {
+				return false
+			}
+		}
+		return true
+	}
 	return newFn
 }
 
 func (f Fn) Eval(state *State) string {
 	newFn := f
-	for _, l := range state.hooks {
+	for _, l := range state.hooks.hooks {
 		newFn = l.BeforeEvaluate(state, newFn)
 	}
 	var res string
@@ -77,7 +85,7 @@ func (f Fn) Eval(state *State) string {
 	} else {
 		res = newFn.Gen(state)
 	}
-	for _, l := range state.hooks {
+	for _, l := range state.hooks.hooks {
 		res = l.AfterEvaluate(state, newFn, res)
 	}
 	return res

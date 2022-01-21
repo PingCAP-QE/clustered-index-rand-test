@@ -2,11 +2,13 @@ package sqlgen_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func (s *testSuite) TestHookPredNeedRollBackStmt(c *C) {
+func TestHookPredNeedRollBackStmt(t *testing.T) {
 	state := sqlgen.NewState()
 	predHook := sqlgen.NewFnHookPred()
 	rollBackStmts := []sqlgen.Fn{
@@ -15,7 +17,7 @@ func (s *testSuite) TestHookPredNeedRollBackStmt(c *C) {
 	for _, f := range rollBackStmts {
 		predHook.AddMatchFn(f)
 	}
-	state.AppendHook(predHook)
+	state.Hook().Append(predHook)
 
 	for i := 0; i < 100; i++ {
 		query := sqlgen.Start.Eval(state)
@@ -26,7 +28,7 @@ func (s *testSuite) TestHookPredNeedRollBackStmt(c *C) {
 	}
 }
 
-func (s *testSuite) TestHookReplacer(c *C) {
+func TestHookReplacer(t *testing.T) {
 	replacerHook := sqlgen.NewFnHookReplacer()
 	query := "select sleep(100000000000);"
 	hijacker := sqlgen.NewFn(func(state *sqlgen.State) sqlgen.Fn {
@@ -35,7 +37,7 @@ func (s *testSuite) TestHookReplacer(c *C) {
 	replacerHook.Replace(sqlgen.Start, hijacker)
 
 	state := sqlgen.NewState()
-	state.AppendHook(replacerHook)
+	state.Hook().Append(replacerHook)
 	result := sqlgen.Start.Eval(state)
-	c.Assert(result, Equals, query)
+	require.Equal(t, result, query)
 }

@@ -2,6 +2,7 @@ package sqlgen
 
 import (
 	"fmt"
+
 	"github.com/cznic/mathutil"
 )
 
@@ -312,29 +313,17 @@ const (
 	IndexTypePrimary
 )
 
-type ScopeKeyType int8
-
-const (
-	ScopeKeyCurrentFn ScopeKeyType = iota
-	ScopeKeyCurrentTables
-	ScopeKeyCurrentSelectedColNum
-	ScopeKeyCurrentPrepare
-	ScopeKeyCurrentPartitionColumn
-	ScopeKeyCurrentModifyColumn
-	ScopeKeyCurrentUniqueIndexForPointGet
-	ScopeKeyCurrentSelectedColumns
-	ScopeKeyCurrentOrderByColumns
-	ScopeKeyLastOutFileTable
-	ScopeKeyJoinPreferIndex
-
-	ScopeKeyTableUniqID
-	ScopeKeyColumnUniqID
-	ScopeKeyIndexUniqID
-	ScopeKeyTmpFileID
-	ScopeKeyPrepareID
-	ScopeKeyCTEUniqID
-	ScopeKeyCTEAsNameID
-)
+func (tp IndexType) String() string {
+	switch tp {
+	case IndexTypeNonUnique:
+		return "key"
+	case IndexTypeUnique:
+		return "unique key"
+	case IndexTypePrimary:
+		return "primary key"
+	}
+	return ""
+}
 
 const DefaultKeySizeLimit = 3072
 
@@ -348,4 +337,8 @@ const (
 	StateClearOptionConfig
 	StateClearOptionScope
 	StateClearOptionAll
+)
+
+const (
+	QueryAggregation = "agg"
 )

@@ -1,33 +1,13 @@
 package sqlgen_test
 
 import (
-	"fmt"
+	"testing"
+
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func (s *testSuite) TestStateClear(c *C) {
-	state := sqlgen.NewState()
-	defer state.CheckIntegrity()
-	state.SetWeight(sqlgen.CreateTable, 100)
-	c.Assert(state.GetWeight(sqlgen.CreateTable), Equals, 100)
-	state.Clear(sqlgen.StateClearOptionWeight)
-	c.Assert(state.GetWeight(sqlgen.CreateTable), Equals, 1)
-	state.CreateScope()
-	state.Store(sqlgen.ScopeKeyCurrentTables, state.GenNewTable())
-	state.Clear(sqlgen.StateClearOptionScope)
-	c.Assert(state.Exists(sqlgen.ScopeKeyCurrentTables), IsFalse)
-	state.SetRepeat(sqlgen.CreateTable, 1, 10)
-	low, up := state.GetRepeat(sqlgen.CreateTable)
-	c.Assert(low, Equals, 1)
-	c.Assert(up, Equals, 10)
-	state.Clear(sqlgen.StateClearOptionRepeat)
-	low, up = state.GetRepeat(sqlgen.CreateTable)
-	c.Assert(low, Equals, 1)
-	c.Assert(up, Equals, 3)
-}
-
-func (s testSuite) TestRandGBKStrings(c *C) {
-	res := sqlgen.RandGBKStrings(10, 1)
-	fmt.Println(res[0])
+func TestRandGBKStrings(t *testing.T) {
+	res := sqlgen.RandGBKStringRunes(10)
+	require.Greater(t, len(res), 10, res)
 }

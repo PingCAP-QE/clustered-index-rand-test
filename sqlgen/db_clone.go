@@ -1,10 +1,12 @@
 package sqlgen
 
-import "log"
+import (
+	"log"
+)
 
 func (s *State) Clone() *State {
-	if len(s.scope) != 1 {
-		log.Printf("Clone failed with len(s.scope): %d != 1, it's in the middle state", len(s.scope))
+	if s.env.Depth() != 1 {
+		log.Printf("Clone failed with len(s.scope): %d != 1, it's in the middle state", s.env.Depth())
 		return nil
 	}
 	s1 := *s
@@ -12,14 +14,7 @@ func (s *State) Clone() *State {
 	for _, tbl := range s.tables {
 		s1.tables = append(s1.tables, tbl.Clone())
 	}
-	s1.scope = make([]map[ScopeKeyType]ScopeObj, 0, len(s.scope))
-	for _, v := range s.scope {
-		temp := map[ScopeKeyType]ScopeObj{}
-		for k, v := range v {
-			temp[k] = v
-		}
-		s1.scope = append(s1.scope, temp)
-	}
+	s1.env = s.env.Clone()
 	return &s1
 }
 

@@ -165,7 +165,7 @@ func (t *Table) GetRandDroppableColumn() *Column {
 	return restCols[rand.Intn(len(restCols))]
 }
 
-func (t *Table) GetRandColumnsIncludedDefaultValue() []*Column {
+func (t *Table) GetRandColumnsIncludedDefaultValue() Columns {
 	if RandomBool() {
 		// insert into t values (...)
 		return nil
@@ -272,15 +272,14 @@ func (t *Table) GetRandRowVal(col *Column) string {
 
 func (t *Table) CloneCreateTableLike(state *State) *Table {
 	newTable := t.Clone()
-	newTable.ID = state.AllocGlobalID(ScopeKeyTableUniqID)
+	newTable.ID = state.alloc.AllocTableID()
 	newTable.Name = fmt.Sprintf("tbl_%d", newTable.ID)
 	for _, c := range newTable.Columns {
-		c.ID = state.AllocGlobalID(ScopeKeyColumnUniqID)
+		c.ID = state.alloc.AllocColumnID()
 	}
 	for _, idx := range newTable.Indices {
-		idx.ID = state.AllocGlobalID(ScopeKeyIndexUniqID)
+		idx.ID = state.alloc.AllocIndexID()
 	}
-	newTable.containsPK = false
 	newTable.values = nil
 	newTable.colForPrefixIndex = nil
 	return newTable
@@ -292,7 +291,7 @@ func (t *Table) GetRandColumns() []*Column {
 		return nil
 	}
 	// insert into t (cols..) values (...)
-	return t.Columns.GetRandColumnsNonEmpty()
+	return t.Columns.GetRandNonEmpty()
 }
 
 // GetRandUniqueIndexForPointGet gets a random unique index.
@@ -347,6 +346,15 @@ func (cols Columns) FilterColumns(pred func(c *Column) bool) Columns {
 	return restCols
 }
 
+func (cols Columns) Find(pred func(c *Column) bool) bool {
+	for _, c := range cols {
+		if pred(c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (cols Columns) FilterColumnsIndices(pred func(c *Column) bool) []int {
 	restCols := make([]int, 0, len(cols)/2)
 	for i, c := range cols {
@@ -365,7 +373,11 @@ func (cols Columns) Copy() Columns {
 	return newCols
 }
 
-func (cols Columns) GetRandNColumns(n int) Columns {
+func (cols Columns) GetRand() *Column {
+	return cols[rand.Intn(len(cols))]
+}
+
+func (cols Columns) GetRandN(n int) Columns {
 	newCols := cols.Copy()
 	rand.Shuffle(len(newCols), func(i, j int) {
 		newCols[i], newCols[j] = newCols[j], newCols[i]
@@ -373,12 +385,12 @@ func (cols Columns) GetRandNColumns(n int) Columns {
 	return newCols[:n]
 }
 
-func (cols Columns) GetRandColumnsNonEmpty() Columns {
+func (cols Columns) GetRandNonEmpty() Columns {
 	if len(cols) == 0 {
 		return nil
 	}
 	count := 1 + rand.Intn(len(cols))
-	return cols.GetRandNColumns(count)
+	return cols.GetRandN(count)
 }
 
 func (cols Columns) ContainColumn(c *Column) bool {
@@ -407,9 +419,25 @@ func (cols Columns) IndexByID(id int) int {
 	return -1
 }
 
+func (cols Columns) Or(others Columns) Columns {
+	if len(cols) == 0 {
+		return others
+	}
+	return cols
+}
+
 func (c *Column) ColumnHasIndex(t *Table) bool {
 	for _, idx := range t.Indices {
 		if idx.ContainsColumn(c) {
+			return true
+		}
+	}
+	return false
+}
+
+func (is Indexes) Find(pred func(index *Index) bool) bool {
+	for _, i := range is {
+		if pred(i) {
 			return true
 		}
 	}
