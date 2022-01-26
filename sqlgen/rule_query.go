@@ -87,6 +87,7 @@ var SelectFields = NewFn(func(state *State) Fn {
 	queryState := state.env.QState
 	var sb strings.Builder
 	first := true
+
 	for t, cols := range queryState.SelectedCols {
 		if !first {
 			sb.WriteString(", ")
@@ -98,11 +99,14 @@ var SelectFields = NewFn(func(state *State) Fn {
 		if cnt == 0 {
 			cnt = 1 + rand.Intn(5)
 		}
+		queryState.FieldNumHint = cnt
 		for i := 0; i < cnt; i++ {
 			if i != 0 {
 				sb.WriteString(", ")
 			}
 			sb.WriteString(SelectField.Eval(state))
+			sb.WriteString(" as ")
+			sb.WriteString(fmt.Sprintf(" r%d ", i))
 		}
 	}
 	return Str(sb.String())
@@ -392,8 +396,19 @@ var SetOperator = NewFn(func(state *State) Fn {
 })
 
 var OrderByLimit = NewFn(func(state *State) Fn {
+	queryState := state.env.QState
+	var fields strings.Builder
+	if queryState == nil {
+		return Empty
+	}
+	for i := 0; i < queryState.FieldNumHint; i++ {
+		if i != 0 {
+			fields.WriteString(",")
+		}
+		fields.WriteString(fmt.Sprintf("r%d", i))
+	}
 	return And(
-		Str("order by 1"),
+		Str("order by"), Str(fields.String()),
 		Opt(Strs("limit", RandomNum(1, 100))),
 	)
 })

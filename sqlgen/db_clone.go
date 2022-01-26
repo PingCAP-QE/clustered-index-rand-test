@@ -5,7 +5,7 @@ import (
 )
 
 func (s *State) Clone() *State {
-	if s.env.Depth() != 1 {
+	if s.env.Depth() > 1 {
 		log.Printf("Clone failed with len(s.scope): %d != 1, it's in the middle state", s.env.Depth())
 		return nil
 	}

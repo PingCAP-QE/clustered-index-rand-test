@@ -52,7 +52,7 @@ func checkSyntaxCmd() *cobra.Command {
 			fileWriter := newFileWriter(outputFile)
 			conn := setUpDatabaseConnection(dsn)
 
-			state := sqlgen.NewState()
+			state := cases.NewGBKState()
 			queries := generatePlainSQLs(state, stmtCount)
 			//queries := generateCreateTables(state, stmtCount)
 

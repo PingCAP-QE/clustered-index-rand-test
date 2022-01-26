@@ -43,6 +43,9 @@ func (e *Env) Clean() {
 }
 
 func (e *Env) Depth() int {
+	if e.prev == nil {
+		return 0
+	}
 	return len(e.prev)
 }
 
