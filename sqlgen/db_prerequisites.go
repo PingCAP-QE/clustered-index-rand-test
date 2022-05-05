@@ -43,6 +43,12 @@ var HasIndexableColumn = func(s *State) bool {
 
 var HasShardableColumn = func(s *State) bool {
 	tbl := s.env.Table
+	if tbl == nil {
+		return false
+	}
+	if tbl.Columns == nil {
+		return false
+	}
 	return tbl.Columns.Find(func(c *Column) bool {
 		return isShardableColumn(c)
 	})
