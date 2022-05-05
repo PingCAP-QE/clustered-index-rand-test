@@ -240,6 +240,11 @@ func abtestCmd() *cobra.Command {
 						continue
 					}
 					if err := compareResult(rs1, rs2, query); err != nil {
+						logFile, _ := os.Create("case.sql")
+						for query := range queries {
+							logFile.WriteString(fmt.Sprintf("%s;\n", query))
+						}
+						logFile.Close()
 						return err
 					}
 				}
