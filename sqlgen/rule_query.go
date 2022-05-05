@@ -16,6 +16,11 @@ var Query = NewFn(func(state *State) Fn {
 	)
 }).P(HasTables)
 
+var QueryAll = NewFn(func(state *State) Fn {
+	table := state.GetRandTable()
+	return And(Str("SELECT * FROM "), Str(table.Name))
+}).P(HasTables)
+
 var UnionSelect = NewFn(func(state *State) Fn {
 	tbl1, tbl2 := state.GetRandTable(), state.GetRandTable()
 	fieldNum := mathutil.Min(len(tbl1.Columns), len(tbl2.Columns))

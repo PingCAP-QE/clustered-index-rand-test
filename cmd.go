@@ -54,7 +54,7 @@ func checkSyntaxCmd() *cobra.Command {
 
 			state := cases.NewGBKState()
 			queries := generatePlainSQLs(state, stmtCount)
-			//queries := generateCreateTables(state, stmtCount)
+			// queries := generateCreateTables(state, stmtCount)
 
 			for i, query := range queries {
 				if debug {
@@ -106,7 +106,7 @@ func parseAndSetSeed(seed string) int64 {
 		}
 	}
 	rand.Seed(seedInt)
-	fmt.Printf("current seed: %d\n", seedInt)
+	// fmt.Printf("current seed: %d\n", seedInt)
 	return seedInt
 }
 
@@ -165,37 +165,83 @@ func abtestCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedSeed := parseAndSetSeed(seed)
+			for seed := 0; seed < 100; seed++ {
+				rand.Seed(parsedSeed + int64(seed))
+				fmt.Printf("seed: %d\n", rand.Int63())
+				conn1 := setUpDatabaseConnection(dsn1)
+				conn2 := setUpDatabaseConnection(dsn2)
 
-			conn1 := setUpDatabaseConnection(dsn1)
-			conn2 := setUpDatabaseConnection(dsn2)
+				state := sqlgen.NewState()
+				state.SetWeight(sqlgen.DMLStmt, 500)
+				state.SetWeight(sqlgen.Query, 0)
+				state.SetWeight(sqlgen.CommonUpdate, 0)
+				queries := generateInitialSQLs(state)
+				queries = append(queries, generatePlainSQLs(state, stmtCount)...)
+				for i := 0; i < 10; i++ {
+					queries = append(queries, sqlgen.QueryAll.Eval(state))
+				}
 
-			state := cases.NewGBKState()
-			queries := generateInitialSQLs(state)
-			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
+				executeQuery(conn1, "set tidb_general_log=1")
+				executeQuery(conn2, "set tidb_general_log=1")
 
-			for _, query := range queries {
-				if debug {
-					fmt.Println(query + ";")
-				}
-				rs1, err1 := executeQuery(conn1, query)
-				rs2, err2 := executeQuery(conn2, query)
-				if debug {
-					fmt.Println(colorizeErrorMsg(err1))
-					fmt.Println(colorizeErrorMsg(err2))
-				}
-				if !ValidateErrs(err1, err2) {
-					msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
-					return errors.Errorf(msg)
-				}
-				if rs1 == nil && rs2 == nil {
-					continue
-				}
-				if debug {
-					fmt.Println(rs1.String())
-					fmt.Println(rs2.String())
-				}
-				if err := compareResult(rs1, rs2, query); err != nil {
-					return err
+				for _, query := range queries {
+					if debug {
+						fmt.Println(query + ";\n")
+					}
+					isNTDelete := strings.HasPrefix(query, "split on")
+					if debug {
+						fmt.Println(query + ";\n")
+					}
+					rs1, err1 := executeQuery(conn1, query)
+					if isNTDelete {
+						query = query[strings.Index(query, "delete"):]
+					}
+					rs2, err2 := executeQuery(conn2, query)
+					// if debug {
+					// 	fmt.Println("# err1: ", colorizeErrorMsg(err1))
+					// 	fmt.Println("# err2: ", colorizeErrorMsg(err2))
+					// }
+					// if debug {
+					// 	if rs1 != nil {
+					// 		fmt.Println("# rs1: ", rs1.String())
+					// 	}
+					// 	if rs2 != nil {
+					// 		fmt.Println("# rs2: ", rs2.String())
+					// 	}
+					// }
+					if isNTDelete {
+						if rs1 != nil && rs2 != nil && debug {
+							var a, b bytes.Buffer
+							rs1.PrettyPrint(&a)
+							rs2.PrettyPrint(&b)
+							println(a.String(), b.String())
+						}
+						continue
+					}
+					if !ValidateErrs(err1, err2) {
+						msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
+						if err1 == nil {
+							var b bytes.Buffer
+							rs1.PrettyPrint(&b)
+							println(b.String())
+						}
+						return errors.Errorf(msg)
+					}
+					if rs1 == nil && rs2 == nil {
+						continue
+					}
+					if strings.HasPrefix(query, "SELECT") && debug {
+						var a, b bytes.Buffer
+						rs1.PrettyPrint(&a)
+						rs2.PrettyPrint(&b)
+						println(a.String(), b.String())
+					}
+					if isNTDelete {
+						continue
+					}
+					if err := compareResult(rs1, rs2, query); err != nil {
+						return err
+					}
 				}
 			}
 			return nil

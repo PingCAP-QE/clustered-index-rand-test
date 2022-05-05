@@ -16,16 +16,17 @@ var Start = NewFn(func(state *State) Fn {
 		CreateTable.W(13).P(NoTooMuchTables),
 		CreateTableLike.W(6).P(HasTables, NoTooMuchTables),
 		Query.W(20).P(HasTables),
-		//QueryPrepare.W(2).P(HasTables),
+		// QueryAll.W(20).P(HasTables),
+		// QueryPrepare.W(2).P(HasTables),
 		DMLStmt.W(20).P(HasTables),
 		DDLStmt.W(5).P(HasTables),
 		SplitRegion.W(1).P(HasTables),
 		AnalyzeTable.W(0).P(HasTables),
-		//PrepareStmt.W(2).P(HasTables),
-		//DeallocPrepareStmt.W(1).P(HasTables),
+		// PrepareStmt.W(2).P(HasTables),
+		// DeallocPrepareStmt.W(1).P(HasTables),
 		FlashBackTable.W(1).P(HasTables),
-		//SelectIntoOutFile.W(1).P(HasTables),
-		//LoadTable.W(1).P(HasTables),
+		// SelectIntoOutFile.W(1).P(HasTables),
+		// LoadTable.W(1).P(HasTables),
 		DropTable.W(1).P(HasTables),
 		SetTiFlashReplica.W(0).P(HasTables),
 	)
@@ -228,10 +229,16 @@ var CommonDelete = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.env.Table = tbl
 	col := tbl.GetRandColumn()
+	shardCol := tbl.GetRandColumn()
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
 	return And(
+		Str("split"),
+		Str("on"),
+		Str(shardCol.Name),
+		Str("limit"),
+		Or(Str("1"), Str("2"), Str("3"), Str("4")),
 		Str("delete"),
 		Str("from"),
 		Str(tbl.Name),
@@ -246,7 +253,7 @@ var CommonDelete = NewFn(func(state *State) Fn {
 				Str(")")),
 			And(Str(col.Name), Str("is null")),
 		),
-		Opt(OrderByLimit),
+		// Opt(OrderByLimit),
 	)
 })
 
@@ -395,24 +402,24 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 	return Strs("create table", newTbl.Name, "like", tbl.Name)
 })
 
-//var SelectIntoOutFile = NewFn(func(state *State) Fn {
+// var SelectIntoOutFile = NewFn(func(state *State) Fn {
 //	tbl := state.GetRandTable()
 //	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
 //	_ = os.RemoveAll(SelectOutFileDir)
 //	_ = os.Mkdir(SelectOutFileDir, 0755)
 //	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, state.AllocGlobalID(ScopeKeyTmpFileID)))
 //	return Strs("select * from", tbl.Name, "into outfile", fmt.Sprintf("'%s'", tmpFile))
-//})
+// })
 //
-//var LoadTable = NewFn(func(state *State) Fn {
+// var LoadTable = NewFn(func(state *State) Fn {
 //	tbl := state.env.Get(ScopeKeyLastOutFileTable).ToTable()
 //	id := state.env.Get(ScopeKeyTmpFileID).ToInt()
 //	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, id))
 //	randChildTable := tbl.childTables[rand.Intn(len(tbl.childTables))]
 //	return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.Name)
-//})
+// })
 
-//var PrepareStmt = NewFn(func(state *State) Fn {
+// var PrepareStmt = NewFn(func(state *State) Fn {
 //	prepare := GenNewPrepare(state.AllocGlobalID(ScopeKeyPrepareID))
 //	state.AppendPrepare(prepare)
 //	state.env.Put(ScopeKeyCurrentPrepare, prepare)
@@ -423,15 +430,15 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 //		Str(`"""`),
 //		Query,
 //		Str(`"""`))
-//})
+// })
 //
-//var DeallocPrepareStmt = NewFn(func(state *State) Fn {
+// var DeallocPrepareStmt = NewFn(func(state *State) Fn {
 //	prepare := state.GetRandPrepare()
 //	state.RemovePrepare(prepare)
 //	return Strs("deallocate prepare", prepare.Name)
-//})
+// })
 //
-//var QueryPrepare = NewFn(func(state *State) Fn {
+// var QueryPrepare = NewFn(func(state *State) Fn {
 //	Assert(len(state.prepareStmts) > 0, state)
 //	prepare := state.GetRandPrepare()
 //	assignments := prepare.GenAssignments()
@@ -444,4 +451,4 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 //	userVarsStr := strings.Join(prepare.UserVars(), ",")
 //	state.InjectTodoSQL(fmt.Sprintf("execute %s using %s", prepare.Name, userVarsStr))
 //	return Str(assignments[0])
-//})
+// })

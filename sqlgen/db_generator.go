@@ -15,7 +15,8 @@ func (s *State) GenNewTable() *Table {
 	id := s.alloc.AllocTableID()
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
-	newTbl.Collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+	// newTbl.Collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+	newTbl.Collate = Collations[CollationBinary]
 	newTbl.childTables = []*Table{newTbl}
 	return newTbl
 }
@@ -36,7 +37,7 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
 		// Float/Double precision is deprecated.
-		//https://github.com/pingcap/tidb/issues/21692
+		// https://github.com/pingcap/tidb/issues/21692
 		col.arg1 = 0
 		col.arg2 = 0
 	case ColumnTypeDecimal:
@@ -59,7 +60,8 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
 		col.collate = Collations[CollationBinary]
 	} else {
-		col.collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		// col.collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		col.collate = Collations[CollationBinary]
 	}
 
 	if col.Tp.IsIntegerType() {

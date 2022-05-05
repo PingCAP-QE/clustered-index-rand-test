@@ -57,7 +57,7 @@ var ColumnDefinitionType = NewFn(func(state *State) Fn {
 		ColumnDefinitionTypesBinaries.W(3),
 		ColumnDefinitionTypesTimes.W(5),
 		ColumnDefinitionTypesBit,
-		ColumnDefinitionTypesJSON,
+		// ColumnDefinitionTypesJSON,
 	)
 })
 
