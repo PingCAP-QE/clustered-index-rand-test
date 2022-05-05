@@ -41,6 +41,13 @@ var HasIndexableColumn = func(s *State) bool {
 	})
 }
 
+var HasShardableColumn = func(s *State) bool {
+	tbl := s.env.Table
+	return tbl.Columns.Find(func(c *Column) bool {
+		return isShardableColumn(c)
+	})
+}
+
 var IndexColumnPrefixable = func(s *State) bool {
 	col := s.env.IdxColumn
 	return col.Tp.IsStringType() && col.arg1 > 0
@@ -60,4 +67,8 @@ var HasNonPKCol = func(s *State) bool {
 	return tbl.Columns.Find(func(c *Column) bool {
 		return !pk.ContainsColumn(c)
 	})
+}
+
+var isShardableColumn = func(c *Column) bool {
+	return c.Tp != ColumnTypeJSON && c.Tp != ColumnTypeSet && c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum
 }

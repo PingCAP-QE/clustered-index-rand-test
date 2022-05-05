@@ -34,7 +34,7 @@ var Start = NewFn(func(state *State) Fn {
 
 var DMLStmt = NewFn(func(state *State) Fn {
 	return Or(
-		CommonDelete.W(1),
+		CommonDelete.W(1).P(HasShardableColumn),
 		CommonInsertOrReplace.W(3),
 		CommonUpdate.W(1),
 	)
@@ -229,7 +229,7 @@ var CommonDelete = NewFn(func(state *State) Fn {
 	tbl := state.GetRandTable()
 	state.env.Table = tbl
 	col := tbl.GetRandColumn()
-	shardCol := tbl.GetRandColumn()
+	shardCol := tbl.GetRandShardableColumn()
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})

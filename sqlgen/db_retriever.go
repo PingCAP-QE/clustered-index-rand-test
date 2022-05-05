@@ -100,6 +100,13 @@ func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
 }
 
+func (t *Table) GetRandShardableColumn() *Column {
+	cols := t.FilterColumns(func(c *Column) bool {
+		return isShardableColumn(c)
+	})
+	return cols[rand.Intn(len(cols))]
+}
+
 func (t *Table) GetRandNonPKColumn() *Column {
 	var pkIdx *Index
 	for _, idx := range t.Indices {
