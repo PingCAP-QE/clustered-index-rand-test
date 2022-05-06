@@ -198,6 +198,7 @@ func abtestCmd() *cobra.Command {
 					rs2, err2 := executeQuery(conn2, query)
 					if err2 != nil {
 						// skip this case, see BU-30.
+						fmt.Println("err2 != nil, skip this case")
 						continue epoch
 					}
 					// if debug {
