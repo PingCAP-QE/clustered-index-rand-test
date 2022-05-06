@@ -53,6 +53,26 @@ func (s *State) GetTableByID(id int) *Table {
 	return nil
 }
 
+func (s *State) GetRandTableColumnWithTp(tp ColumnType) (*Table, *Column) {
+	resultTbl := make([]*Table, 0)
+	resultCol := make([]Columns, 0)
+	for _, t := range s.tables {
+		cols := t.Columns.FilterColumns(func(c *Column) bool {
+			return c.Tp == tp
+		})
+		if len(cols) != 0 {
+			resultTbl = append(resultTbl, t)
+			resultCol = append(resultCol, cols)
+		}
+	}
+	if len(resultTbl) == 0 {
+		return nil, nil
+	}
+	idx := rand.Intn(len(resultTbl))
+	idxC := rand.Intn(len(resultCol[idx]))
+	return resultTbl[idx], resultCol[idx][idxC]
+}
+
 func (s *State) GetRandPrepare() *Prepare {
 	return s.prepareStmts[rand.Intn(len(s.prepareStmts))]
 }
@@ -98,6 +118,16 @@ func (ts Tables) PickN(n int) []*Table {
 
 func (t *Table) GetRandColumn() *Column {
 	return t.Columns[rand.Intn(len(t.Columns))]
+}
+
+func (t *Table) GetRandColumnWithTp(tp ColumnType) *Column {
+	cols := t.FilterColumns(func(c *Column) bool {
+		return c.Tp == tp
+	})
+	if len(cols) == 0 {
+		return nil
+	}
+	return cols[rand.Intn(len(cols))]
 }
 
 func (t *Table) GetRandNonPKColumn() *Column {

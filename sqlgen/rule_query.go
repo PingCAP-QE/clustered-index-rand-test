@@ -317,36 +317,58 @@ func init() {
 var Predicate = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	randCol := state.env.Column
-	var randVal = NewFn(func(state *State) Fn {
-		var v string
-		if rand.Intn(3) == 0 || len(tbl.values) == 0 {
-			v = randCol.RandomValue()
-		} else {
-			v = tbl.GetRandRowVal(randCol)
-		}
-		return Str(v)
-	})
-	var randColVals = NewFn(func(state *State) Fn {
-		return Repeat(randVal.R(1, 5), Str(","))
-	})
-	var subSelect = NewFn(func(state *State) Fn {
-		subTbl := state.GetRandTable()
-		subCol := subTbl.GetRandColumn()
-		return And(
-			Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
-			Str("where"), Predicates2,
-		)
-	})
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
 	pre := Or(
-		And(Str(colName), CompareSymbol, randVal),
-		And(Str(colName), Str("in"), Str("("), Or(randColVals, subSelect), Str(")")),
+		And(Str(colName), CompareSymbol, RandVal),
+		And(Str(colName), Str("in"), Str("("), InValues, Str(")")),
 		And(Str("IsNull("), Str(colName), Str(")")),
-		And(Str(colName), Str("between"), randVal, Str("and"), randVal),
+		And(Str(colName), Str("between"), RandVal, Str("and"), RandVal),
 	)
 	return Or(
 		pre,
 		And(Str("not("), pre, Str(")")),
+	)
+})
+
+var InValues = NewFn(func(state *State) Fn {
+	return Or(RandColVals, SubSelect)
+})
+
+var RandColVals = NewFn(func(state *State) Fn {
+	return Repeat(RandVal.R(1, 5), Str(","))
+})
+
+var RandVal = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	randCol := state.env.Column
+	var v string
+	if rand.Intn(3) == 0 || len(tbl.values) == 0 {
+		v = randCol.RandomValue()
+	} else {
+		v = tbl.GetRandRowVal(randCol)
+	}
+	return Str(v)
+})
+
+var SubSelect = NewFn(func(state *State) Fn {
+	subTbl := state.GetRandTable()
+	subCol := subTbl.GetRandColumn()
+	return And(
+		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
+		Str("where"), Predicates2,
+	)
+})
+
+var InValuesWithGivenTp = NewFn(func(state *State) Fn {
+	return Or(RandColVals, SubSelectWithGivenTp.P(HasSameColumnType))
+})
+
+var SubSelectWithGivenTp = NewFn(func(state *State) Fn {
+	randCol := state.env.Column
+	subTbl, subCol := state.GetRandTableColumnWithTp(randCol.Tp)
+	return And(
+		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
+		Str("where"), Predicate,
 	)
 })
 

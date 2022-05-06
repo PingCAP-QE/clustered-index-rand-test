@@ -61,3 +61,9 @@ var HasNonPKCol = func(s *State) bool {
 		return !pk.ContainsColumn(c)
 	})
 }
+
+var HasSameColumnType = func(s *State) bool {
+	col := s.env.Column
+	t, _ := s.GetRandTableColumnWithTp(col.Tp)
+	return t != nil
+}
