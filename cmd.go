@@ -165,6 +165,7 @@ func abtestCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedSeed := parseAndSetSeed(seed)
+		epoch:
 			for seed := 0; seed < 100; seed++ {
 				rand.Seed(parsedSeed + int64(seed))
 				fmt.Printf("seed: %d\n", rand.Int63())
@@ -186,9 +187,6 @@ func abtestCmd() *cobra.Command {
 				executeQuery(conn2, "set tidb_general_log=1")
 
 				for _, query := range queries {
-					if debug {
-						fmt.Println(query + ";\n")
-					}
 					isNTDelete := strings.HasPrefix(query, "split on")
 					if debug {
 						fmt.Println(query + ";\n")
@@ -198,6 +196,10 @@ func abtestCmd() *cobra.Command {
 						query = query[strings.Index(query, "delete"):]
 					}
 					rs2, err2 := executeQuery(conn2, query)
+					if err2 != nil {
+						// skip this case, see BU-30.
+						continue epoch
+					}
 					// if debug {
 					// 	fmt.Println("# err1: ", colorizeErrorMsg(err1))
 					// 	fmt.Println("# err2: ", colorizeErrorMsg(err2))
