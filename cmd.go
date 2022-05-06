@@ -196,11 +196,6 @@ func abtestCmd() *cobra.Command {
 						query = query[strings.Index(query, "delete"):]
 					}
 					rs2, err2 := executeQuery(conn2, query)
-					if err2 != nil {
-						// skip this case, see BU-30.
-						fmt.Println("err2 != nil, skip this case")
-						continue epoch
-					}
 					// if debug {
 					// 	fmt.Println("# err1: ", colorizeErrorMsg(err1))
 					// 	fmt.Println("# err2: ", colorizeErrorMsg(err2))
@@ -214,6 +209,11 @@ func abtestCmd() *cobra.Command {
 					// 	}
 					// }
 					if isNTDelete {
+						if err2 != nil {
+							// skip this case, see BU-30.
+							fmt.Println("err2 != nil, skip this case")
+							continue epoch
+						}
 						if rs1 != nil && rs2 != nil && debug {
 							var a, b bytes.Buffer
 							rs1.PrettyPrint(&a)
