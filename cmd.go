@@ -177,6 +177,7 @@ func abtestCmd() *cobra.Command {
 				state.SetWeight(sqlgen.Query, 0) // there can be valid but randomized results
 				state.SetWeight(sqlgen.CommonUpdate, 0)
 				state.SetWeight(sqlgen.AlterColumn, 0) // column name change can have different results in nt-delete, e.g. shard on the changed column
+				state.ReplaceRule(sqlgen.InValues, sqlgen.InValuesWithGivenTp)
 				queries := generateInitialSQLs(state)
 				queries = append(queries, generatePlainSQLs(state, stmtCount)...)
 				for i := 0; i < 10; i++ {
