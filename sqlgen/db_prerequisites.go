@@ -75,6 +75,13 @@ var HasNonPKCol = func(s *State) bool {
 	})
 }
 
+<<<<<<< HEAD
 var isShardableColumn = func(c *Column) bool {
 	return c.Tp != ColumnTypeJSON && c.Tp != ColumnTypeSet && c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum
+=======
+var HasSameColumnType = func(s *State) bool {
+	col := s.env.Column
+	t, _ := s.GetRandTableColumnWithTp(col.Tp)
+	return t != nil
+>>>>>>> 45f350c95661ccdf2a7549c14a7f559e77198514
 }

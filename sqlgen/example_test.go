@@ -142,6 +142,20 @@ func TestGBKCharacters(t *testing.T) {
 	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
 }
 
+func TestExampleSubSelectFieldCompatible(t *testing.T) {
+	state := sqlgen.NewState()
+	state.ReplaceRule(sqlgen.InValues, sqlgen.InValuesWithGivenTp)
+	query := sqlgen.CreateTable.Eval(state)
+	require.Greater(t, len(query), 0)
+	tbl := state.GetRandTable()
+	state.Env().Table = tbl
+	state.Env().Column = tbl.GetRandColumn()
+	for i := 0; i < 100; i++ {
+		pred := sqlgen.Predicate.Eval(state)
+		fmt.Println(pred)
+	}
+}
+
 func generateCreateTable(state *sqlgen.State, tblCount, colCount, idxCount int) []string {
 	result := make([]string, 0, tblCount)
 	state.SetRepeat(sqlgen.ColumnDefinition, colCount, colCount)
