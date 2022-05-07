@@ -119,7 +119,7 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 		cWithDef, cWithoutDef := tbl.Columns.Span(func(c *Column) bool {
 			return c.defaultVal != ""
 		})
-		state.env.Columns = cWithoutDef.Concat(cWithDef.RandNR())
+		state.env.Columns = cWithoutDef.Concat(cWithDef.RandN())
 	}
 	// TODO: insert into t partition(p1) values(xxx)
 	// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
@@ -206,7 +206,7 @@ var AssignClause = NewFn(func(state *State) Fn {
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.RandN(rand.Intn(len(tbl.Columns)))
+	cols := tbl.Columns.RandNNotNil()
 	return Strs(
 		"on duplicate key update",
 		PrintRandomAssignments(cols),

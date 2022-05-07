@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
+	"github.com/pingcap/tidb/parser"
+	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,5 +109,19 @@ func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {
 	}
 	for _, pkCol := range pkCols {
 		require.True(t, tbl.Columns.Contain(pkCol))
+	}
+}
+
+func TestSyntax(t *testing.T) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	tidbParser := parser.New()
+
+	state.Config().SetMaxTable(200)
+	for i := 0; i < 1000; i++ {
+		sql := sqlgen.Start.Eval(state)
+		_, warn, err := tidbParser.ParseSQL(sql)
+		require.Lenf(t, warn, 0, "sql: %s", sql)
+		require.Nilf(t, err, "sql: %s", sql)
 	}
 }

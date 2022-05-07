@@ -237,13 +237,13 @@ var WindowClause = NewFn(func(state *State) Fn {
 
 var WindowPartitionBy = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.RandN(rand.Intn(len(tbl.Columns)))
+	cols := tbl.Columns.RandNNotNil()
 	return Strs("partition by", PrintColumnNamesWithoutPar(cols, ""))
 })
 
 var WindowOrderBy = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.RandN(rand.Intn(len(tbl.Columns)))
+	cols := tbl.Columns.RandNNotNil()
 	return Strs("order by", PrintColumnNamesWithoutPar(cols, ""))
 })
 

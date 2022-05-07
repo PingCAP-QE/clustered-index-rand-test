@@ -160,15 +160,20 @@ func (cols Columns) Rand() *Column {
 	return gRand1(cols)
 }
 
-func (cols Columns) RandN(n int) Columns {
-	return gRandN(cols, n)
-}
-
-func (cols Columns) RandNR() Columns {
+func (cols Columns) RandN() Columns {
 	if len(cols) == 0 {
 		return nil
 	}
-	return cols.RandN(rand.Intn(len(cols)))
+	cnt := rand.Intn(len(cols))
+	return gRandN(cols, rand.Intn(cnt))
+}
+
+func (cols Columns) RandNNotNil() Columns {
+	if len(cols) == 0 {
+		return nil
+	}
+	cnt := len(cols) - 1
+	return gRandN(cols, 1+cnt)
 }
 
 func (cols Columns) Contain(c *Column) bool {
