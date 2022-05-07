@@ -331,7 +331,10 @@ var Predicate = NewFn(func(state *State) Fn {
 })
 
 var InValues = NewFn(func(state *State) Fn {
-	return Or(RandColVals, SubSelect)
+	return Or(
+		RandColVals,
+		SubSelect,
+	)
 })
 
 var RandColVals = NewFn(func(state *State) Fn {
@@ -359,10 +362,6 @@ var SubSelect = NewFn(func(state *State) Fn {
 	)
 })
 
-var InValuesWithGivenTp = NewFn(func(state *State) Fn {
-	return Or(RandColVals, SubSelectWithGivenTp.P(HasSameColumnType))
-})
-
 var SubSelectWithGivenTp = NewFn(func(state *State) Fn {
 	randCol := state.env.Column
 	subTbl, subCol := state.GetRandTableColumnWithTp(randCol.Tp)
@@ -370,7 +369,7 @@ var SubSelectWithGivenTp = NewFn(func(state *State) Fn {
 		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
 		Str("where"), Predicate,
 	)
-})
+}).P(HasSameColumnType)
 
 var ForUpdateOpt = NewFn(func(state *State) Fn {
 	return Opt(Str("for update"))

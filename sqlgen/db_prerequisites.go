@@ -34,13 +34,6 @@ var HasDroppableColumn = func(s *State) bool {
 	return false
 }
 
-var HasIndexableColumn = func(s *State) bool {
-	tbl := s.env.Table
-	return tbl.Columns.Find(func(c *Column) bool {
-		return c.Tp != ColumnTypeJSON
-	})
-}
-
 var IndexColumnPrefixable = func(s *State) bool {
 	col := s.env.IdxColumn
 	return col.Tp.IsStringType() && col.arg1 > 0

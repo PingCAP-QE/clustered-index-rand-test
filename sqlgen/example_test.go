@@ -9,6 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestReadMeExample(t *testing.T) {
+	state := sqlgen.NewState()
+	state.Config().SetMaxTable(200)
+	state.SetWeight(sqlgen.IndexDefinitions, 0)
+	state.SetWeight(sqlgen.PartitionDefinition, 0)
+	for i := 0; i < 200; i++ {
+		sql := sqlgen.CreateTable.Eval(state)
+		fmt.Print(sql)
+		fmt.Println(";")
+	}
+}
+
 func TestQuery(t *testing.T) {
 	state := sqlgen.NewState()
 	rowCount := 10
@@ -144,7 +156,7 @@ func TestGBKCharacters(t *testing.T) {
 
 func TestExampleSubSelectFieldCompatible(t *testing.T) {
 	state := sqlgen.NewState()
-	state.ReplaceRule(sqlgen.InValues, sqlgen.InValuesWithGivenTp)
+	state.ReplaceRule(sqlgen.SubSelect, sqlgen.SubSelectWithGivenTp)
 	query := sqlgen.CreateTable.Eval(state)
 	require.Greater(t, len(query), 0)
 	tbl := state.GetRandTable()
