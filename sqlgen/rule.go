@@ -7,9 +7,6 @@ import (
 )
 
 var Start = NewFn(func(state *State) Fn {
-	if s, ok := state.PopOneTodoSQL(); ok {
-		return Str(s)
-	}
 	return Or(
 		SetSystemVars.W(2),
 		AdminCheck.W(1).P(HasTables),
@@ -23,10 +20,11 @@ var Start = NewFn(func(state *State) Fn {
 		AnalyzeTable.W(0).P(HasTables),
 		//PrepareStmt.W(2).P(HasTables),
 		//DeallocPrepareStmt.W(1).P(HasTables),
-		FlashBackTable.W(1).P(HasTables),
+		FlashBackTable.W(1).P(HasDroppedTables),
 		//SelectIntoOutFile.W(1).P(HasTables),
 		//LoadTable.W(1).P(HasTables),
 		DropTable.W(1).P(HasTables),
+		TruncateTable.W(1).P(HasTables),
 		SetTiFlashReplica.W(0).P(HasTables),
 	)
 })
@@ -40,7 +38,7 @@ var DMLStmt = NewFn(func(state *State) Fn {
 })
 
 var DDLStmt = NewFn(func(state *State) Fn {
-	state.env.Table = state.GetRandTable()
+	state.env.Table = state.Tables.Rand()
 	return Or(
 		AddColumn,
 		AddIndex,
@@ -66,18 +64,24 @@ var SwitchClustered = NewFn(func(state *State) Fn {
 })
 
 var DropTable = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.RemoveTable(tbl)
 	return Strs("drop table", tbl.Name)
 })
 
+var TruncateTable = NewFn(func(state *State) Fn {
+	tbl := state.Tables.Rand()
+	state.TruncateTable(tbl)
+	return Strs("truncate table", tbl.Name)
+})
+
 var CreateTable = NewFn(func(state *State) Fn {
 	tbl := state.GenNewTable()
-	state.AppendTable(tbl)
+	state.Tables = state.Tables.Append(tbl)
 	state.env.Table = tbl
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
 	eColDefs := ColumnDefinitions.Eval(state)
-	state.env.PartColumn = tbl.GetRandColumnForPartition()
+	state.env.PartColumn = tbl.Columns.Filter(func(c *Column) bool { return c.Tp.IsPartitionType() }).Rand()
 	ePartitionDef := PartitionDefinition.Eval(state)
 	eTableOption := TableOptions.Eval(state)
 	eIdxDefs := IndexDefinitions.Eval(state)
@@ -109,10 +113,14 @@ var InsertInto = NewFn(func(state *State) Fn {
 })
 
 var CommonInsertOrReplace = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.env.Table = tbl
-	cols := tbl.GetRandColumnsIncludedDefaultValue()
-	state.env.Columns = cols
+	if RandomBool() {
+		cWithDef, cWithoutDef := tbl.Columns.Span(func(c *Column) bool {
+			return c.defaultVal != ""
+		})
+		state.env.Columns = cWithoutDef.Concat(cWithDef.RandNR())
+	}
 	// TODO: insert into t partition(p1) values(xxx)
 	// TODO: insert ... select... , it's hard to make the selected columns match the inserted columns.
 	return Or(
@@ -192,13 +200,13 @@ var MultipleRowVals = NewFn(func(state *State) Fn {
 
 var AssignClause = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.GetRandColumn()
+	col := tbl.Columns.Rand()
 	return Strs(fmt.Sprintf("%s.%s", tbl.Name, col.Name), "=", col.RandomValue())
 })
 
 var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.GetRandNonEmpty()
+	cols := tbl.Columns.RandN(rand.Intn(len(tbl.Columns)))
 	return Strs(
 		"on duplicate key update",
 		PrintRandomAssignments(cols),
@@ -206,7 +214,7 @@ var OnDuplicateUpdate = NewFn(func(state *State) Fn {
 })
 
 var CommonUpdate = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.env.Table = tbl
 	return And(
 		Str("update"),
@@ -220,14 +228,14 @@ var CommonUpdate = NewFn(func(state *State) Fn {
 })
 
 var AnalyzeTable = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	return And(Str("analyze table"), Str(tbl.Name))
 })
 
 var CommonDelete = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.env.Table = tbl
-	col := tbl.GetRandColumn()
+	col := tbl.Columns.Rand()
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
@@ -257,7 +265,7 @@ var AddIndex = NewFn(func(state *State) Fn {
 
 var DropIndex = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	idx := tbl.GetRandomIndex()
+	idx := tbl.Indexes.Rand()
 	tbl.RemoveIndex(idx)
 	if idx.Tp == IndexTypePrimary {
 		return Strs("alter table", tbl.Name, "drop primary key")
@@ -288,7 +296,7 @@ var AddColumn = NewFn(func(state *State) Fn {
 
 var DropColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.GetRandDroppableColumn()
+	col := tbl.Columns.Filter(func(c *Column) bool { return !c.HasIndex(tbl) }).Rand()
 	tbl.RemoveColumn(col)
 	return Strs(
 		"alter table", tbl.Name,
@@ -298,7 +306,7 @@ var DropColumn = NewFn(func(state *State) Fn {
 
 var AlterColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.GetRandColumn()
+	col := tbl.Columns.Rand()
 	state.env.Column = col
 	return Or(
 		AlterColumnChange,
@@ -308,10 +316,10 @@ var AlterColumn = NewFn(func(state *State) Fn {
 
 var AlterColumnNoPK = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	pk := tbl.GetPrimaryKeyIndex()
-	state.env.Column = tbl.Columns.FilterColumns(func(c *Column) bool {
-		return pk == nil || !pk.ContainsColumn(c)
-	}).GetRand()
+	pk := tbl.Indexes.Primary()
+	state.env.Column = tbl.Columns.Filter(func(c *Column) bool {
+		return pk == nil || !pk.HasColumn(c)
+	}).Rand()
 	return Or(
 		AlterColumnChange,
 		AlterColumnModify,
@@ -373,7 +381,7 @@ var ColumnPositionFirst = NewFn(func(state *State) Fn {
 var ColumnPositionAfter = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	col := state.env.Column
-	restCols := tbl.FilterColumns(func(c *Column) bool {
+	restCols := tbl.Columns.Filter(func(c *Column) bool {
 		return c.ID != col.ID
 	})
 	afterCol := restCols[rand.Intn(len(restCols))]
@@ -389,14 +397,14 @@ var AndOr = NewFn(func(state *State) Fn {
 })
 
 var CreateTableLike = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	newTbl := tbl.CloneCreateTableLike(state)
-	state.AppendTable(newTbl)
+	state.Tables = state.Tables.Append(newTbl)
 	return Strs("create table", newTbl.Name, "like", tbl.Name)
 })
 
 //var SelectIntoOutFile = NewFn(func(state *State) Fn {
-//	tbl := state.GetRandTable()
+//	tbl := state.Tables.Rand()
 //	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
 //	_ = os.RemoveAll(SelectOutFileDir)
 //	_ = os.Mkdir(SelectOutFileDir, 0755)

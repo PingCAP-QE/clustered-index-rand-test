@@ -194,7 +194,7 @@ Similarly, `R()` is used to change the **repeat** count of a specific `Fn` wrapp
 
 ```go
 var CommonUpdate = NewFn(func(state *State) Fn {
-    tbl := state.GetRandTable()
+    tbl := state.Tables.Rand()
     state.env.Table = tbl
     return And(
         Str("update"),
@@ -219,7 +219,7 @@ Finally, let's look back to `state *State`. Except sharing information between `
   - `(t *Table) AppendColumn(c *Column)`
   - `(t *Table) AppendIndex(idx *Index)`
   - `(s *State) GetRandTable() *Table`
-  - `(t *Table) GetRandColumn() *Column`
+  - `(t *Table) Columns.Rand() *Column`
 
 - Configurations provider: these are used to control `Fn`'s behavior. It is usually set before, and keep unchanged during `Fn` evaluation. The available config option locates in `db_config.go`.
 

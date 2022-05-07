@@ -1,18 +1,5 @@
 package sqlgen
 
-func (s *State) PopOneTodoSQL() (string, bool) {
-	if len(s.todoSQLs) == 0 {
-		return "", false
-	}
-	sql := s.todoSQLs[0]
-	s.todoSQLs = s.todoSQLs[1:]
-	return sql, true
-}
-
-func (s *State) InjectTodoSQL(sqls ...string) {
-	s.todoSQLs = append(s.todoSQLs, sqls...)
-}
-
 func (s *State) SetWeight(prod Fn, weight int) {
 	Assert(weight >= 0)
 	s.weight[prod.Info] = weight
@@ -28,19 +15,45 @@ func (s *State) SetPrerequisite(fn Fn, pred func(*State) bool) {
 	s.prereq[fn.Info] = pred
 }
 
-func (s *State) AppendTable(tbl *Table) {
-	s.tables = append(s.tables, tbl)
+func (s *State) AppendTable(t *Table) {
+	s.Tables = append(s.Tables, t)
 }
 
 func (s *State) RemoveTable(t *Table) {
-	filled := 0
-	for _, tb := range s.tables {
+	tmp := s.Tables[:0]
+	for _, tb := range s.Tables {
 		if tb.ID != t.ID {
-			s.tables[filled] = tb
-			filled++
+			tmp = append(tmp, tb)
+		} else {
+			s.droppedTables = append(s.droppedTables, tb)
 		}
 	}
-	s.tables = s.tables[:filled]
+	s.Tables = tmp
+}
+
+func (s *State) TruncateTable(t *Table) {
+	newTable := t.CloneCreateTableLike(s)
+	newTable.Name = t.Name
+	for i, st := range s.Tables {
+		if st == t {
+			s.Tables[i] = newTable
+			break
+		}
+	}
+	s.droppedTables = append(s.droppedTables, t)
+}
+
+func (s *State) FlashbackTable(t *Table) {
+	s.droppedTables = s.droppedTables.Removed(t)
+	for i, st := range s.Tables {
+		// For truncated tables.
+		if st.Name == t.Name {
+			s.Tables[i] = t
+			return
+		}
+	}
+	// For dropped tables.
+	s.AppendTable(t)
 }
 
 func (s *State) PushCTE(cte *Table) {
@@ -116,7 +129,7 @@ func (t *Table) ModifyColumn(oldCol, newCol *Column) {
 			break
 		}
 	}
-	for _, idx := range t.Indices {
+	for _, idx := range t.Indexes {
 		for j, idxCol := range idx.Columns {
 			if idxCol.ID == oldCol.ID {
 				idx.Columns[j] = newCol
@@ -127,7 +140,7 @@ func (t *Table) ModifyColumn(oldCol, newCol *Column) {
 
 func (t *Table) RemoveColumn(c *Column) {
 	var idxToRemove []*Index
-	for _, idx := range t.Indices {
+	for _, idx := range t.Indexes {
 		for _, idxCol := range idx.Columns {
 			if idxCol.ID == c.ID {
 				idxToRemove = append(idxToRemove, idx)
@@ -152,7 +165,7 @@ func (t *Table) RemoveColumn(c *Column) {
 }
 
 func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
-	for _, idx := range t.Indices {
+	for _, idx := range t.Indexes {
 		for i, idxCol := range idx.Columns {
 			if idxCol.ID == oldCol.ID {
 				idx.Columns[i] = newCol
@@ -215,7 +228,7 @@ func (t *Table) columnOffset(col *Column) int {
 }
 
 func (t *Table) AppendIndex(idx *Index) {
-	t.Indices = append(t.Indices, idx)
+	t.Indexes = append(t.Indexes, idx)
 	if idx.Tp == IndexTypePrimary {
 		for _, c := range idx.Columns {
 			c.isNotNull = true
@@ -225,13 +238,13 @@ func (t *Table) AppendIndex(idx *Index) {
 
 func (t *Table) RemoveIndex(idx *Index) {
 	var pos int
-	for i := range t.Indices {
-		if t.Indices[i].ID == idx.ID {
+	for i := range t.Indexes {
+		if t.Indexes[i].ID == idx.ID {
 			pos = i
 			break
 		}
 	}
-	t.Indices = append(t.Indices[:pos], t.Indices[pos+1:]...)
+	t.Indexes = append(t.Indexes[:pos], t.Indexes[pos+1:]...)
 }
 
 func (t *Table) AppendRow(row []string) {

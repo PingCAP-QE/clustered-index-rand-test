@@ -1,37 +1,12 @@
 package sqlgen
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"runtime/debug"
 
 	"github.com/davecgh/go-spew/spew"
 )
-
-type TableColumnPair struct {
-	t *Table
-	c *Column
-}
-
-type TableColumnPairs []TableColumnPair
-
-func NewTableColumnPairs1ToN(t *Table, cols []*Column) TableColumnPairs {
-	ret := make([]TableColumnPair, 0, len(cols))
-	for _, c := range cols {
-		ret = append(ret, TableColumnPair{t: t, c: c})
-	}
-	return ret
-}
-
-func NewTableColumnPairsNToN(tbs []*Table, cols []*Column) TableColumnPairs {
-	Assert(len(tbs) == len(cols))
-	ret := make([]TableColumnPair, 0, len(cols))
-	for i, c := range cols {
-		ret = append(ret, TableColumnPair{t: tbs[i], c: c})
-	}
-	return ret
-}
 
 type Interval struct {
 	lower int
@@ -46,26 +21,108 @@ func Assert(cond bool, targets ...interface{}) {
 	}
 }
 
-type Columns []*Column
-
-type Indexes []*Index
-
-func NeverReach(msgs ...string) Fn {
-	debug.PrintStack()
-	if len(msgs) > 0 {
-		errMsg := fmt.Sprintf("assertion failed: should not reach here %s", msgs)
-		log.Fatal(errMsg)
-	}
-	log.Fatal("assertion failed: should not reach here")
-	return defaultFn()
+type Entity interface {
+	*Table | *Column | *Index | *TableColumns
 }
 
-func PickOneTable(tbs interface{}) *Table {
-	switch v := tbs.(type) {
-	case []*Table:
-		return v[rand.Intn(len(v))]
-	case *Table:
-		return v
+func gRand1[T Entity](is []T) T {
+	if len(is) == 0 {
+		return nil
 	}
-	panic("not a table or tables")
+	return is[rand.Intn(len(is))]
+}
+
+func gRandN[T Entity](is []T, n int) []T {
+	newIs := gCopy(is)
+	rand.Shuffle(len(newIs), func(i, j int) {
+		newIs[i], newIs[j] = newIs[j], newIs[i]
+	})
+	return newIs[:n]
+}
+
+func gFilter[T Entity](is []T, pred func(T) bool) []T {
+	ret := make([]T, 0, len(is)/2)
+	for _, t := range is {
+		if pred(t) {
+			ret = append(ret, t)
+		}
+	}
+	return ret
+}
+
+func gExist[T Entity](is []T, pred func(T) bool) bool {
+	for _, t := range is {
+		if pred(t) {
+			return true
+		}
+	}
+	return false
+}
+
+func gContain[T Entity](is []T, other T) bool {
+	for _, t := range is {
+		if other == t {
+			return true
+		}
+	}
+	return false
+}
+
+func gDiff[T Entity](src, dest []T) []T {
+	ret := make([]T, 0, len(src)/2)
+	for _, i := range src {
+		if !gContain(dest, i) {
+			ret = append(ret, i)
+		}
+	}
+	if len(ret) == 0 {
+		return nil
+	}
+	return ret
+}
+
+func gCopy[T Entity](is []T) []T {
+	newIs := make([]T, len(is))
+	for i := 0; i < len(is); i++ {
+		newIs[i] = is[i]
+	}
+	return newIs
+}
+
+func gConcat[T Entity](iss ...[]T) []T {
+	newIs := make([]T, 0)
+	for _, is := range iss {
+		for _, i := range is {
+			newIs = append(newIs, i)
+		}
+	}
+	return newIs
+}
+
+func gSpan[T Entity](is []T, pred func(T) bool) ([]T, []T) {
+	match, unmatch := make([]T, 0), make([]T, 0)
+	for _, t := range is {
+		if pred(t) {
+			match = append(match, t)
+		} else {
+			unmatch = append(unmatch, t)
+		}
+	}
+	return match, unmatch
+}
+
+func gMap[T Entity](is []T, fn func(T) T) []T {
+	newIs := gCopy(is)
+	for i, t := range newIs {
+		newIs[i] = fn(t)
+	}
+	return newIs
+}
+
+func gFold[T Entity](is []T, init T, fn func(a, b T) T) T {
+	total := init
+	for _, i := range is {
+		total = fn(total, i)
+	}
+	return total
 }

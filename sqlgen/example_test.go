@@ -29,7 +29,7 @@ func TestQuery(t *testing.T) {
 		sql := sqlgen.CreateTable.Eval(state)
 		fmt.Println(sql)
 	}
-	for _, tb := range state.GetAllTables() {
+	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
 			sql := sqlgen.InsertInto.Eval(state)
@@ -132,16 +132,19 @@ func TestExampleColumnTypeChangeWithGivenTypes(t *testing.T) {
 		require.Equal(t, 5, strings.Count(query, "int"), query)
 	}
 	for i := 0; i < 20; i++ {
-		state.Env().Table = state.GetRandTable()
+		state.Env().Table = state.Tables.Rand()
 		query := sqlgen.AddColumn.Eval(state)
 		require.Contains(t, query, "bigint", query)
 	}
 	for i := 0; i < 20; i++ {
-		randTable := state.GetRandTable()
-		state.Env().Table = state.GetRandTable()
+		randTable := state.Tables.Rand()
+		state.Env().Table = state.Tables.Rand()
 		query := sqlgen.AlterColumn.Eval(state)
 		if len(query) == 0 {
-			require.Nil(t, randTable.GetRandNonPKColumn())
+			pk := randTable.Indexes.Primary()
+			if pk != nil {
+				require.Len(t, randTable.Columns.Diff(pk.Columns), 0)
+			}
 		} else {
 			require.Contains(t, query, "tinyint", query)
 		}
@@ -159,9 +162,9 @@ func TestExampleSubSelectFieldCompatible(t *testing.T) {
 	state.ReplaceRule(sqlgen.SubSelect, sqlgen.SubSelectWithGivenTp)
 	query := sqlgen.CreateTable.Eval(state)
 	require.Greater(t, len(query), 0)
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.Env().Table = tbl
-	state.Env().Column = tbl.GetRandColumn()
+	state.Env().Column = tbl.Columns.Rand()
 	for i := 0; i < 100; i++ {
 		pred := sqlgen.Predicate.Eval(state)
 		fmt.Println(pred)
@@ -181,7 +184,7 @@ func generateCreateTable(state *sqlgen.State, tblCount, colCount, idxCount int) 
 
 func generateInsertInto(state *sqlgen.State, rowCount int) []string {
 	result := make([]string, 0, rowCount)
-	for _, tb := range state.GetAllTables() {
+	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
 			sql := sqlgen.InsertInto.Eval(state)
@@ -193,7 +196,7 @@ func generateInsertInto(state *sqlgen.State, rowCount int) []string {
 
 func generateQuery(state *sqlgen.State, count int) []string {
 	result := make([]string, 0, count)
-	for _, tb := range state.GetAllTables() {
+	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < count; i++ {
 			sql := sqlgen.Query.Eval(state)

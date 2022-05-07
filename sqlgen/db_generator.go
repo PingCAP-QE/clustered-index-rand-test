@@ -57,9 +57,9 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	}
 	// Set collation
 	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
-		col.collate = Collations[CollationBinary]
+		col.Collation = Collations[CollationBinary]
 	} else {
-		col.collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		col.Collation = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
 	}
 
 	if col.Tp.IsIntegerType() {
@@ -99,10 +99,6 @@ func LimitIndexColumnSize(cols []*Column, sizeLimit int) []*Column {
 	return cols[:maxIdx]
 }
 
-func GenIndexType(s *State, tbl *Table, idx *Index) IndexType {
-	return IndexType(rand.Intn(int(IndexTypePrimary + 1)))
-}
-
 func GenNewPrepare(id int) *Prepare {
 	return &Prepare{
 		ID:   id,
@@ -127,7 +123,7 @@ func (t *Table) GenRandValues(cols []*Column) []string {
 // the generator have no idea about whether the primary key is clustered or not.
 func (t *Table) GenMultipleRowsAscForHandleCols(count int) [][]string {
 	rows := make([][]string, count)
-	pkIdx := t.GetPrimaryKeyIndex()
+	pkIdx := t.Indexes.Primary()
 	chooseClustered := RandomBool() && pkIdx != nil
 	if chooseClustered {
 		firstColumn := pkIdx.Columns[0].RandomValuesAsc(count)
@@ -255,7 +251,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		} else if length > 20 {
 			length = 20
 		}
-		return RandStrings(length, count, c.collate.CharsetName == "gbk")
+		return RandStrings(length, count, c.Collation.CharsetName == "gbk")
 	case ColumnTypeText, ColumnTypeBlob:
 		length := c.arg1
 		if length == 0 {
@@ -263,7 +259,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		} else if length > 20 {
 			length = 20
 		}
-		return RandStrings(length, count, c.collate.CharsetName == "gbk")
+		return RandStrings(length, count, c.Collation.CharsetName == "gbk")
 	case ColumnTypeEnum, ColumnTypeSet:
 		return RandEnums(c.args, count)
 	case ColumnTypeDate, ColumnTypeDatetime, ColumnTypeTimestamp:

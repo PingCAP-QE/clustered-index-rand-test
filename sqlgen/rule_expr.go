@@ -8,14 +8,14 @@ import (
 var BuiltinFunction = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	cols := state.env.QColumns
-	strCols := cols.FilterColumns(func(c *Column) bool {
+	strCols := cols.Filter(func(c *Column) bool {
 		return c.Tp.IsStringType()
 	}).Or(cols.Columns)
-	intCols := tbl.Columns.FilterColumns(func(c *Column) bool {
+	intCols := tbl.Columns.Filter(func(c *Column) bool {
 		return c.Tp.IsIntegerType()
 	}).Or(cols.Columns)
-	s1, s2 := Str(strCols.GetRand().Name), Str(strCols.GetRand().Name)
-	i1, i2 := Str(intCols.GetRand().Name), Str(intCols.GetRand().Name)
+	s1, s2 := Str(strCols.Rand().Name), Str(strCols.Rand().Name)
+	i1, i2 := Str(intCols.Rand().Name), Str(intCols.Rand().Name)
 	chs := Str(Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)].CharsetName)
 	ns := RandomNums(0, 10, 2)
 	n1, n2 := Str(ns[0]), Str(ns[1])
@@ -74,10 +74,10 @@ var BuiltinFunction = NewFn(func(state *State) Fn {
 var AggFunction = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	cols := state.env.QColumns
-	intCols := cols.FilterColumns(func(c *Column) bool {
+	intCols := cols.Filter(func(c *Column) bool {
 		return c.Tp.IsIntegerType()
 	}).Or(cols.Columns)
-	col := intCols.GetRand()
+	col := intCols.Rand()
 	for i, c := range cols.Columns {
 		if c.ID == col.ID {
 			cols.Attr[i] = QueryAggregation // group by clause needs this.

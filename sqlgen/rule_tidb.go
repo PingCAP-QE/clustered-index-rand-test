@@ -6,7 +6,7 @@ import (
 )
 
 var AdminCheck = NewFn(func(state *State) Fn {
-	state.env.Table = state.GetRandTable()
+	state.env.Table = state.Tables.Rand()
 	return Or(
 		AdminCheckTable,
 		AdminCheckIndex.P(CurrentTableHasIndices),
@@ -20,34 +20,31 @@ var AdminCheckTable = NewFn(func(state *State) Fn {
 
 var AdminCheckIndex = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	idx := tbl.GetRandomIndex()
+	idx := tbl.Indexes.Rand()
 	return Strs("admin check index", tbl.Name, idx.Name)
 })
 
 var FlashBackTable = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
-	state.InjectTodoSQL(fmt.Sprintf("/*DDL*/ flashback table %s", tbl.Name))
-	return Or(
-		Strs("drop table", tbl.Name),
-		Strs("truncate table", tbl.Name),
-	)
+	tbl := state.droppedTables.Rand()
+	state.FlashbackTable(tbl)
+	return Strs("flashback table", tbl.Name)
 })
 
 var SetTiFlashReplica = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	tbl.tiflashReplica = 1
 	return Strs("alter table", tbl.Name, "set tiflash replica 1")
 })
 
 var SplitRegion = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	splitTablePrefix := fmt.Sprintf("split table %s", tbl.Name)
 
-	splittingIndex := len(tbl.Indices) > 0 && RandomBool()
+	splittingIndex := len(tbl.Indexes) > 0 && RandomBool()
 	var idx *Index
 	var idxPrefix string
 	if splittingIndex {
-		idx = tbl.Indices[rand.Intn(len(tbl.Indices))]
+		idx = tbl.Indexes[rand.Intn(len(tbl.Indexes))]
 		idxPrefix = fmt.Sprintf("index %s", idx.Name)
 	}
 

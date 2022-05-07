@@ -120,7 +120,7 @@ var CTEDefinition = NewFn(func(state *State) Fn {
 		if RandomBool() && state.GetCTECount() != 0 {
 			cte.Name = state.GetRandomCTE().Name
 		} else {
-			cte.Name = state.GetRandTable().Name
+			cte.Name = state.Tables.Rand().Name
 		}
 	}
 	state.PushCTE(cte)
@@ -135,13 +135,13 @@ var CTEDefinition = NewFn(func(state *State) Fn {
 
 var CTESeedPart = NewFn(func(state *State) Fn {
 	validSQLPercent := 75
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	currentCTE := state.CurrentCTE()
 	fields := make([]string, len(currentCTE.Columns)-1)
 	for i := range fields {
 		switch rand.Intn(4) {
 		case 0, 3:
-			cols := tbl.FilterColumns(func(column *Column) bool {
+			cols := tbl.Columns.Filter(func(column *Column) bool {
 				return column.Tp == currentCTE.Columns[i+1].Tp
 			})
 			if len(cols) != 0 {

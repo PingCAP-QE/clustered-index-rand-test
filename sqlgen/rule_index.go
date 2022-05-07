@@ -57,7 +57,7 @@ var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	idx := state.env.Index
 	partCol := state.env.PartColumn
-	if partCol != nil && idx.IsUnique() && !idx.Columns.ContainColumn(partCol) {
+	if partCol != nil && idx.IsUnique() && !idx.Columns.Contain(partCol) {
 		state.env.IdxColumn = partCol
 		return Or(
 			IndexDefinitionColumnNoPrefix,
@@ -65,13 +65,13 @@ var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 		)
 	}
 	// json column can't be used as index column.
-	totalCols := tbl.Columns.FilterColumns(func(c *Column) bool {
-		return c.Tp != ColumnTypeJSON && !idx.ContainsColumn(c)
+	totalCols := tbl.Columns.Filter(func(c *Column) bool {
+		return c.Tp != ColumnTypeJSON && !idx.HasColumn(c)
 	})
 	if len(totalCols) == 0 {
 		return Empty
 	}
-	state.env.IdxColumn = totalCols.GetRand()
+	state.env.IdxColumn = totalCols.Rand()
 	return IndexDefinitionColumnCheckLen
 })
 
