@@ -166,9 +166,10 @@ func abtestCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedSeed := parseAndSetSeed(seed)
 		epoch:
-			for seed := 0; seed < 100; seed++ {
-				rand.Seed(parsedSeed + int64(seed))
-				fmt.Printf("seed: %d\n", rand.Int63())
+			for seed := 0; seed < 3000; seed++ {
+				seed := parsedSeed + int64(seed)
+				rand.Seed(seed)
+				fmt.Printf("seed: %d\n", seed)
 				conn1 := setUpDatabaseConnection(dsn1)
 				conn2 := setUpDatabaseConnection(dsn2)
 
@@ -210,9 +211,17 @@ func abtestCmd() *cobra.Command {
 					// 	}
 					// }
 					if isNTDelete {
-						if err2 != nil {
-							// skip this case, see BU-30.
-							fmt.Println("err2 != nil, skip this case")
+						// If either of the normal delete or nt-delte fails, we should not compare the results. We cannot guarantee that the results are the same.
+						// because we assure there is at most 1 batch. Errors in NT-delete are always early returned, thus captured in err1.
+						if err2 != nil || err1 != nil {
+							// skip this case, see BU-32.
+							fmt.Println("one of the deletes failed, skip this case:")
+							if err1 != nil {
+								fmt.Printf("err1: %v, ", err1)
+							}
+							if err2 != nil {
+								fmt.Printf("err2: %v", err2)
+							}
 							continue epoch
 						}
 						if rs1 != nil && rs2 != nil && debug {
