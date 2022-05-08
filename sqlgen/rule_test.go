@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
+	"github.com/pingcap/tidb/parser"
+	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,14 +51,14 @@ func TestCreateTableLike(t *testing.T) {
 	sqlgen.CreateTable.Eval(state)
 	for i := 0; i < 100; i++ {
 		sqlgen.CreateTableLike.Eval(state)
-		state.Env().Table = state.GetRandTable()
+		state.Env().Table = state.Tables.Rand()
 		sqlgen.AddColumn.Eval(state)
-		dropColTbls := state.FilterTables(func(t *sqlgen.Table) bool {
+		dropColTbls := state.Tables.Filter(func(t *sqlgen.Table) bool {
 			state.Env().Table = t
 			return sqlgen.MoreThan1Columns(state) && sqlgen.HasDroppableColumn(state)
 		})
 		if len(dropColTbls) > 0 {
-			state.Env().Table = dropColTbls.PickOne()
+			state.Env().Table = dropColTbls.Rand()
 			sqlgen.DropColumn.Eval(state)
 		}
 	}
@@ -67,7 +69,7 @@ func TestAlterColumnPosition(t *testing.T) {
 	defer state.CheckIntegrity()
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	_ = sqlgen.CreateTable.Eval(state)
-	state.Env().Table = state.GetRandTable()
+	state.Env().Table = state.Tables.Rand()
 	for i := 0; i < 10; i++ {
 		_ = sqlgen.InsertInto.Eval(state)
 	}
@@ -75,7 +77,7 @@ func TestAlterColumnPosition(t *testing.T) {
 		_ = sqlgen.AlterColumn.Eval(state)
 	}
 	// TODO: implement the type-value compatibility check.
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	for _, c := range tbl.Columns {
 		fmt.Printf("%s ", c.Tp)
 	}
@@ -95,17 +97,31 @@ func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {
 	state.ReplaceRule(sqlgen.AlterColumn, sqlgen.AlterColumnNoPK)
 
 	_ = sqlgen.CreateTable.Eval(state)
-	tbl := state.GetRandTable()
-	pk := tbl.GetRandomIndex()
+	tbl := state.Tables.Rand()
+	pk := tbl.Indexes.Rand()
 	require.Equal(t, sqlgen.IndexTypePrimary, pk.Tp)
-	pkCols := tbl.Columns.FilterColumns(func(c *sqlgen.Column) bool {
-		return pk.ContainsColumn(c)
+	pkCols := tbl.Columns.Filter(func(c *sqlgen.Column) bool {
+		return pk.HasColumn(c)
 	})
 	state.Env().Table = tbl
 	for i := 0; i < 30; i++ {
 		sqlgen.AlterColumn.Eval(state)
 	}
 	for _, pkCol := range pkCols {
-		require.True(t, tbl.Columns.ContainColumn(pkCol))
+		require.True(t, tbl.Columns.Contain(pkCol))
+	}
+}
+
+func TestSyntax(t *testing.T) {
+	state := sqlgen.NewState()
+	defer state.CheckIntegrity()
+	tidbParser := parser.New()
+
+	state.Config().SetMaxTable(200)
+	for i := 0; i < 1000; i++ {
+		sql := sqlgen.Start.Eval(state)
+		_, warn, err := tidbParser.ParseSQL(sql)
+		require.Lenf(t, warn, 0, "sql: %s", sql)
+		require.Nilf(t, err, "sql: %s", sql)
 	}
 }

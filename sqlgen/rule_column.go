@@ -68,11 +68,11 @@ var ColumnDefinitionCollation = NewFn(func(state *State) Fn {
 	}
 	switch col.Tp {
 	case ColumnTypeBinary, ColumnTypeVarBinary, ColumnTypeBlob:
-		col.collate = Collations[CollationBinary]
+		col.Collation = Collations[CollationBinary]
 		return Empty
 	default:
-		col.collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
-		return Opt(Strs("collate", col.collate.CollationName))
+		col.Collation = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		return Opt(Strs("collate", col.Collation.CollationName))
 	}
 })
 

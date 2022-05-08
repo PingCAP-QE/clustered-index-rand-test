@@ -10,9 +10,9 @@ func (s *State) Clone() *State {
 		return nil
 	}
 	s1 := *s
-	s1.tables = make([]*Table, 0, len(s.tables))
-	for _, tbl := range s.tables {
-		s1.tables = append(s1.tables, tbl.Clone())
+	s1.Tables = make([]*Table, 0, len(s.Tables))
+	for _, tbl := range s.Tables {
+		s1.Tables = append(s1.Tables, tbl.Clone())
 	}
 	s1.env = s.env.Clone()
 	return &s1
@@ -25,20 +25,20 @@ func (t *Table) Clone() *Table {
 		newTable.Columns = append(newTable.Columns, col.Clone())
 	}
 	newTable.values = cloneValues(t.values)
-	newTable.Indices = make([]*Index, 0, len(t.Indices))
-	for _, idx := range t.Indices {
+	newTable.Indexes = make([]*Index, 0, len(t.Indexes))
+	for _, idx := range t.Indexes {
 		newIdx := *idx
 		newIdx.Columns = make([]*Column, 0, len(idx.Columns))
 		for _, c := range idx.Columns {
-			offset := t.Columns.IndexByID(c.ID)
+			offset := t.Columns.ByID(c.ID)
 			newIdx.Columns = append(newIdx.Columns, newTable.Columns[offset])
 		}
 		newIdx.ColumnPrefix = cloneInts(idx.ColumnPrefix)
-		newTable.Indices = append(newTable.Indices, &newIdx)
+		newTable.Indexes = append(newTable.Indexes, &newIdx)
 	}
 	newTable.colForPrefixIndex = make([]*Column, 0, len(t.colForPrefixIndex))
 	for _, c := range t.colForPrefixIndex {
-		offset := t.Columns.IndexByID(c.ID)
+		offset := t.Columns.ByID(c.ID)
 		newTable.colForPrefixIndex = append(newTable.colForPrefixIndex, newTable.Columns[offset])
 	}
 	// TODO: DROP TABLE need to remove itself from children tables.

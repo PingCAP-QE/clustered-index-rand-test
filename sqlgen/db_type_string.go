@@ -16,9 +16,9 @@ func (t *Table) String() string {
 		}
 		sb.WriteString(c.String())
 	}
-	if len(t.Indices) != 0 {
+	if len(t.Indexes) != 0 {
 		sb.WriteString(", ")
-		for i, idx := range t.Indices {
+		for i, idx := range t.Indexes {
 			if i != 0 {
 				sb.WriteString(",")
 			}

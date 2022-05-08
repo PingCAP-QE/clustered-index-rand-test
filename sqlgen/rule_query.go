@@ -26,7 +26,7 @@ var QueryAll = NewFn(func(state *State) Fn {
 }).P(HasTables)
 
 var UnionSelect = NewFn(func(state *State) Fn {
-	tbl1, tbl2 := state.GetRandTable(), state.GetRandTable()
+	tbl1, tbl2 := state.Tables.Rand(), state.Tables.Rand()
 	fieldNum := mathutil.Min(len(tbl1.Columns), len(tbl2.Columns))
 	state.env.Table = tbl1
 	state.env.QState = &QueryState{FieldNumHint: fieldNum, SelectedCols: map[*Table]QueryStateColumns{
@@ -54,7 +54,7 @@ var UnionSelect = NewFn(func(state *State) Fn {
 })
 
 var SingleSelect = NewFn(func(state *State) Fn {
-	tbl := state.GetRandTable()
+	tbl := state.Tables.Rand()
 	state.env.QState = &QueryState{
 		SelectedCols: map[*Table]QueryStateColumns{
 			tbl: {
@@ -67,8 +67,8 @@ var SingleSelect = NewFn(func(state *State) Fn {
 })
 
 var MultiSelect = NewFn(func(state *State) Fn {
-	tbl1 := state.GetRandTable()
-	tbl2 := state.GetRandTable()
+	tbl1 := state.Tables.Rand()
+	tbl2 := state.Tables.Rand()
 	state.env.QState = &QueryState{
 		SelectedCols: map[*Table]QueryStateColumns{
 			tbl1: {
@@ -135,7 +135,7 @@ var SelectField = NewFn(func(state *State) Fn {
 var SelectFieldName = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	cols := state.env.QColumns
-	c := cols.GetRand()
+	c := cols.Rand()
 	return Str(fmt.Sprintf("%s.%s", tbl.Name, c.Name))
 })
 
@@ -170,7 +170,7 @@ var JoinPredicate = NewFn(func(state *State) Fn {
 		prevCol   *Column
 	)
 	for t, cols := range queryState.SelectedCols {
-		col := cols.GetRand()
+		col := cols.Rand()
 		if prevTable != nil {
 			preds = append(preds,
 				fmt.Sprintf("%s.%s = %s.%s",
@@ -246,13 +246,13 @@ var WindowClause = NewFn(func(state *State) Fn {
 
 var WindowPartitionBy = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.GetRandNonEmpty()
+	cols := tbl.Columns.RandNNotNil()
 	return Strs("partition by", PrintColumnNamesWithoutPar(cols, ""))
 })
 
 var WindowOrderBy = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	cols := tbl.Columns.GetRandNonEmpty()
+	cols := tbl.Columns.RandNNotNil()
 	return Strs("order by", PrintColumnNamesWithoutPar(cols, ""))
 })
 
@@ -283,7 +283,7 @@ var WindowFunction = NewFn(func(state *State) Fn {
 	for t := range queryState.SelectedCols {
 		tbl = t
 	}
-	col := Str(tbl.GetRandColumn().Name)
+	col := Str(tbl.Columns.Rand().Name)
 	num := Str(RandomNum(1, 6))
 	return Or(
 		Str("row_number()"),
@@ -309,9 +309,9 @@ var Predicates = NewFn(func(state *State) Fn {
 		if state.env.QState != nil {
 			state.env.Table = state.env.QState.GetRandTable()
 		} else if state.env.Table == nil {
-			state.env.Table = state.GetRandTable()
+			state.env.Table = state.Tables.Rand()
 		}
-		state.env.Column = state.env.Table.GetRandColumn()
+		state.env.Column = state.env.Table.Columns.Rand()
 		pred = append(pred, Predicate.Eval(state))
 	}
 	return Str(strings.Join(pred, " "))
@@ -340,7 +340,10 @@ var Predicate = NewFn(func(state *State) Fn {
 })
 
 var InValues = NewFn(func(state *State) Fn {
-	return Or(RandColVals, SubSelect)
+	return Or(
+		RandColVals,
+		SubSelect,
+	)
 })
 
 var RandColVals = NewFn(func(state *State) Fn {
@@ -360,26 +363,22 @@ var RandVal = NewFn(func(state *State) Fn {
 })
 
 var SubSelect = NewFn(func(state *State) Fn {
-	subTbl := state.GetRandTable()
-	subCol := subTbl.GetRandColumn()
+	subTbl := state.Tables.Rand()
+	subCol := subTbl.Columns.Rand()
 	return And(
 		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
 		Str("where"), Predicates2,
 	)
 })
 
-var InValuesWithGivenTp = NewFn(func(state *State) Fn {
-	return Or(RandColVals, SubSelectWithGivenTp.P(HasSameColumnType))
-})
-
 var SubSelectWithGivenTp = NewFn(func(state *State) Fn {
 	randCol := state.env.Column
-	subTbl, subCol := state.GetRandTableColumnWithTp(randCol.Tp)
+	subTbl, subCol := GetRandTableColumnWithTp(state.Tables, randCol.Tp)
 	return And(
 		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
 		Str("where"), Predicate,
 	)
-})
+}).P(HasSameColumnType)
 
 var ForUpdateOpt = NewFn(func(state *State) Fn {
 	return Opt(Str("for update"))

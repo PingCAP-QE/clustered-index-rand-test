@@ -12,7 +12,7 @@ type IntegrityChecker interface {
 }
 
 func (s *State) CheckIntegrity() {
-	for _, tb := range s.tables {
+	for _, tb := range s.Tables {
 		Assert(tb != nil)
 		tb.CheckIntegrity()
 	}
@@ -23,11 +23,11 @@ func (t *Table) CheckIntegrity() {
 		Assert(col != nil)
 		col.CheckIntegrity()
 	}
-	for _, idx := range t.Indices {
+	for _, idx := range t.Indexes {
 		Assert(idx != nil)
 		idx.CheckIntegrity()
 		for _, idxCol := range idx.Columns {
-			Assert(t.Columns.ContainColumn(idxCol))
+			Assert(t.Columns.Contain(idxCol))
 		}
 	}
 }

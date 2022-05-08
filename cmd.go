@@ -330,7 +330,7 @@ func generateInitialSQLs(state *sqlgen.State) []string {
 		query := sqlgen.CreateTable.Eval(state)
 		sqls = append(sqls, query)
 	}
-	for _, tb := range state.GetAllTables() {
+	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
 			query := sqlgen.InsertInto.Eval(state)

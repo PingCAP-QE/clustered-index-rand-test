@@ -1,22 +1,26 @@
 package sqlgen
 
 var NoTooMuchTables = func(s *State) bool {
-	return len(s.tables) < 20
+	return len(s.Tables) < 20
 }
 
 var CurrentTableHasIndices = func(s *State) bool {
-	return len(s.env.Table.Indices) > 0
+	return len(s.env.Table.Indexes) > 0
 }
 
 var NoPrimaryKey = func(s *State) bool {
-	idx := s.env.Table.Indices
+	idx := s.env.Table.Indexes
 	return !idx.Find(func(index *Index) bool {
 		return index.Tp == IndexTypePrimary
 	})
 }
 
 var HasTables = func(s *State) bool {
-	return len(s.tables) >= 1
+	return len(s.Tables) >= 1
+}
+
+var HasDroppedTables = func(s *State) bool {
+	return len(s.droppedTables) > 0
 }
 
 var MoreThan1Columns = func(s *State) bool {
@@ -27,7 +31,7 @@ var MoreThan1Columns = func(s *State) bool {
 var HasDroppableColumn = func(s *State) bool {
 	tbl := s.env.Table
 	for _, c := range tbl.Columns {
-		if !c.ColumnHasIndex(tbl) {
+		if !c.HasIndex(tbl) {
 			return true
 		}
 	}
@@ -66,12 +70,12 @@ var IndexColumnCanHaveNoPrefix = func(s *State) bool {
 
 var HasNonPKCol = func(s *State) bool {
 	tbl := s.env.Table
-	pk := tbl.GetPrimaryKeyIndex()
+	pk := tbl.Indexes.Primary()
 	if pk == nil {
 		return true
 	}
-	return tbl.Columns.Find(func(c *Column) bool {
-		return !pk.ContainsColumn(c)
+	return tbl.Columns.Found(func(c *Column) bool {
+		return !pk.HasColumn(c)
 	})
 }
 
@@ -80,6 +84,6 @@ var isShardableColumn = func(c *Column) bool {
 }
 var HasSameColumnType = func(s *State) bool {
 	col := s.env.Column
-	t, _ := s.GetRandTableColumnWithTp(col.Tp)
+	t, _ := GetRandTableColumnWithTp(s.Tables, col.Tp)
 	return t != nil
 }

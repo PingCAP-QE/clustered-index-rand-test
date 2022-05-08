@@ -55,17 +55,6 @@ func RandomGroups(ss []string, groupCount int) [][]string {
 	return groups
 }
 
-func ConcatColumnPairs(t1, t2 *Table, col1, col2 []*Column) TableColumnPairs {
-	ret := make(TableColumnPairs, 0, len(col1)+len(col2))
-	for _, c := range col1 {
-		ret = append(ret, TableColumnPair{t: t1, c: c})
-	}
-	for _, c := range col2 {
-		ret = append(ret, TableColumnPair{t: t2, c: c})
-	}
-	return ret
-}
-
 type SeqGetter = func(idx int) interface{}
 type SeqSetter = func(idx int, v interface{})
 
@@ -105,7 +94,7 @@ func Move(srcIdx, destIdx int, get SeqGetter, set SeqSetter) {
 	}
 }
 
-// FilterColumns filters the columns inplace.
+// Filter filters the columns inplace.
 func FilterColumnGroup(colGroups [][]*Column, pred func(c []*Column) bool) [][]*Column {
 	filled := 0
 	for _, g := range colGroups {
@@ -157,4 +146,49 @@ func GroupColumnsWithSameType(cols []*Column) [][]*Column {
 		}
 	}
 	return result
+}
+
+type TableColumns struct {
+	Table   *Table
+	Columns Columns
+}
+
+type TableColumnsArr []*TableColumns
+
+func (ts Tables) TableColumnPairs() TableColumnsArr {
+	arr := make(TableColumnsArr, 0, len(ts))
+	for _, t := range ts {
+		arr = append(arr, &TableColumns{
+			Table:   t,
+			Columns: t.Columns,
+		})
+	}
+	return arr
+}
+
+func (tcs TableColumnsArr) Map(pred func(tc *TableColumns) *TableColumns) TableColumnsArr {
+	return gMap(tcs, pred)
+}
+
+func (tcs TableColumnsArr) Filter(pred func(tc *TableColumns) bool) TableColumnsArr {
+	return gFilter(tcs, pred)
+}
+
+func (tcs TableColumnsArr) Rand() *TableColumns {
+	return gRand1(tcs)
+}
+
+func (tc *TableColumns) Rand() (*Table, *Column) {
+	return tc.Table, tc.Columns.Rand()
+}
+
+func GetRandTableColumnWithTp(tbls Tables, tp ColumnType) (*Table, *Column) {
+	return tbls.TableColumnPairs().Map(func(tc *TableColumns) *TableColumns {
+		tc.Columns = tc.Columns.Filter(func(c *Column) bool {
+			return c.Tp == tp
+		})
+		return tc
+	}).Filter(func(tc *TableColumns) bool {
+		return len(tc.Columns) > 0
+	}).Rand().Rand()
 }

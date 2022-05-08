@@ -10,16 +10,17 @@ type State struct {
 	repeat map[string]Interval
 	prereq map[string]func(*State) bool
 
-	tables Tables
-	ctes   [][]*Table
-	alloc  *IDAllocator
+	Tables        Tables
+	droppedTables Tables
+
+	ctes  [][]*Table
+	alloc *IDAllocator
 
 	env *Env
 
 	prepareStmts []*Prepare
 
-	todoSQLs []string
-	fnStack  string
+	fnStack string
 }
 
 type Table struct {
@@ -27,7 +28,7 @@ type Table struct {
 	Name    string
 	AsName  string
 	Columns Columns
-	Indices Indexes
+	Indexes Indexes
 	Collate *Collation
 
 	tiflashReplica int
@@ -42,18 +43,18 @@ type Table struct {
 }
 
 type Column struct {
-	ID   int
-	Name string
-	Tp   ColumnType
+	ID        int
+	Name      string
+	Tp        ColumnType
+	Collation *Collation
 
 	isUnsigned bool
-	arg1       int      // optional
-	arg2       int      // optional
-	args       []string // for ColumnTypeSet and ColumnTypeEnum
+	arg1       int // optional
+	arg2       int // optional
 
+	args       []string // for ColumnTypeSet and ColumnTypeEnum
 	defaultVal string
 	isNotNull  bool
-	collate    *Collation
 }
 
 type Index struct {
@@ -161,7 +162,7 @@ func (s *State) PickRandomCTEOrTableName() string {
 		}
 	}
 
-	for _, tbl := range s.tables {
+	for _, tbl := range s.Tables {
 		names = append(names, tbl.Name)
 	}
 
