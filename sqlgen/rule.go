@@ -13,17 +13,16 @@ var Start = NewFn(func(state *State) Fn {
 		CreateTable.W(13).P(NoTooMuchTables),
 		CreateTableLike.W(6).P(HasTables, NoTooMuchTables),
 		Query.W(20).P(HasTables),
-		// QueryAll.W(20).P(HasTables),
 		// QueryPrepare.W(2).P(HasTables),
 		DMLStmt.W(20).P(HasTables),
 		DDLStmt.W(5).P(HasTables),
 		SplitRegion.W(1).P(HasTables),
 		AnalyzeTable.W(0).P(HasTables),
-		//PrepareStmt.W(2).P(HasTables),
-		//DeallocPrepareStmt.W(1).P(HasTables),
+		// PrepareStmt.W(2).P(HasTables),
+		// DeallocPrepareStmt.W(1).P(HasTables),
 		FlashBackTable.W(1).P(HasDroppedTables),
-		//SelectIntoOutFile.W(1).P(HasTables),
-		//LoadTable.W(1).P(HasTables),
+		// SelectIntoOutFile.W(1).P(HasTables),
+		// LoadTable.W(1).P(HasTables),
 		DropTable.W(1).P(HasTables),
 		TruncateTable.W(1).P(HasTables),
 		SetTiFlashReplica.W(0).P(HasTables),
@@ -31,11 +30,12 @@ var Start = NewFn(func(state *State) Fn {
 })
 
 var DMLStmt = NewFn(func(state *State) Fn {
-	state.env.Table = state.GetRandTable()
+	state.env.Table = state.Tables.Rand()
 	return Or(
-		CommonDelete.W(1).P(HasShardableColumn),
+		CommonDelete.W(1),
 		CommonInsertOrReplace.W(3),
 		CommonUpdate.W(1),
+		NonTransactionalDelete.W(1).P(HasShardableColumn),
 	)
 })
 
@@ -234,6 +234,10 @@ var AnalyzeTable = NewFn(func(state *State) Fn {
 	return And(Str("analyze table"), Str(tbl.Name))
 })
 
+var NonTransactionalDelete = NewFn(func(state *State) Fn {
+	return CommonDelete
+})
+
 var CommonDelete = NewFn(func(state *State) Fn {
 	tbl := state.Tables.Rand()
 	state.env.Table = tbl
@@ -242,11 +246,6 @@ var CommonDelete = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
 	return And(
-		Str("split"),
-		Str("on"),
-		Str(shardCol.Name),
-		Str("limit"),
-		Str("1000"),
 		Str("delete"),
 		Str("from"),
 		Str(tbl.Name),
@@ -261,7 +260,7 @@ var CommonDelete = NewFn(func(state *State) Fn {
 				Str(")")),
 			And(Str(col.Name), Str("is null")),
 		),
-		// Opt(OrderByLimit),
+		Opt(OrderByLimit),
 	)
 })
 
@@ -410,7 +409,7 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 	return Strs("create table", newTbl.Name, "like", tbl.Name)
 })
 
-//var SelectIntoOutFile = NewFn(func(state *State) Fn {
+// var SelectIntoOutFile = NewFn(func(state *State) Fn {
 //	tbl := state.Tables.Rand()
 //	state.StoreInRoot(ScopeKeyLastOutFileTable, tbl)
 //	_ = os.RemoveAll(SelectOutFileDir)

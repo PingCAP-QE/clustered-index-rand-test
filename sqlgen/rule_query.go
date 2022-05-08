@@ -17,7 +17,7 @@ var Query = NewFn(func(state *State) Fn {
 }).P(HasTables)
 
 var QueryAll = NewFn(func(state *State) Fn {
-	table := state.GetRandTable()
+	table := state.Tables.Rand()
 	fields := make([]string, 0)
 	for _, c := range table.Columns {
 		fields = append(fields, c.Name)

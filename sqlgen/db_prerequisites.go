@@ -38,13 +38,6 @@ var HasDroppableColumn = func(s *State) bool {
 	return false
 }
 
-var HasIndexableColumn = func(s *State) bool {
-	tbl := s.env.Table
-	return tbl.Columns.Find(func(c *Column) bool {
-		return c.Tp != ColumnTypeJSON
-	})
-}
-
 var HasShardableColumn = func(s *State) bool {
 	tbl := s.env.Table
 	if tbl == nil {
@@ -53,7 +46,7 @@ var HasShardableColumn = func(s *State) bool {
 	if tbl.Columns == nil {
 		return false
 	}
-	return tbl.Columns.Find(func(c *Column) bool {
+	return tbl.Columns.Found(func(c *Column) bool {
 		return isShardableColumn(c)
 	})
 }

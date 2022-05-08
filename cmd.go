@@ -106,7 +106,7 @@ func parseAndSetSeed(seed string) int64 {
 		}
 	}
 	rand.Seed(seedInt)
-	// fmt.Printf("current seed: %d\n", seedInt)
+	fmt.Printf("current seed: %d\n", seedInt)
 	return seedInt
 }
 
@@ -157,6 +157,7 @@ func abtestCmd() *cobra.Command {
 		logPath     string
 		seed        string
 		debug       bool
+		testNT      bool
 	)
 	cmd := &cobra.Command{
 		Use:           "abtest",
@@ -165,102 +166,84 @@ func abtestCmd() *cobra.Command {
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedSeed := parseAndSetSeed(seed)
-		epoch:
-			for seed := 0; seed < 3000; seed++ {
-				seed := parsedSeed + int64(seed)
-				rand.Seed(seed)
-				fmt.Printf("seed: %d\n", seed)
-				conn1 := setUpDatabaseConnection(dsn1)
-				conn2 := setUpDatabaseConnection(dsn2)
+			conn1 := setUpDatabaseConnection(dsn1)
+			conn2 := setUpDatabaseConnection(dsn2)
 
-				state := sqlgen.NewState()
+			state := sqlgen.NewState()
+			if testNT {
 				state.SetWeight(sqlgen.DMLStmt, 500)
 				state.SetWeight(sqlgen.Query, 0) // there can be valid but randomized results
 				state.SetWeight(sqlgen.CommonUpdate, 0)
+				state.SetWeight(sqlgen.CommonDelete, 0)
 				state.SetWeight(sqlgen.AlterColumn, 0) // column name change can have different results in nt-delete, e.g. shard on the changed column
-				state.ReplaceRule(sqlgen.InValues, sqlgen.InValuesWithGivenTp)
-				queries := generateInitialSQLs(state)
-				queries = append(queries, generatePlainSQLs(state, stmtCount)...)
+				state.SetWeight(sqlgen.ColumnDefinitionTypesJSON, 0)
+				state.ReplaceRule(sqlgen.SubSelect, sqlgen.SubSelectWithGivenTp)
+			} else {
+				state = cases.NewGBKState()
+			}
+			queries := generateInitialSQLs(state)
+			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
+			if testNT {
 				for i := 0; i < 10; i++ {
 					queries = append(queries, sqlgen.QueryAll.Eval(state))
 				}
-
 				executeQuery(conn1, "set tidb_general_log=1")
 				executeQuery(conn2, "set tidb_general_log=1")
+			}
 
-				for _, query := range queries {
-					isNTDelete := strings.HasPrefix(query, "split on")
-					if debug {
-						fmt.Println(query + ";\n")
-					}
-					rs1, err1 := executeQuery(conn1, query)
-					if isNTDelete {
-						query = query[strings.Index(query, "delete"):]
-					}
-					rs2, err2 := executeQuery(conn2, query)
-					// if debug {
-					// 	fmt.Println("# err1: ", colorizeErrorMsg(err1))
-					// 	fmt.Println("# err2: ", colorizeErrorMsg(err2))
-					// }
-					// if debug {
-					// 	if rs1 != nil {
-					// 		fmt.Println("# rs1: ", rs1.String())
-					// 	}
-					// 	if rs2 != nil {
-					// 		fmt.Println("# rs2: ", rs2.String())
-					// 	}
-					// }
-					if isNTDelete {
-						// If either of the normal delete or nt-delte fails, we should not compare the results. We cannot guarantee that the results are the same.
-						// because we assure there is at most 1 batch. Errors in NT-delete are always early returned, thus captured in err1.
-						if err2 != nil || err1 != nil {
-							// skip this case, see BU-32.
-							fmt.Println("one of the deletes failed, skip this case:")
-							if err1 != nil {
-								fmt.Printf("err1: %v, ", err1)
-							}
-							if err2 != nil {
-								fmt.Printf("err2: %v", err2)
-							}
-							continue epoch
+			for i, query := range queries {
+				isNTDelete := testNT && strings.HasPrefix(query, "split on")
+				if debug {
+					fmt.Println(query + ";\n")
+				}
+				rs1, err1 := executeQuery(conn1, query)
+				if isNTDelete {
+					query = query[strings.Index(query, "delete"):]
+				}
+				rs2, err2 := executeQuery(conn2, query)
+				if isNTDelete {
+					// If either of the normal delete or nt-delete fails, we should not compare the results. We cannot guarantee that the results are the same.
+					// because we assure there is at most 1 batch. Errors in NT-delete are always early returned, thus captured in err1.
+					if err2 != nil || err1 != nil {
+						// skip this case, see BU-32.
+						fmt.Println("one of the deletes failed, skip this case:")
+						if err1 != nil {
+							fmt.Printf("err1: %v, ", err1)
 						}
-						if rs1 != nil && rs2 != nil && debug {
-							var a, b bytes.Buffer
-							rs1.PrettyPrint(&a)
-							rs2.PrettyPrint(&b)
-							println(a.String(), b.String())
+						if err2 != nil {
+							fmt.Printf("err2: %v", err2)
 						}
-						continue
+						return nil
 					}
-					if !ValidateErrs(err1, err2) {
-						msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
-						if err1 == nil {
-							var b bytes.Buffer
-							rs1.PrettyPrint(&b)
-							println(b.String())
-						}
-						return errors.Errorf(msg)
-					}
-					if rs1 == nil && rs2 == nil {
-						continue
-					}
-					if strings.HasPrefix(query, "SELECT") && debug {
+					if rs1 != nil && rs2 != nil && debug {
 						var a, b bytes.Buffer
 						rs1.PrettyPrint(&a)
 						rs2.PrettyPrint(&b)
 						println(a.String(), b.String())
 					}
-					if isNTDelete {
-						continue
+					continue
+				}
+				if !ValidateErrs(err1, err2) {
+					msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
+					return errors.Errorf(msg)
+				}
+				if rs1 == nil && rs2 == nil {
+					continue
+				}
+				if debug {
+					fmt.Println(rs1.String())
+					fmt.Println(rs2.String())
+				}
+				if isNTDelete {
+					continue
+				}
+				if err := compareResult(rs1, rs2, query); err != nil {
+					logFile, _ := os.Create("case.sql")
+					for j := 0; j <= i; j++ {
+						logFile.WriteString(fmt.Sprintf("%s;\n", queries[j]))
 					}
-					if err := compareResult(rs1, rs2, query); err != nil {
-						logFile, _ := os.Create("case.sql")
-						for _, query := range queries {
-							logFile.WriteString(fmt.Sprintf("%s;\n", query))
-						}
-						logFile.Close()
-						return err
-					}
+					logFile.Close()
+					return err
 				}
 			}
 			return nil
@@ -273,6 +256,7 @@ func abtestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
 	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
+	cmd.Flags().BoolVar(&testNT, "nontransactional", false, "test non-transactional delete")
 	return cmd
 }
 
