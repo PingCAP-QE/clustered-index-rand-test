@@ -235,7 +235,33 @@ var AnalyzeTable = NewFn(func(state *State) Fn {
 })
 
 var NonTransactionalDelete = NewFn(func(state *State) Fn {
-	return CommonDelete
+	tbl := state.env.Table
+	col := tbl.Columns.Rand()
+	shardCol := tbl.Columns.Filter(isShardableColumn).Rand()
+	var randRowVal = NewFn(func(state *State) Fn {
+		return Str(col.RandomValue())
+	})
+	return And(
+		Str("split"),
+		Str("on"),
+		Str(shardCol.Name),
+		Str("limit"),
+		Or(Str("1"), Str("2"), Str("3"), Str("4")),
+		Str("delete"),
+		Str("from"),
+		Str(tbl.Name),
+		Str("where"),
+		Or(
+			And(Predicates),
+			And(
+				Str(fmt.Sprintf("%s.%s", tbl.Name, col.Name)),
+				Str("in"),
+				Str("("),
+				Repeat(randRowVal.R(1, 9), Str(",")),
+				Str(")")),
+			And(Str(col.Name), Str("is null")),
+		),
+	)
 })
 
 var CommonDelete = NewFn(func(state *State) Fn {
