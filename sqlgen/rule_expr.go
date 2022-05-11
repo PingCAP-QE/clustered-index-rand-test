@@ -14,8 +14,11 @@ var BuiltinFunction = NewFn(func(state *State) Fn {
 	intCols := tbl.Columns.Filter(func(c *Column) bool {
 		return c.Tp.IsIntegerType()
 	}).Or(cols.Columns)
-	s1, s2 := Str(strCols.Rand().Name), Str(strCols.Rand().Name)
-	i1, i2 := Str(intCols.Rand().Name), Str(intCols.Rand().Name)
+	mk := func(colName string) Fn {
+		return Str(fmt.Sprintf("%s.%s", tbl.Name, colName))
+	}
+	s1, s2 := mk(strCols.Rand().Name), mk(strCols.Rand().Name)
+	i1, i2 := mk(intCols.Rand().Name), mk(intCols.Rand().Name)
 	chs := Str(Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)].CharsetName)
 	ns := RandomNums(0, 10, 2)
 	n1, n2 := Str(ns[0]), Str(ns[1])

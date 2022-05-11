@@ -4,14 +4,39 @@ var NoTooMuchTables = func(s *State) bool {
 	return len(s.Tables) < 20
 }
 
-var CurrentTableHasIndices = func(s *State) bool {
-	return len(s.env.Table.Indexes) > 0
+var HasModifiableIndexes = func(s *State) bool {
+	cnt := len(s.Env().Table.Indexes)
+	switch cnt {
+	case 0:
+		return false
+	case 1:
+		return !s.Env().Table.Clustered
+	default:
+		return true
+	}
+}
+
+var AddIndex2 Fn
+
+func init() {
+	AddIndex2 = AddIndex
+}
+
+var NotAddingIndex = func(state *State) bool {
+	return !state.Env().IsIn(AddIndex2)
 }
 
 var NoPrimaryKey = func(s *State) bool {
 	idx := s.env.Table.Indexes
-	return !idx.Find(func(index *Index) bool {
+	return !idx.Found(func(index *Index) bool {
 		return index.Tp == IndexTypePrimary
+	})
+}
+
+var HasNotNullColumn = func(s *State) bool {
+	tbl := s.env.Table
+	return tbl.Columns.Found(func(c *Column) bool {
+		return c.isNotNull
 	})
 }
 
@@ -48,15 +73,18 @@ var IndexColumnCanHaveNoPrefix = func(s *State) bool {
 	return !col.Tp.NeedKeyLength()
 }
 
-var HasNonPKCol = func(s *State) bool {
+var HasModifiableColumn = func(s *State) bool {
 	tbl := s.env.Table
-	pk := tbl.Indexes.Primary()
-	if pk == nil {
-		return true
-	}
-	return tbl.Columns.Found(func(c *Column) bool {
-		return !pk.HasColumn(c)
+	cols := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		return !s.env.MultiObjs.SameObject(c.Name)
 	})
+	pk := tbl.Indexes.Primary()
+	if pk != nil && tbl.Clustered {
+		// Not support modify/change clustered primary key columns.
+		cols = cols.Diff(pk.Columns)
+	}
+	return len(cols) > 0
 }
 
 var HasSameColumnType = func(s *State) bool {

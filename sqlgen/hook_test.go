@@ -12,7 +12,7 @@ func TestHookPredNeedRollBackStmt(t *testing.T) {
 	state := sqlgen.NewState()
 	predHook := sqlgen.NewFnHookPred()
 	rollBackStmts := []sqlgen.Fn{
-		sqlgen.DDLStmt, sqlgen.FlashBackTable, sqlgen.CreateTable, sqlgen.SplitRegion,
+		sqlgen.AlterTable, sqlgen.FlashBackTable, sqlgen.CreateTable, sqlgen.SplitRegion,
 	}
 	for _, f := range rollBackStmts {
 		predHook.AddMatchFn(f)

@@ -52,7 +52,7 @@ func checkSyntaxCmd() *cobra.Command {
 			fileWriter := newFileWriter(outputFile)
 			conn := setUpDatabaseConnection(dsn)
 
-			state := cases.NewGBKState()
+			state := cases.NewMultiSchemaChangeState()
 			queries := generatePlainSQLs(state, stmtCount)
 			//queries := generateCreateTables(state, stmtCount)
 
@@ -64,6 +64,7 @@ func checkSyntaxCmd() *cobra.Command {
 				fileWriter.writeSQL(query)
 				_, err := executeQuery(conn, query)
 				if err != nil {
+					fmt.Println(query)
 					errMsg := strings.ToLower(err.Error())
 					if strings.Contains(errMsg, "error") &&
 						strings.Contains(errMsg, "error 1064") {
@@ -253,6 +254,14 @@ func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
 	}
 	defer rows.Close()
 	return resultset.ReadFromRows(rows)
+}
+
+func executeAndPrint(conn *sql.Conn, query string) {
+	rs, err := executeQuery(conn, query)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	rs.PrettyPrint(os.Stdout)
 }
 
 func generateInitialSQLs(state *sqlgen.State) []string {

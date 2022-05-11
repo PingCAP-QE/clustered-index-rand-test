@@ -21,3 +21,12 @@ func TestGBKCase(t *testing.T) {
 		fmt.Println(query)
 	}
 }
+
+func TestTiDB600Case(t *testing.T) {
+	state := NewStateForTiDB600()
+	for i := 0; i < 1000; i++ {
+		query := sqlgen.Start.Eval(state)
+		fmt.Printf("/*%d*/ ", i)
+		fmt.Println(query)
+	}
+}

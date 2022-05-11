@@ -29,6 +29,9 @@ var IndexDefinition = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	tbl.AppendIndex(newIdx)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(newIdx.Name)
+	}
 	return Str(ret)
 })
 
@@ -36,7 +39,7 @@ var IndexDefinitionType = NewFn(func(state *State) Fn {
 	return Or(
 		IndexDefinitionTypeUnique,
 		IndexDefinitionTypeNonUnique,
-		IndexDefinitionTypePrimary.P(NoPrimaryKey),
+		IndexDefinitionTypePrimary.P(NoPrimaryKey, HasNotNullColumn),
 	)
 })
 
@@ -137,7 +140,19 @@ var IndexDefinitionClustered = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	return Or(
-		Str("/*T![clustered_index] clustered */"),
-		Str("/*T![clustered_index] nonclustered */"),
+		IndexDefinitionKeywordClustered.P(NotAddingIndex), // Not support add clustered primary key.
+		IndexDefinitionKeywordNonClustered,
 	)
+})
+
+var IndexDefinitionKeywordClustered = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	tbl.Clustered = true
+	return Str("/*T![clustered_index] clustered */")
+})
+
+var IndexDefinitionKeywordNonClustered = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	tbl.Clustered = false
+	return Str("/*T![clustered_index] nonclustered */")
 })

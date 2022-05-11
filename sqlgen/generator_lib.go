@@ -152,6 +152,10 @@ var Empty = NewFn(func(state *State) Fn {
 	return Str("")
 })
 
+var None = NewFn(func(state *State) Fn {
+	return Str("")
+})
+
 func Opt(fn Fn) Fn {
 	ret := defaultFn()
 	ret.Gen = func(state *State) string {

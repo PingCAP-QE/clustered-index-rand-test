@@ -15,7 +15,7 @@ var Start = NewFn(func(state *State) Fn {
 		Query.W(20).P(HasTables),
 		//QueryPrepare.W(2).P(HasTables),
 		DMLStmt.W(20).P(HasTables),
-		DDLStmt.W(5).P(HasTables),
+		AlterTable.W(5).P(HasTables),
 		SplitRegion.W(1).P(HasTables),
 		AnalyzeTable.W(0).P(HasTables),
 		//PrepareStmt.W(2).P(HasTables),
@@ -37,14 +37,28 @@ var DMLStmt = NewFn(func(state *State) Fn {
 	)
 })
 
-var DDLStmt = NewFn(func(state *State) Fn {
-	state.env.Table = state.Tables.Rand()
+var AlterTable = NewFn(func(state *State) Fn {
+	tbl := state.Tables.Rand()
+	state.env.Table = tbl
+	return And(Str("alter table"), Str(tbl.Name),
+		Or(
+			AlterTableChangeSingle,
+			AlterTableChangeMulti.W(0),
+		))
+})
+
+var AlterTableChangeMulti = NewFn(func(state *State) Fn {
+	state.Env().MultiObjs = NewMultiObjs()
+	return Repeat(AlterTableChangeSingle.R(2, 5), Str(", "))
+})
+
+var AlterTableChangeSingle = NewFn(func(state *State) Fn {
 	return Or(
 		AddColumn,
 		AddIndex,
 		DropColumn.P(MoreThan1Columns, HasDroppableColumn),
-		DropIndex.P(CurrentTableHasIndices),
-		AlterColumn,
+		DropIndex.P(HasModifiableIndexes),
+		AlterColumn.P(HasModifiableColumn),
 	)
 })
 
@@ -259,21 +273,28 @@ var CommonDelete = NewFn(func(state *State) Fn {
 })
 
 var AddIndex = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	return And(Str("alter table"), Str(tbl.Name), Str("add"), IndexDefinition)
+	NotNil(state.env.Table)
+	return And(Str("add"), IndexDefinition)
 })
 
 var DropIndex = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	idx := tbl.Indexes.Rand()
+	tbl := state.Env().Table
+	idxes := tbl.Indexes.Filter(func(index *Index) bool {
+		// Not support operate the same object in multi-schema change.
+		return !state.Env().MultiObjs.SameObject(index.Name)
+	})
+	if tbl.Clustered {
+		// Cannot drop the clustered primary key.
+		idxes = idxes.Filter(func(index *Index) bool {
+			return index.Tp != IndexTypePrimary
+		})
+	}
+	idx := idxes.Rand()
 	tbl.RemoveIndex(idx)
 	if idx.Tp == IndexTypePrimary {
-		return Strs("alter table", tbl.Name, "drop primary key")
+		return Str("drop primary key")
 	}
-	return Strs(
-		"alter table", tbl.Name,
-		"drop index", idx.Name,
-	)
+	return Strs("drop index", idx.Name)
 })
 
 var AddColumn = NewFn(func(state *State) Fn {
@@ -281,7 +302,6 @@ var AddColumn = NewFn(func(state *State) Fn {
 	newCol := &Column{ID: state.alloc.AllocColumnID()}
 	state.env.Column = newCol
 	ret := And(
-		Str("alter table"), Str(tbl.Name),
 		Str("add column"),
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnAdd,
@@ -291,40 +311,39 @@ var AddColumn = NewFn(func(state *State) Fn {
 		ColumnDefinitionDefault,
 	).Eval(state)
 	tbl.AppendColumn(newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(newCol.Name)
+	}
 	return Str(ret)
 })
 
 var DropColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.Columns.Filter(func(c *Column) bool { return !c.HasIndex(tbl) }).Rand()
+	col := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		return !c.HasIndex(tbl) && !state.env.MultiObjs.SameObject(c.Name)
+	}).Rand()
 	tbl.RemoveColumn(col)
-	return Strs(
-		"alter table", tbl.Name,
-		"drop column", col.Name,
-	)
+	return Strs("drop column", col.Name)
 })
 
 var AlterColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.Columns.Rand()
-	state.env.Column = col
+	cols := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		return !state.env.MultiObjs.SameObject(c.Name)
+	})
+	pk := tbl.Indexes.Primary()
+	if pk != nil && tbl.Clustered {
+		// Not support modify/change clustered primary key columns.
+		cols = cols.Diff(pk.Columns)
+	}
+	state.env.Column = cols.Rand()
 	return Or(
 		AlterColumnChange,
 		AlterColumnModify,
 	)
 })
-
-var AlterColumnNoPK = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	pk := tbl.Indexes.Primary()
-	state.env.Column = tbl.Columns.Filter(func(c *Column) bool {
-		return pk == nil || !pk.HasColumn(c)
-	}).Rand()
-	return Or(
-		AlterColumnChange,
-		AlterColumnModify,
-	)
-}).P(HasNonPKCol)
 
 var AlterColumnChange = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
@@ -332,7 +351,7 @@ var AlterColumnChange = NewFn(func(state *State) Fn {
 	newCol := &Column{ID: state.alloc.AllocColumnID()}
 	state.env.Column = newCol
 	ret := And(
-		Str("alter table"), Str(tbl.Name), Str("change column"),
+		Str("change column"),
 		Str(col.Name),
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnModify,
@@ -342,6 +361,9 @@ var AlterColumnChange = NewFn(func(state *State) Fn {
 		ColumnDefinitionDefault,
 	).Eval(state)
 	tbl.ModifyColumn(col, newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(col.Name)
+	}
 	return And(Str(ret), ColumnPositionOpt)
 })
 
@@ -351,7 +373,7 @@ var AlterColumnModify = NewFn(func(state *State) Fn {
 	newCol := &Column{ID: col.ID, Name: col.Name}
 	state.env.Column = newCol
 	ret := And(
-		Str("alter table"), Str(tbl.Name), Str("modify column"),
+		Str("modify column"),
 		Str(col.Name),
 		ColumnDefinitionTypeOnModify,
 		ColumnDefinitionCollation,
@@ -360,6 +382,9 @@ var AlterColumnModify = NewFn(func(state *State) Fn {
 		ColumnDefinitionDefault,
 	).Eval(state)
 	tbl.ModifyColumn(col, newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(col.Name)
+	}
 	return And(Str(ret), ColumnPositionOpt)
 })
 

@@ -105,7 +105,7 @@ func TestExampleIntegerColumnTypeChange(t *testing.T) {
 	for _, sql := range insertSQLs {
 		fmt.Println(sql)
 	}
-	state.SetWeight(sqlgen.DDLStmt, 20)
+	state.SetWeight(sqlgen.AlterTable, 20)
 	state.SetWeight(sqlgen.AlterColumn, 10)
 	alterTableCount := 0
 	for i := 0; i < 200; i++ {

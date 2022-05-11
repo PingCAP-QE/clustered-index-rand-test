@@ -14,8 +14,11 @@
 package sqlgen
 
 import (
+	"fmt"
 	"runtime"
 )
+
+var copyID int64
 
 type Fn struct {
 	Gen          func(state *State) string
@@ -42,6 +45,12 @@ func NewFn(fn func(state *State) Fn) Fn {
 	return ret
 }
 
+func (f Fn) Copy() Fn {
+	copyID++
+	f.Info = fmt.Sprintf("%s%d", f.Info, copyID)
+	return f
+}
+
 func (f Fn) Equal(other Fn) bool {
 	if f.Info == "" || other.Info == "" {
 		return false
@@ -65,6 +74,9 @@ func (f Fn) P(fns ...func(state *State) bool) Fn {
 	newFn := f
 	newFn.Prerequisite = func(state *State) bool {
 		for _, pre := range fns {
+			if pre == nil {
+				continue
+			}
 			if !pre(state) {
 				return false
 			}

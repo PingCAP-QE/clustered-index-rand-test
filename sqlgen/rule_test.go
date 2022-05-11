@@ -94,7 +94,6 @@ func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	state.SetRepeat(sqlgen.IndexDefinition, 1, 1)
 	state.ReplaceRule(sqlgen.IndexDefinitionType, sqlgen.IndexDefinitionTypePrimary)
-	state.ReplaceRule(sqlgen.AlterColumn, sqlgen.AlterColumnNoPK)
 
 	_ = sqlgen.CreateTable.Eval(state)
 	tbl := state.Tables.Rand()
