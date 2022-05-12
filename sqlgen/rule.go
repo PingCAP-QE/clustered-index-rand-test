@@ -237,7 +237,11 @@ var AnalyzeTable = NewFn(func(state *State) Fn {
 var NonTransactionalDelete = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	col := tbl.Columns.Rand()
-	shardCol := tbl.Columns.Filter(isShardableColumn).Rand()
+	indexes := tbl.Indexes.Filter(func(i *Index) bool {
+		return isShardableColumn(i.Columns[0])
+	})
+	shardCol := indexes.Rand().Columns[0]
+	// shardCol := tbl.Columns.Filter(isShardableColumn).Rand()
 	var randRowVal = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
