@@ -129,11 +129,13 @@ func Repeat(fn Fn, sep Fn) Fn {
 			res, err := fn.Eval(state)
 			if err != nil {
 				log.L().Debug("repeat() error, skip the rest", zap.Error(err))
-				break
 			}
 			s := strings.Trim(res, " \n\t")
 			if len(s) == 0 {
-				continue
+				if i == 0 {
+					return "", fmt.Errorf("repeat: %v", err)
+				}
+				break
 			}
 			if i != 0 {
 				sepRes, err := sep.Eval(state)

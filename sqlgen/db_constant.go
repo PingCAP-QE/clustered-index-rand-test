@@ -201,6 +201,17 @@ var Collations = map[CollationType]*Collation{
 	CollationUtf8mb4UnicodeCI: {224, "utf8mb4", "utf8mb4_unicode_ci", false},
 }
 
+func (c *Collation) CharsetCompatible(other *Collation) bool {
+	if c == nil {
+		return true
+	}
+	switch c.CharsetName {
+	case "binary":
+		return other.CharsetName != "gbk"
+	}
+	return true
+}
+
 func (c ColumnType) IsStringType() bool {
 	switch c {
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText,

@@ -22,24 +22,6 @@ func init() {
 	AddIndex2 = AddIndex
 }
 
-var NotAddingIndex = func(state *State) bool {
-	return !state.Env().IsIn(AddIndex2)
-}
-
-var NoPrimaryKey = func(s *State) bool {
-	idx := s.env.Table.Indexes
-	return !idx.Found(func(index *Index) bool {
-		return index.Tp == IndexTypePrimary
-	})
-}
-
-var HasNotNullColumn = func(s *State) bool {
-	tbl := s.env.Table
-	return tbl.Columns.Found(func(c *Column) bool {
-		return c.isNotNull
-	})
-}
-
 var HasTables = func(s *State) bool {
 	return len(s.Tables) >= 1
 }
@@ -71,20 +53,6 @@ var IndexColumnPrefixable = func(s *State) bool {
 var IndexColumnCanHaveNoPrefix = func(s *State) bool {
 	col := s.env.IdxColumn
 	return !col.Tp.NeedKeyLength()
-}
-
-var HasModifiableColumn = func(s *State) bool {
-	tbl := s.env.Table
-	cols := tbl.Columns.Filter(func(c *Column) bool {
-		// Not support operate the same object in multi-schema change.
-		return !s.env.MultiObjs.SameObject(c.Name)
-	})
-	pk := tbl.Indexes.Primary()
-	if pk != nil && tbl.Clustered {
-		// Not support modify/change clustered primary key columns.
-		cols = cols.Diff(pk.Columns)
-	}
-	return len(cols) > 0
 }
 
 var HasSameColumnType = func(s *State) bool {

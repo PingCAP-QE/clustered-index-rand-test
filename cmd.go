@@ -170,7 +170,7 @@ func abtestCmd() *cobra.Command {
 			conn1 := setUpDatabaseConnection(dsn1)
 			conn2 := setUpDatabaseConnection(dsn2)
 
-			state := cases.NewGBKState()
+			state := cases.NewMultiSchemaChangeState()
 			queries := generateInitialSQLs(state)
 			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
 

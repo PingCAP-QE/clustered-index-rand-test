@@ -42,7 +42,7 @@ var IndexDefinitionType = NewFn(func(state *State) Fn {
 	return Or(
 		IndexDefinitionTypeUnique,
 		IndexDefinitionTypeNonUnique,
-		IndexDefinitionTypePrimary.P(NoPrimaryKey, HasNotNullColumn),
+		IndexDefinitionTypePrimary,
 	)
 })
 
@@ -138,6 +138,14 @@ var IndexDefinitionTypeNonUnique = NewFn(func(state *State) Fn {
 })
 
 var IndexDefinitionTypePrimary = NewFn(func(state *State) Fn {
+	if state.env.Table.Indexes.Primary() != nil {
+		return None("pk exists")
+	}
+	if !state.env.Table.Columns.Found(func(c *Column) bool {
+		return c.defaultVal != "null"
+	}) {
+		return None("all columns are default null")
+	}
 	idx := state.env.Index
 	idx.Tp = IndexTypePrimary
 	return Str("primary key")
@@ -149,12 +157,15 @@ var IndexDefinitionClustered = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	return Or(
-		IndexDefinitionKeywordClustered.P(NotAddingIndex), // Not support add clustered primary key.
+		IndexDefinitionKeywordClustered,
 		IndexDefinitionKeywordNonClustered,
 	)
 })
 
 var IndexDefinitionKeywordClustered = NewFn(func(state *State) Fn {
+	if state.env.IsIn(AddIndex2) {
+		return None("add clustered primary key is not supported")
+	}
 	tbl := state.env.Table
 	tbl.Clustered = true
 	return Str("/*T![clustered_index] clustered */")

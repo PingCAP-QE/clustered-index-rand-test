@@ -75,6 +75,9 @@ var ColumnDefinitionCollation = NewFn(func(state *State) Fn {
 		return Empty
 	default:
 		col.Collation = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		if oldCol := state.env.OldColumn; oldCol != nil && !oldCol.Collation.CharsetCompatible(col.Collation) {
+			return Empty
+		}
 		return Opt(Strs("collate", col.Collation.CollationName))
 	}
 })
