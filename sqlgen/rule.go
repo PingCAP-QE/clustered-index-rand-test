@@ -246,7 +246,7 @@ var NonTransactionalDelete = NewFn(func(state *State) Fn {
 		Str("on"),
 		Str(shardCol.Name),
 		Str("limit"),
-		Or(Str("1"), Str("2"), Str("3"), Str("4")),
+		Str("1000"),
 		Str("delete"),
 		Str("from"),
 		Str(tbl.Name),
