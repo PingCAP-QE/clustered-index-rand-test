@@ -242,7 +242,7 @@ var NonTransactionalDelete = NewFn(func(state *State) Fn {
 		return Str(col.RandomValue())
 	})
 	return And(
-		Str("split"),
+		Str("batch"),
 		Str("on"),
 		Str(shardCol.Name),
 		Str("limit"),

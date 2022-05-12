@@ -192,7 +192,7 @@ func abtestCmd() *cobra.Command {
 			}
 
 			for i, query := range queries {
-				isNTDelete := testNT && strings.HasPrefix(query, "split on")
+				isNTDelete := testNT && strings.HasPrefix(query, "batch on")
 				if debug {
 					fmt.Println(query + ";\n")
 				}
