@@ -47,7 +47,7 @@ var HasShardableColumn = func(s *State) bool {
 		return false
 	}
 	return tbl.Indexes.Find(func(i *Index) bool {
-		return i.Columns.Found(isShardableColumn)
+		return isShardableColumn(i.Columns[0])
 	})
 }
 
