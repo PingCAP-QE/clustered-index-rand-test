@@ -188,7 +188,7 @@ func abtestCmd() *cobra.Command {
 					msg := fmt.Sprintf("error mismatch: %v != %v\nseed: %d\nquery: %s", err1, err2, parsedSeed, query)
 					return errors.Errorf(msg)
 				}
-				if rs1 == nil && rs2 == nil {
+				if rs1 == nil || rs2 == nil {
 					continue
 				}
 				if debug {
@@ -364,6 +364,12 @@ func ValidateErrs(err1 error, err2 error) bool {
 		"Column count doesn't match value count",         // 4.0 not compatible with 'split table by'
 		"for column '_tidb_rowid'",                       // 4.0 split table between may generate incorrect value.
 		"Unknown column '_tidb_rowid'",                   // 5.0 clustered index table don't have _tidb_row_id.
+		"Invalid JSON text",                              // TiDB JSON is different from MySQL.
+		"admin check",
+		"approx_count_distinct",
+		"intersect",
+		"except",
+		"split table",
 	}
 	for _, msg := range ignoreErrMsgs {
 		match := OneOfContains(err1, err2, msg)

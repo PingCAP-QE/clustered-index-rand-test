@@ -201,21 +201,18 @@ var Collations = map[CollationType]*Collation{
 	CollationUtf8mb4UnicodeCI: {224, "utf8mb4", "utf8mb4_unicode_ci", false},
 }
 
-func (c *Collation) CharsetCompatible(other *Collation) bool {
-	if c == nil {
-		return true
-	}
-	switch c.CharsetName {
-	case "binary":
-		return other.CharsetName != "gbk"
-	}
-	return true
-}
-
 func (c ColumnType) IsStringType() bool {
 	switch c {
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText,
 		ColumnTypeBlob, ColumnTypeBinary, ColumnTypeVarBinary:
+		return true
+	}
+	return false
+}
+
+func (c ColumnType) IsFloatingType() bool {
+	switch c {
+	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal:
 		return true
 	}
 	return false
@@ -236,6 +233,14 @@ func (c ColumnType) NeedKeyLength() bool {
 func (c ColumnType) IsIntegerType() bool {
 	switch c {
 	case ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt, ColumnTypeMediumInt, ColumnTypeBigInt:
+		return true
+	}
+	return false
+}
+
+func (c ColumnType) IsTimeType() bool {
+	switch c {
+	case ColumnTypeTime, ColumnTypeTimestamp, ColumnTypeDate, ColumnTypeDatetime, ColumnTypeYear:
 		return true
 	}
 	return false

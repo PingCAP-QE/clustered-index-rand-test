@@ -340,21 +340,27 @@ var DropColumn = NewFn(func(state *State) Fn {
 	if len(tbl.Columns) < 2 {
 		return None("columns less than 2")
 	}
-	compositeIdx := tbl.Indexes.Filter(func(index *Index) bool {
+	multiColIdxes := tbl.Indexes.Filter(func(index *Index) bool {
 		return len(index.Columns) > 1
 	})
+	pk := tbl.Indexes.Primary()
 	cols := tbl.Columns.Filter(func(c *Column) bool {
 		// Not support operate the same object in multi-schema change.
+		if state.env.MultiObjs.SameObject(c.Name) {
+			return false
+		}
 		// Not support drop with composite index covered.
-		return !state.env.MultiObjs.SameObject(c.Name) && !compositeIdx.Found(func(index *Index) bool {
+		if multiColIdxes.Found(func(index *Index) bool {
 			return index.HasColumn(c)
-		})
-	})
-	pk := tbl.Indexes.Primary()
-	if pk != nil {
+		}) {
+			return false
+		}
 		// Not support drop with primary key covered.
-		cols = cols.Diff(pk.Columns)
-	}
+		if pk != nil && pk.HasColumn(c) {
+			return false
+		}
+		return true
+	})
 	if len(cols) == 0 {
 		return None("no column can be dropped")
 	}
@@ -460,6 +466,9 @@ var ColumnPositionAfter = NewFn(func(state *State) Fn {
 	restCols := tbl.Columns.Filter(func(c *Column) bool {
 		return c.ID != col.ID && !state.env.MultiObjs.SameObject(c.Name)
 	})
+	if len(restCols) == 0 {
+		return None("cannot find after column")
+	}
 	afterCol := restCols[rand.Intn(len(restCols))]
 	tbl.MoveColumnAfterColumn(col, afterCol)
 	if state.env.MultiObjs != nil {
