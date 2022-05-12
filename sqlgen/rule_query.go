@@ -26,8 +26,14 @@ var UnionSelect = NewFn(func(state *State) Fn {
 			Attr:    make([]string, len(tbl1.Columns)),
 		},
 	}}
-	firstSelect := CommonSelect.Eval(state)
-	setOpr := SetOperator.Eval(state)
+	firstSelect, err := CommonSelect.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
+	setOpr, err := SetOperator.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	state.env.Table = tbl2
 	state.env.QState = &QueryState{FieldNumHint: fieldNum, SelectedCols: map[*Table]QueryStateColumns{
 		tbl2: {
@@ -35,7 +41,10 @@ var UnionSelect = NewFn(func(state *State) Fn {
 			Attr:    make([]string, len(tbl2.Columns)),
 		},
 	}}
-	secondSelect := CommonSelect.Eval(state)
+	secondSelect, err := CommonSelect.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	return Strs(
 		"(", firstSelect, ")",
 		setOpr,
@@ -287,7 +296,11 @@ var Predicates = NewFn(func(state *State) Fn {
 	var pred []string
 	for i := 0; i < 1+rand.Intn(2); i++ {
 		if i != 0 {
-			pred = append(pred, AndOr.Eval(state))
+			andor, err := AndOr.Eval(state)
+			if err != nil {
+				return NoneBecauseOf(err)
+			}
+			pred = append(pred, andor)
 		}
 		if state.env.QState != nil {
 			state.env.Table = state.env.QState.GetRandTable()
@@ -295,7 +308,11 @@ var Predicates = NewFn(func(state *State) Fn {
 			state.env.Table = state.Tables.Rand()
 		}
 		state.env.Column = state.env.Table.Columns.Rand()
-		pred = append(pred, Predicate.Eval(state))
+		p, err := Predicate.Eval(state)
+		if err != nil {
+			return NoneBecauseOf(err)
+		}
+		pred = append(pred, p)
 	}
 	return Str(strings.Join(pred, " "))
 })

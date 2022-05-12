@@ -20,7 +20,8 @@ func TestHookPredNeedRollBackStmt(t *testing.T) {
 	state.Hook().Append(predHook)
 
 	for i := 0; i < 100; i++ {
-		query := sqlgen.Start.Eval(state)
+		query, err := sqlgen.Start.Eval(state)
+		require.NoError(t, err)
 		if predHook.Matched() {
 			fmt.Println(query)
 		}
@@ -38,6 +39,7 @@ func TestHookReplacer(t *testing.T) {
 
 	state := sqlgen.NewState()
 	state.Hook().Append(replacerHook)
-	result := sqlgen.Start.Eval(state)
+	result, err := sqlgen.Start.Eval(state)
+	require.NoError(t, err)
 	require.Equal(t, result, query)
 }

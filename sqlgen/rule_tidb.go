@@ -54,7 +54,11 @@ var SplitRegion = NewFn(func(state *State) Fn {
 	var idxPrefix string
 	if splittingIndex {
 		idx = tbl.Indexes[rand.Intn(len(tbl.Indexes))]
-		idxPrefix = fmt.Sprintf("index %s", idx.Name)
+		name := idx.Name
+		if idx.Tp == IndexTypePrimary {
+			name = "`primary`"
+		}
+		idxPrefix = fmt.Sprintf("index %s", name)
 	}
 
 	// split table t between (1, 2) and (100, 200) regions 2;

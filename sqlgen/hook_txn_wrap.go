@@ -18,15 +18,21 @@ func (s *FnHookTxnWrap) BeforeEvaluate(state *State, fn Fn) Fn {
 	}
 	return Fn{
 		Info: txnStartWrapName,
-		Gen: func(state *State) string {
-			startTxnRs := s.startTxn()
-			currRs := fn.Gen(state)
-			return startTxnRs + " ; " + currRs
+		Gen: func(state *State) (string, error) {
+			startTxnRs, err := s.startTxn()
+			if err != nil {
+				return "", err
+			}
+			currRs, err := fn.Gen(state)
+			if err != nil {
+				return "", err
+			}
+			return startTxnRs + " ; " + currRs, nil
 		},
 	}
 }
 
-func (s *FnHookTxnWrap) startTxn() string {
+func (s *FnHookTxnWrap) startTxn() (string, error) {
 	fns := []Fn{
 		Empty.W(1),
 		And(
@@ -57,11 +63,14 @@ func (s *FnHookTxnWrap) AfterEvaluate(state *State, fn Fn, result string) string
 	if fn.Info != txnStartWrapName {
 		return result
 	}
-	endTxnRs := s.endTxn()
+	endTxnRs, err := s.endTxn()
+	if err != nil {
+		return ""
+	}
 	return result + " ; " + endTxnRs
 }
 
-func (s *FnHookTxnWrap) endTxn() string {
+func (s *FnHookTxnWrap) endTxn() (string, error) {
 	fns := []Fn{
 		Empty,
 		Or(

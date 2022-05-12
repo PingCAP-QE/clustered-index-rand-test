@@ -10,6 +10,7 @@ type Env struct {
 type Elem struct {
 	Table      *Table
 	Column     *Column
+	OldColumn  *Column
 	PartColumn *Column
 	IdxColumn  *Column
 	Columns    Columns

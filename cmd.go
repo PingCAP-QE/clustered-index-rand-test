@@ -271,13 +271,19 @@ func generateInitialSQLs(state *sqlgen.State) []string {
 	state.SetRepeat(sqlgen.ColumnDefinition, columnCount, columnCount)
 	state.SetRepeat(sqlgen.IndexDefinition, indexCount, indexCount)
 	for i := 0; i < tableCount; i++ {
-		query := sqlgen.CreateTable.Eval(state)
+		query, err := sqlgen.CreateTable.Eval(state)
+		if err != nil {
+			panic(err)
+		}
 		sqls = append(sqls, query)
 	}
 	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
-			query := sqlgen.InsertInto.Eval(state)
+			query, err := sqlgen.InsertInto.Eval(state)
+			if err != nil {
+				panic(err)
+			}
 			sqls = append(sqls, query)
 		}
 	}
@@ -288,7 +294,11 @@ func generatePlainSQLs(state *sqlgen.State, count int) []string {
 	state.Env().Clean()
 	sqls := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		sqls = append(sqls, sqlgen.Start.Eval(state))
+		query, err := sqlgen.Start.Eval(state)
+		if err != nil {
+			panic(err)
+		}
+		sqls = append(sqls, query)
 	}
 	return sqls
 }
@@ -299,7 +309,11 @@ func generateCreateTables(state *sqlgen.State, count int) []string {
 	state.Config().SetMaxTable(count)
 	state.SetWeight(sqlgen.SwitchClustered, 0)
 	for i := 0; i < count; i++ {
-		sqls = append(sqls, sqlgen.CreateTable.Eval(state))
+		query, err := sqlgen.CreateTable.Eval(state)
+		if err != nil {
+			panic(err)
+		}
+		sqls = append(sqls, query)
 	}
 	return sqls
 }
@@ -329,7 +343,11 @@ func printCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			state := sqlgen.NewState()
 			for i := 0; i < count; i++ {
-				fmt.Printf("%s;\n", sqlgen.Start.Eval(state))
+				query, err := sqlgen.Start.Eval(state)
+				if err != nil {
+					panic(err)
+				}
+				fmt.Printf("%s;\n", query)
 			}
 			return nil
 		},

@@ -19,7 +19,7 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 	// Example:
 	//   a varchar(255) collate utf8mb4_bin not null
 	//   b bigint unsigned default 100
-	ret := And(
+	ret, err := And(
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnCreate,
 		ColumnDefinitionCollation,
@@ -27,6 +27,9 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 		ColumnDefinitionNotNull,
 		ColumnDefinitionDefault,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	tbl.AppendColumn(partialCol)
 	return Str(ret)
 })
@@ -328,6 +331,13 @@ var ColumnDefinitionTypesYear = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesJSON = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	if state.env.OldColumn != nil && tbl.Indexes.Found(func(index *Index) bool {
+		return index.HasColumn(state.env.OldColumn)
+	}) {
+		// JSON column cannot be used in key specification.
+		return None("json column cannot be used in key")
+	}
 	col := state.env.Column
 	col.Tp = ColumnTypeJSON
 	return Str("json")
