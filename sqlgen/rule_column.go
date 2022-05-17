@@ -19,7 +19,7 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 	// Example:
 	//   a varchar(255) collate utf8mb4_bin not null
 	//   b bigint unsigned default 100
-	ret := And(
+	ret, err := And(
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnCreate,
 		ColumnDefinitionCollation,
@@ -27,6 +27,9 @@ var ColumnDefinition = NewFn(func(state *State) Fn {
 		ColumnDefinitionNotNull,
 		ColumnDefinitionDefault,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	tbl.AppendColumn(partialCol)
 	return Str(ret)
 })
@@ -72,6 +75,9 @@ var ColumnDefinitionCollation = NewFn(func(state *State) Fn {
 		return Empty
 	default:
 		col.Collation = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
+		if oldCol := state.env.OldColumn; oldCol != nil && !CharsetCompatible(oldCol, col) {
+			return Empty
+		}
 		return Opt(Strs("collate", col.Collation.CollationName))
 	}
 })
@@ -127,6 +133,9 @@ var ColumnDefinitionTypesBinaries = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesTimes = NewFn(func(state *State) Fn {
+	if !ModifyColumnCompatible(state.env.OldColumn, ColumnTypeTime) {
+		return None("unsupported change to time")
+	}
 	return Or(
 		ColumnDefinitionTypesDate,
 		ColumnDefinitionTypesTime,
@@ -217,6 +226,9 @@ var ColumnDefinitionTypesDecimal = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesBit = NewFn(func(state *State) Fn {
+	if !ModifyColumnCompatible(state.env.OldColumn, ColumnTypeSet) {
+		return None("unsupported change to bit")
+	}
 	col := state.env.Column
 	col.arg1 = 1 + rand.Intn(62)
 	col.Tp = ColumnTypeBit
@@ -266,6 +278,9 @@ var ColumnDefinitionTypesVarbinary = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesEnum = NewFn(func(state *State) Fn {
+	if !ModifyColumnCompatible(state.env.OldColumn, ColumnTypeEnum) {
+		return None("unsupported change to enum")
+	}
 	col := state.env.Column
 	col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	col.Tp = ColumnTypeEnum
@@ -282,6 +297,9 @@ var ColumnDefinitionTypesEnum = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesSet = NewFn(func(state *State) Fn {
+	if !ModifyColumnCompatible(state.env.OldColumn, ColumnTypeSet) {
+		return None("unsupported change to set")
+	}
 	col := state.env.Column
 	col.args = []string{"Alice", "Bob", "Charlie", "David"}
 	col.Tp = ColumnTypeSet
@@ -328,6 +346,15 @@ var ColumnDefinitionTypesYear = NewFn(func(state *State) Fn {
 })
 
 var ColumnDefinitionTypesJSON = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	if oldCol := state.env.OldColumn; oldCol != nil {
+		if tbl.Indexes.Found(func(index *Index) bool {
+			return index.HasColumn(oldCol)
+		}) {
+			// JSON column cannot be used in key specification.
+			return None("json column cannot be used in key")
+		}
+	}
 	col := state.env.Column
 	col.Tp = ColumnTypeJSON
 	return Str("json")

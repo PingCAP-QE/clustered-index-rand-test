@@ -19,22 +19,29 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 func And(fns ...Fn) Fn {
 	ret := defaultFn()
 	ret.Info = "And"
-	ret.Gen = func(state *State) string {
+	ret.Gen = func(state *State) (string, error) {
 		var resStr strings.Builder
 		for i, f := range fns {
 			Assert(state.GetPrerequisite(f)(state))
 			if i != 0 {
 				resStr.WriteString(" ")
 			}
-			res := f.Eval(state)
+			res, err := f.Eval(state)
+			if err != nil {
+				log.L().Debug("and() error", zap.String("fn", f.Info), zap.Error(err))
+				return "", err
+			}
 			resStr.WriteString(strings.Trim(res, " "))
 		}
-		return resStr.String()
+		return resStr.String(), nil
 	}
 	return ret
 }
@@ -42,11 +49,24 @@ func And(fns ...Fn) Fn {
 func Or(fns ...Fn) Fn {
 	ret := defaultFn()
 	ret.Info = "Or"
-	ret.Gen = func(state *State) string {
-		Assert(len(fns) > 0)
-		chosenFnIdx := randSelectByWeight(state, fns)
-		chosenFn := fns[chosenFnIdx]
-		return chosenFn.Eval(state)
+	ret.Gen = func(state *State) (string, error) {
+		var fnNames []string
+		var errs []error
+		for len(fns) > 0 {
+			chosenFnIdx := randSelectByWeight(state, fns)
+			chosenFn := fns[chosenFnIdx]
+			rs, err := chosenFn.Eval(state)
+			if err != nil {
+				fnNames = append(fnNames, chosenFn.Info)
+				errs = append(errs, err)
+				fns[len(fns)-1], fns[chosenFnIdx] = fns[chosenFnIdx], fns[len(fns)-1]
+				fns = fns[:len(fns)-1]
+				continue
+			}
+			return rs, nil
+		}
+		log.L().Debug("or() error", zap.Strings("fns", fnNames), zap.Errors("errors", errs))
+		return "", fmt.Errorf("or exhausted")
 	}
 	return ret
 }
@@ -55,8 +75,8 @@ func Or(fns ...Fn) Fn {
 func Str(str string) Fn {
 	ret := defaultFn()
 	ret.Info = "Str"
-	ret.Gen = func(_ *State) string {
-		return str
+	ret.Gen = func(_ *State) (string, error) {
+		return str, nil
 	}
 	return ret
 }
@@ -83,8 +103,8 @@ func Strf(str string, fns ...Fn) Fn {
 func Strs(strs ...string) Fn {
 	ret := defaultFn()
 	ret.Info = "Strs"
-	ret.Gen = func(state *State) string {
-		return strings.Join(strs, " ")
+	ret.Gen = func(state *State) (string, error) {
+		return strings.Join(strs, " "), nil
 	}
 	return ret
 }
@@ -99,26 +119,35 @@ func If(condition bool, fn Fn) Fn {
 func Repeat(fn Fn, sep Fn) Fn {
 	ret := defaultFn()
 	ret.Info = "Repeat"
-	ret.Gen = func(state *State) string {
+	ret.Gen = func(state *State) (string, error) {
 		var resStr strings.Builder
 		count := randGenRepeatCount(state, fn)
 		for i := 0; i < count; i++ {
 			if !state.GetPrerequisite(fn)(state) {
 				break
 			}
-			res := fn.Eval(state)
+			res, err := fn.Eval(state)
+			if err != nil {
+				log.L().Debug("repeat() error, skip the rest", zap.Error(err))
+			}
 			s := strings.Trim(res, " \n\t")
 			if len(s) == 0 {
-				continue
+				if i == 0 {
+					return "", fmt.Errorf("repeat: %v", err)
+				}
+				break
 			}
 			if i != 0 {
-				sepRes := sep.Eval(state)
+				sepRes, err := sep.Eval(state)
+				if err != nil {
+					return "", fmt.Errorf("repeat sep: %s", err.Error())
+				}
 				resStr.WriteString(" ")
 				resStr.WriteString(sepRes)
 			}
 			resStr.WriteString(s)
 		}
-		return resStr.String()
+		return resStr.String(), nil
 	}
 	return ret
 }
@@ -152,12 +181,25 @@ var Empty = NewFn(func(state *State) Fn {
 	return Str("")
 })
 
+func None(msg string) Fn {
+	return NoneBecauseOf(fmt.Errorf(msg))
+}
+
+func NoneBecauseOf(err error) Fn {
+	ret := defaultFn()
+	ret.Info = "NoneBecauseOf"
+	ret.Gen = func(state *State) (string, error) {
+		return "", fmt.Errorf("none: %s", err.Error())
+	}
+	return ret
+}
+
 func Opt(fn Fn) Fn {
 	ret := defaultFn()
-	ret.Gen = func(state *State) string {
+	ret.Gen = func(state *State) (string, error) {
 		total := 1 + state.GetWeight(fn)
 		if rand.Intn(total) == 0 {
-			return ""
+			return "", nil
 		}
 		return fn.Eval(state)
 	}

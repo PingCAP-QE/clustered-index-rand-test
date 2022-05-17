@@ -10,6 +10,7 @@ type Env struct {
 type Elem struct {
 	Table      *Table
 	Column     *Column
+	OldColumn  *Column
 	PartColumn *Column
 	IdxColumn  *Column
 	Columns    Columns
@@ -18,6 +19,7 @@ type Elem struct {
 	QColumns   QueryStateColumns
 	FnInfo     string
 	Bool       bool
+	MultiObjs  *MultiObjs
 }
 
 func (e *Env) Enter() {
@@ -71,4 +73,13 @@ func (e *Env) GetCurrentStack() string {
 		sb.WriteString("'")
 	}
 	return sb.String()
+}
+
+func (e *Env) IsIn(fn Fn) bool {
+	for _, prev := range e.prev {
+		if fn.Info == prev.FnInfo {
+			return true
+		}
+	}
+	return fn.Info == e.FnInfo
 }

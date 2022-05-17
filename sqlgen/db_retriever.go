@@ -225,7 +225,7 @@ func (c *Column) HasIndex(t *Table) bool {
 	return false
 }
 
-func (is Indexes) Find(pred func(index *Index) bool) bool {
+func (is Indexes) Found(pred func(index *Index) bool) bool {
 	return gExist(is, pred)
 }
 

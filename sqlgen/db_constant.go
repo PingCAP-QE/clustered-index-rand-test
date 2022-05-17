@@ -210,6 +210,14 @@ func (c ColumnType) IsStringType() bool {
 	return false
 }
 
+func (c ColumnType) IsFloatingType() bool {
+	switch c {
+	case ColumnTypeFloat, ColumnTypeDouble, ColumnTypeDecimal:
+		return true
+	}
+	return false
+}
+
 func (c ColumnType) SameTypeAs(other ColumnType) bool {
 	return (c.IsStringType() && other.IsStringType()) || (c.IsIntegerType() && other.IsIntegerType())
 }
@@ -225,6 +233,14 @@ func (c ColumnType) NeedKeyLength() bool {
 func (c ColumnType) IsIntegerType() bool {
 	switch c {
 	case ColumnTypeInt, ColumnTypeTinyInt, ColumnTypeSmallInt, ColumnTypeMediumInt, ColumnTypeBigInt:
+		return true
+	}
+	return false
+}
+
+func (c ColumnType) IsTimeType() bool {
+	switch c {
+	case ColumnTypeTime, ColumnTypeTimestamp, ColumnTypeDate, ColumnTypeDatetime, ColumnTypeYear:
 		return true
 	}
 	return false

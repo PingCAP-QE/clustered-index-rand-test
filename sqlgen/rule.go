@@ -15,7 +15,7 @@ var Start = NewFn(func(state *State) Fn {
 		Query.W(20).P(HasTables),
 		// QueryPrepare.W(2).P(HasTables),
 		DMLStmt.W(20).P(HasTables),
-		DDLStmt.W(5).P(HasTables),
+		AlterTable.W(5).P(HasTables),
 		SplitRegion.W(1).P(HasTables),
 		AnalyzeTable.W(0).P(HasTables),
 		// PrepareStmt.W(2).P(HasTables),
@@ -39,13 +39,27 @@ var DMLStmt = NewFn(func(state *State) Fn {
 	)
 })
 
-var DDLStmt = NewFn(func(state *State) Fn {
-	state.env.Table = state.Tables.Rand()
+var AlterTable = NewFn(func(state *State) Fn {
+	tbl := state.Tables.Rand()
+	state.env.Table = tbl
+	return And(Str("alter table"), Str(tbl.Name),
+		Or(
+			AlterTableChangeSingle,
+			AlterTableChangeMulti.W(0),
+		))
+})
+
+var AlterTableChangeMulti = NewFn(func(state *State) Fn {
+	state.Env().MultiObjs = NewMultiObjs()
+	return Repeat(AlterTableChangeSingle.R(2, 5), Str(", "))
+})
+
+var AlterTableChangeSingle = NewFn(func(state *State) Fn {
 	return Or(
 		AddColumn,
 		AddIndex,
-		DropColumn.P(MoreThan1Columns, HasDroppableColumn),
-		DropIndex.P(CurrentTableHasIndices),
+		DropColumn,
+		DropIndex,
 		AlterColumn,
 	)
 })
@@ -82,11 +96,23 @@ var CreateTable = NewFn(func(state *State) Fn {
 	state.Tables = state.Tables.Append(tbl)
 	state.env.Table = tbl
 	// The eval order matters because the dependency is ColumnDefinitions <- PartitionDefinition <- IndexDefinitions.
-	eColDefs := ColumnDefinitions.Eval(state)
+	eColDefs, err := ColumnDefinitions.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	state.env.PartColumn = tbl.Columns.Filter(func(c *Column) bool { return c.Tp.IsPartitionType() }).Rand()
-	ePartitionDef := PartitionDefinition.Eval(state)
-	eTableOption := TableOptions.Eval(state)
-	eIdxDefs := IndexDefinitions.Eval(state)
+	ePartitionDef, err := PartitionDefinition.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
+	eTableOption, err := TableOptions.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
+	eIdxDefs, err := IndexDefinitions.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	if len(strings.Trim(eIdxDefs, " ")) != 0 {
 		return Strs("create table", tbl.Name, "(", eColDefs, ",", eIdxDefs, ")",
 			eTableOption, ePartitionDef)
@@ -295,29 +321,38 @@ var CommonDelete = NewFn(func(state *State) Fn {
 })
 
 var AddIndex = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	return And(Str("alter table"), Str(tbl.Name), Str("add"), IndexDefinition)
+	NotNil(state.env.Table)
+	return And(Str("add"), IndexDefinition)
 })
 
 var DropIndex = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	idx := tbl.Indexes.Rand()
+	tbl := state.Env().Table
+	idxes := tbl.Indexes.Filter(func(index *Index) bool {
+		// Not support operate the same object in multi-schema change.
+		return !state.Env().MultiObjs.SameObject(index.Name)
+	})
+	if tbl.Clustered {
+		// Cannot drop the clustered primary key.
+		idxes = idxes.Filter(func(index *Index) bool {
+			return index.Tp != IndexTypePrimary
+		})
+	}
+	if len(idxes) == 0 {
+		return None("no indexes can be dropped")
+	}
+	idx := idxes.Rand()
 	tbl.RemoveIndex(idx)
 	if idx.Tp == IndexTypePrimary {
-		return Strs("alter table", tbl.Name, "drop primary key")
+		return Str("drop primary key")
 	}
-	return Strs(
-		"alter table", tbl.Name,
-		"drop index", idx.Name,
-	)
+	return Strs("drop index", idx.Name)
 })
 
 var AddColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	newCol := &Column{ID: state.alloc.AllocColumnID()}
 	state.env.Column = newCol
-	ret := And(
-		Str("alter table"), Str(tbl.Name),
+	ret, err := And(
 		Str("add column"),
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnAdd,
@@ -326,49 +361,79 @@ var AddColumn = NewFn(func(state *State) Fn {
 		ColumnDefinitionNotNull,
 		ColumnDefinitionDefault,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	tbl.AppendColumn(newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(newCol.Name)
+	}
 	return Str(ret)
 })
 
 var DropColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.Columns.Filter(func(c *Column) bool { return !c.HasIndex(tbl) }).Rand()
+	if len(tbl.Columns) < 2 {
+		return None("columns less than 2")
+	}
+	multiColIdxes := tbl.Indexes.Filter(func(index *Index) bool {
+		return len(index.Columns) > 1
+	})
+	pk := tbl.Indexes.Primary()
+	cols := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		if state.env.MultiObjs.SameObject(c.Name) {
+			return false
+		}
+		// Not support drop with composite index covered.
+		if multiColIdxes.Found(func(index *Index) bool {
+			return index.HasColumn(c)
+		}) {
+			return false
+		}
+		// Not support drop with primary key covered.
+		if pk != nil && pk.HasColumn(c) {
+			return false
+		}
+		return true
+	})
+	if len(cols) == 0 {
+		return None("no column can be dropped")
+	}
+	col := cols.Rand()
 	tbl.RemoveColumn(col)
-	return Strs(
-		"alter table", tbl.Name,
-		"drop column", col.Name,
-	)
+	return Strs("drop column", col.Name)
 })
 
 var AlterColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
-	col := tbl.Columns.Rand()
-	state.env.Column = col
+	cols := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		return !state.env.MultiObjs.SameObject(c.Name)
+	})
+	pk := tbl.Indexes.Primary()
+	if pk != nil {
+		// Not support modify/change primary key columns.
+		cols = cols.Diff(pk.Columns)
+	}
+	if len(cols) == 0 {
+		return None("no columns can be modified")
+	}
+	state.env.Column = cols.Rand()
 	return Or(
 		AlterColumnChange,
 		AlterColumnModify,
 	)
 })
-
-var AlterColumnNoPK = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
-	pk := tbl.Indexes.Primary()
-	state.env.Column = tbl.Columns.Filter(func(c *Column) bool {
-		return pk == nil || !pk.HasColumn(c)
-	}).Rand()
-	return Or(
-		AlterColumnChange,
-		AlterColumnModify,
-	)
-}).P(HasNonPKCol)
 
 var AlterColumnChange = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	col := state.env.Column
 	newCol := &Column{ID: state.alloc.AllocColumnID()}
 	state.env.Column = newCol
-	ret := And(
-		Str("alter table"), Str(tbl.Name), Str("change column"),
+	state.env.OldColumn = col
+	ret, err := And(
+		Str("change column"),
 		Str(col.Name),
 		ColumnDefinitionName,
 		ColumnDefinitionTypeOnModify,
@@ -377,7 +442,14 @@ var AlterColumnChange = NewFn(func(state *State) Fn {
 		ColumnDefinitionNotNull,
 		ColumnDefinitionDefault,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	tbl.ModifyColumn(col, newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(newCol.Name)
+		state.env.MultiObjs.AddName(col.Name)
+	}
 	return And(Str(ret), ColumnPositionOpt)
 })
 
@@ -386,8 +458,9 @@ var AlterColumnModify = NewFn(func(state *State) Fn {
 	col := state.env.Column
 	newCol := &Column{ID: col.ID, Name: col.Name}
 	state.env.Column = newCol
-	ret := And(
-		Str("alter table"), Str(tbl.Name), Str("modify column"),
+	state.env.OldColumn = col
+	ret, err := And(
+		Str("modify column"),
 		Str(col.Name),
 		ColumnDefinitionTypeOnModify,
 		ColumnDefinitionCollation,
@@ -395,7 +468,13 @@ var AlterColumnModify = NewFn(func(state *State) Fn {
 		ColumnDefinitionNotNull,
 		ColumnDefinitionDefault,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	tbl.ModifyColumn(col, newCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(col.Name)
+	}
 	return And(Str(ret), ColumnPositionOpt)
 })
 
@@ -403,7 +482,7 @@ var ColumnPositionOpt = NewFn(func(state *State) Fn {
 	return Or(
 		Empty,
 		ColumnPositionFirst,
-		ColumnPositionAfter.P(MoreThan1Columns),
+		ColumnPositionAfter,
 	)
 })
 
@@ -416,12 +495,21 @@ var ColumnPositionFirst = NewFn(func(state *State) Fn {
 
 var ColumnPositionAfter = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
+	if len(tbl.Columns) < 2 {
+		return None("ColumnPositionAfter should have at lease 2 columns")
+	}
 	col := state.env.Column
 	restCols := tbl.Columns.Filter(func(c *Column) bool {
-		return c.ID != col.ID
+		return c.ID != col.ID && !state.env.MultiObjs.SameObject(c.Name)
 	})
+	if len(restCols) == 0 {
+		return None("cannot find after column")
+	}
 	afterCol := restCols[rand.Intn(len(restCols))]
 	tbl.MoveColumnAfterColumn(col, afterCol)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(afterCol.Name)
+	}
 	return Strs("after", afterCol.Name)
 })
 

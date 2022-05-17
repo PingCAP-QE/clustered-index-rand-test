@@ -18,17 +18,23 @@ var IndexDefinition = NewFn(func(state *State) Fn {
 	// Example:
 	//   unique key idx_1 (a, b, c)
 	//   primary key (a(2), b(3), c)
-	ret := And(
+	ret, err := And(
 		IndexDefinitionType,
 		IndexDefinitionName,
 		IndexDefinitionColumns,
 		IndexDefinitionClustered,
 	).Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	// It is possible that no column can be used to build an index.
 	if len(newIdx.Columns) == 0 {
 		return Empty
 	}
 	tbl.AppendIndex(newIdx)
+	if state.env.MultiObjs != nil {
+		state.env.MultiObjs.AddName(newIdx.Name)
+	}
 	return Str(ret)
 })
 
@@ -36,7 +42,7 @@ var IndexDefinitionType = NewFn(func(state *State) Fn {
 	return Or(
 		IndexDefinitionTypeUnique,
 		IndexDefinitionTypeNonUnique,
-		IndexDefinitionTypePrimary.P(NoPrimaryKey),
+		IndexDefinitionTypePrimary,
 	)
 })
 
@@ -64,10 +70,16 @@ var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 			IndexDefinitionColumnPrefix.P(IndexColumnPrefixable),
 		)
 	}
-	// json column can't be used as index column.
 	totalCols := tbl.Columns.Filter(func(c *Column) bool {
-		return c.Tp != ColumnTypeJSON && !idx.HasColumn(c)
+		// json column can't be used as index column.
+		return !idx.HasColumn(c) && c.Tp != ColumnTypeJSON && !state.env.MultiObjs.SameObject(c.Name)
 	})
+	if idx.Tp == IndexTypePrimary {
+		// All parts of a PRIMARY KEY must be NOT NULL.
+		totalCols = totalCols.Filter(func(c *Column) bool {
+			return c.defaultVal != "null"
+		})
+	}
 	if len(totalCols) == 0 {
 		return Empty
 	}
@@ -126,6 +138,14 @@ var IndexDefinitionTypeNonUnique = NewFn(func(state *State) Fn {
 })
 
 var IndexDefinitionTypePrimary = NewFn(func(state *State) Fn {
+	if state.env.Table.Indexes.Primary() != nil {
+		return None("pk exists")
+	}
+	if !state.env.Table.Columns.Found(func(c *Column) bool {
+		return c.defaultVal != "null"
+	}) {
+		return None("all columns are default null")
+	}
 	idx := state.env.Index
 	idx.Tp = IndexTypePrimary
 	return Str("primary key")
@@ -137,7 +157,22 @@ var IndexDefinitionClustered = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	return Or(
-		Str("/*T![clustered_index] clustered */"),
-		Str("/*T![clustered_index] nonclustered */"),
+		IndexDefinitionKeywordClustered,
+		IndexDefinitionKeywordNonClustered,
 	)
+})
+
+var IndexDefinitionKeywordClustered = NewFn(func(state *State) Fn {
+	if state.env.IsIn(AddIndex2) {
+		return None("add clustered primary key is not supported")
+	}
+	tbl := state.env.Table
+	tbl.Clustered = true
+	return Str("/*T![clustered_index] clustered */")
+})
+
+var IndexDefinitionKeywordNonClustered = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	tbl.Clustered = false
+	return Str("/*T![clustered_index] nonclustered */")
 })

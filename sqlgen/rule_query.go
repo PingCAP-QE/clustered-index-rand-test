@@ -35,8 +35,14 @@ var UnionSelect = NewFn(func(state *State) Fn {
 			Attr:    make([]string, len(tbl1.Columns)),
 		},
 	}}
-	firstSelect := CommonSelect.Eval(state)
-	setOpr := SetOperator.Eval(state)
+	firstSelect, err := CommonSelect.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
+	setOpr, err := SetOperator.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	state.env.Table = tbl2
 	state.env.QState = &QueryState{FieldNumHint: fieldNum, SelectedCols: map[*Table]QueryStateColumns{
 		tbl2: {
@@ -44,7 +50,10 @@ var UnionSelect = NewFn(func(state *State) Fn {
 			Attr:    make([]string, len(tbl2.Columns)),
 		},
 	}}
-	secondSelect := CommonSelect.Eval(state)
+	secondSelect, err := CommonSelect.Eval(state)
+	if err != nil {
+		return NoneBecauseOf(err)
+	}
 	return Strs(
 		"(", firstSelect, ")",
 		setOpr,
@@ -88,37 +97,29 @@ var CommonSelect = NewFn(func(state *State) Fn {
 	NotNil(state.env.QState)
 	return And(
 		Str("select"), HintTiFlash, HintIndexMerge, Opt(HintAggToCop), HintJoin,
-		SelectFields, Str("from"), TableReference, WhereClause, GroupByColumnsOpt, OrderByLimit, ForUpdateOpt,
+		SelectFields, Str("from"), TableReference,
+		WhereClause, GroupByColumnsOpt, WindowClause, OrderByLimit, ForUpdateOpt,
 	)
 })
 
 var SelectFields = NewFn(func(state *State) Fn {
 	queryState := state.env.QState
-	var sb strings.Builder
-	first := true
-
-	for t, cols := range queryState.SelectedCols {
-		if !first {
-			sb.WriteString(", ")
-		}
-		first = false
-		state.env.Table = t
-		state.env.QColumns = cols
-		cnt := queryState.FieldNumHint
-		if cnt == 0 {
-			cnt = 1 + rand.Intn(5)
-		}
-		queryState.FieldNumHint = cnt
-		for i := 0; i < cnt; i++ {
-			if i != 0 {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(SelectField.Eval(state))
-			sb.WriteString(" as ")
-			sb.WriteString(fmt.Sprintf(" r%d ", i))
+	if queryState.FieldNumHint == 0 {
+		queryState.FieldNumHint = 1 + rand.Intn(5)
+	}
+	var fns []Fn
+	for i := 0; i < queryState.FieldNumHint; i++ {
+		fieldID := fmt.Sprintf("r%d", i)
+		fns = append(fns, NewFn(func(state *State) Fn {
+			state.env.Table = queryState.GetRandTable()
+			state.env.QColumns = queryState.SelectedCols[state.env.Table]
+			return And(SelectField, Str("as"), Str(fieldID))
+		}))
+		if i != queryState.FieldNumHint-1 {
+			fns = append(fns, Str(","))
 		}
 	}
-	return Str(sb.String())
+	return And(fns...)
 })
 
 var SelectField = NewFn(func(state *State) Fn {
@@ -283,7 +284,7 @@ var WindowFunction = NewFn(func(state *State) Fn {
 	for t := range queryState.SelectedCols {
 		tbl = t
 	}
-	col := Str(tbl.Columns.Rand().Name)
+	col := Str(fmt.Sprintf("%s.%s", tbl.Name, tbl.Columns.Rand().Name))
 	num := Str(RandomNum(1, 6))
 	return Or(
 		Str("row_number()"),
@@ -304,7 +305,11 @@ var Predicates = NewFn(func(state *State) Fn {
 	var pred []string
 	for i := 0; i < 1+rand.Intn(2); i++ {
 		if i != 0 {
-			pred = append(pred, AndOr.Eval(state))
+			andor, err := AndOr.Eval(state)
+			if err != nil {
+				return NoneBecauseOf(err)
+			}
+			pred = append(pred, andor)
 		}
 		if state.env.QState != nil {
 			state.env.Table = state.env.QState.GetRandTable()
@@ -312,7 +317,11 @@ var Predicates = NewFn(func(state *State) Fn {
 			state.env.Table = state.Tables.Rand()
 		}
 		state.env.Column = state.env.Table.Columns.Rand()
-		pred = append(pred, Predicate.Eval(state))
+		p, err := Predicate.Eval(state)
+		if err != nil {
+			return NoneBecauseOf(err)
+		}
+		pred = append(pred, p)
 	}
 	return Str(strings.Join(pred, " "))
 })

@@ -9,7 +9,7 @@ var AdminCheck = NewFn(func(state *State) Fn {
 	state.env.Table = state.Tables.Rand()
 	return Or(
 		AdminCheckTable,
-		AdminCheckIndex.P(CurrentTableHasIndices),
+		AdminCheckIndex.P(HasModifiableIndexes),
 	)
 }).P(HasTables)
 
@@ -19,8 +19,17 @@ var AdminCheckTable = NewFn(func(state *State) Fn {
 })
 
 var AdminCheckIndex = NewFn(func(state *State) Fn {
-	tbl := state.env.Table
+	tbl := state.Env().Table
 	idx := tbl.Indexes.Rand()
+	if tbl.Clustered {
+		// The clustered primary key cannot be checked.
+		idx = tbl.Indexes.Filter(func(index *Index) bool {
+			return index.Tp != IndexTypePrimary
+		}).Rand()
+	}
+	if idx.Tp == IndexTypePrimary {
+		return Strs("admin check index", tbl.Name, "`primary`")
+	}
 	return Strs("admin check index", tbl.Name, idx.Name)
 })
 
@@ -45,7 +54,11 @@ var SplitRegion = NewFn(func(state *State) Fn {
 	var idxPrefix string
 	if splittingIndex {
 		idx = tbl.Indexes[rand.Intn(len(tbl.Indexes))]
-		idxPrefix = fmt.Sprintf("index %s", idx.Name)
+		name := idx.Name
+		if idx.Tp == IndexTypePrimary {
+			name = "`primary`"
+		}
+		idxPrefix = fmt.Sprintf("index %s", name)
 	}
 
 	// split table t between (1, 2) and (100, 200) regions 2;

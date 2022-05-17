@@ -24,12 +24,13 @@ type State struct {
 }
 
 type Table struct {
-	ID      int
-	Name    string
-	AsName  string
-	Columns Columns
-	Indexes Indexes
-	Collate *Collation
+	ID        int
+	Name      string
+	AsName    string
+	Columns   Columns
+	Indexes   Indexes
+	Collate   *Collation
+	Clustered bool
 
 	tiflashReplica int
 
@@ -210,4 +211,28 @@ func (q QueryState) GetRandTable() *Table {
 		idx--
 	}
 	return nil
+}
+
+type MultiObjs struct {
+	items []string
+}
+
+func NewMultiObjs() *MultiObjs {
+	return &MultiObjs{}
+}
+
+func (m *MultiObjs) SameObject(name string) bool {
+	if m == nil {
+		return false
+	}
+	for _, i := range m.items {
+		if i == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *MultiObjs) AddName(name string) {
+	m.items = append(m.items, name)
 }

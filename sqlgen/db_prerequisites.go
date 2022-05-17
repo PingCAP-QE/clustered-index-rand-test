@@ -4,15 +4,22 @@ var NoTooMuchTables = func(s *State) bool {
 	return len(s.Tables) < 20
 }
 
-var CurrentTableHasIndices = func(s *State) bool {
-	return len(s.env.Table.Indexes) > 0
+var HasModifiableIndexes = func(s *State) bool {
+	cnt := len(s.Env().Table.Indexes)
+	switch cnt {
+	case 0:
+		return false
+	case 1:
+		return !s.Env().Table.Clustered
+	default:
+		return true
+	}
 }
 
-var NoPrimaryKey = func(s *State) bool {
-	idx := s.env.Table.Indexes
-	return !idx.Find(func(index *Index) bool {
-		return index.Tp == IndexTypePrimary
-	})
+var AddIndex2 Fn
+
+func init() {
+	AddIndex2 = AddIndex
 }
 
 var HasTables = func(s *State) bool {
@@ -46,7 +53,7 @@ var HasShardableColumn = func(s *State) bool {
 	if tbl.Columns == nil {
 		return false
 	}
-	return tbl.Indexes.Find(func(i *Index) bool {
+	return tbl.Indexes.Found(func(i *Index) bool {
 		return isShardableColumn(i.Columns[0])
 	})
 }
@@ -75,8 +82,54 @@ var HasNonPKCol = func(s *State) bool {
 var isShardableColumn = func(c *Column) bool {
 	return c.Tp != ColumnTypeJSON && c.Tp != ColumnTypeSet && c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum
 }
+
 var HasSameColumnType = func(s *State) bool {
 	col := s.env.Column
 	t, _ := GetRandTableColumnWithTp(s.Tables, col.Tp)
 	return t != nil
+}
+
+var ModifyColumnCompatible = func(oldCol *Column, newColTp ColumnType) bool {
+	if oldCol == nil {
+		return true
+	}
+	oldTp := oldCol.Tp
+	if oldTp.IsTimeType() || oldTp.IsStringType() || oldTp == ColumnTypeJSON {
+		if newColTp == ColumnTypeBit {
+			return false
+		}
+	}
+	if oldTp.IsTimeType() || oldTp.IsStringType() || oldTp.IsFloatingType() || oldTp == ColumnTypeJSON || oldTp == ColumnTypeBit {
+		if newColTp == ColumnTypeEnum || newColTp == ColumnTypeSet {
+			return false
+		}
+	}
+	if oldTp == ColumnTypeEnum || oldTp == ColumnTypeSet || oldTp.IsFloatingType() || oldTp == ColumnTypeBit {
+		if newColTp.IsTimeType() {
+			return false
+		}
+	}
+	return true
+}
+
+var CharsetCompatible = func(from, to *Column) bool {
+	if from == nil {
+		return true
+	}
+	if from.Collation == nil || to.Collation == nil {
+		return true
+	}
+	incompatibleSets := map[string][]string{
+		"binary":  {"gbk"},
+		"utf8mb4": {"binary"},
+		"gbk":     {"binary"},
+	}
+	if ss, ok := incompatibleSets[from.Collation.CharsetName]; ok {
+		for _, s := range ss {
+			if s == to.Collation.CharsetName {
+				return false
+			}
+		}
+	}
+	return true
 }

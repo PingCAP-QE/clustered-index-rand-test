@@ -14,11 +14,14 @@
 package sqlgen
 
 import (
+	"fmt"
 	"runtime"
 )
 
+var copyID int64
+
 type Fn struct {
-	Gen          func(state *State) string
+	Gen          func(state *State) (string, error)
 	Info         string
 	Weight       int
 	Repeat       Interval
@@ -36,10 +39,16 @@ func NewFn(fn func(state *State) Fn) Fn {
 	_, filePath, line, _ := runtime.Caller(1)
 	ret := defaultFn()
 	ret.Info = constructFnInfo(filePath, line)
-	ret.Gen = func(state *State) string {
+	ret.Gen = func(state *State) (string, error) {
 		return fn(state).Eval(state)
 	}
 	return ret
+}
+
+func (f Fn) Copy() Fn {
+	copyID++
+	f.Info = fmt.Sprintf("%s%d", f.Info, copyID)
+	return f
 }
 
 func (f Fn) Equal(other Fn) bool {
@@ -65,6 +74,9 @@ func (f Fn) P(fns ...func(state *State) bool) Fn {
 	newFn := f
 	newFn.Prerequisite = func(state *State) bool {
 		for _, pre := range fns {
+			if pre == nil {
+				continue
+			}
 			if !pre(state) {
 				return false
 			}
@@ -74,19 +86,16 @@ func (f Fn) P(fns ...func(state *State) bool) Fn {
 	return newFn
 }
 
-func (f Fn) Eval(state *State) string {
+func (f Fn) Eval(state *State) (res string, err error) {
 	newFn := f
 	for _, l := range state.hooks.hooks {
 		newFn = l.BeforeEvaluate(state, newFn)
 	}
-	var res string
-	if state.GetWeight(f) == 0 {
-		res = ""
-	} else {
-		res = newFn.Gen(state)
+	if state.GetWeight(f) != 0 {
+		res, err = newFn.Gen(state)
 	}
 	for _, l := range state.hooks.hooks {
 		res = l.AfterEvaluate(state, newFn, res)
 	}
-	return res
+	return res, err
 }

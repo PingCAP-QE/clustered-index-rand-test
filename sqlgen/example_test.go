@@ -15,7 +15,8 @@ func TestReadMeExample(t *testing.T) {
 	state.SetWeight(sqlgen.IndexDefinitions, 0)
 	state.SetWeight(sqlgen.PartitionDefinition, 0)
 	for i := 0; i < 200; i++ {
-		sql := sqlgen.CreateTable.Eval(state)
+		sql, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		fmt.Print(sql)
 		fmt.Println(";")
 	}
@@ -26,13 +27,15 @@ func TestQuery(t *testing.T) {
 	rowCount := 10
 	tblCount := 2
 	for i := 0; i < tblCount; i++ {
-		sql := sqlgen.CreateTable.Eval(state)
+		sql, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		fmt.Println(sql)
 	}
 	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
-			sql := sqlgen.InsertInto.Eval(state)
+			sql, err := sqlgen.InsertInto.Eval(state)
+			require.NoError(t, err)
 			fmt.Println(sql)
 		}
 	}
@@ -85,7 +88,8 @@ func TestExampleCreateTableWithoutIndexOrPartitions(t *testing.T) {
 	state.SetWeight(sqlgen.IndexDefinitions, 0)
 	state.SetWeight(sqlgen.PartitionDefinition, 0)
 	for i := 0; i < 200; i++ {
-		sql := sqlgen.CreateTable.Eval(state)
+		sql, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		fmt.Println(sql)
 		require.Greater(t, len(sql), 0)
 		require.NotContains(t, sql, "index")
@@ -105,11 +109,12 @@ func TestExampleIntegerColumnTypeChange(t *testing.T) {
 	for _, sql := range insertSQLs {
 		fmt.Println(sql)
 	}
-	state.SetWeight(sqlgen.DDLStmt, 20)
+	state.SetWeight(sqlgen.AlterTable, 20)
 	state.SetWeight(sqlgen.AlterColumn, 10)
 	alterTableCount := 0
 	for i := 0; i < 200; i++ {
-		sql := sqlgen.Start.Eval(state)
+		sql, err := sqlgen.Start.Eval(state)
+		require.NoError(t, err)
 		require.Greater(t, len(sql), 0)
 		fmt.Println(sql)
 		if strings.Contains(sql, "alter table") {
@@ -128,18 +133,21 @@ func TestExampleColumnTypeChangeWithGivenTypes(t *testing.T) {
 	state.ReplaceRule(sqlgen.ColumnDefinitionTypeOnModify, sqlgen.ColumnDefinitionTypesIntegerTiny)
 
 	for i := 0; i < 100; i++ {
-		query := sqlgen.CreateTable.Eval(state)
+		query, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		require.Equal(t, 5, strings.Count(query, "int"), query)
 	}
 	for i := 0; i < 20; i++ {
 		state.Env().Table = state.Tables.Rand()
-		query := sqlgen.AddColumn.Eval(state)
+		query, err := sqlgen.AddColumn.Eval(state)
+		require.NoError(t, err)
 		require.Contains(t, query, "bigint", query)
 	}
 	for i := 0; i < 20; i++ {
 		randTable := state.Tables.Rand()
 		state.Env().Table = state.Tables.Rand()
-		query := sqlgen.AlterColumn.Eval(state)
+		query, err := sqlgen.AlterColumn.Eval(state)
+		require.NoError(t, err)
 		if len(query) == 0 {
 			pk := randTable.Indexes.Primary()
 			if pk != nil {
@@ -160,13 +168,15 @@ func TestGBKCharacters(t *testing.T) {
 func TestExampleSubSelectFieldCompatible(t *testing.T) {
 	state := sqlgen.NewState()
 	state.ReplaceRule(sqlgen.SubSelect, sqlgen.SubSelectWithGivenTp)
-	query := sqlgen.CreateTable.Eval(state)
+	query, err := sqlgen.CreateTable.Eval(state)
+	require.NoError(t, err)
 	require.Greater(t, len(query), 0)
 	tbl := state.Tables.Rand()
 	state.Env().Table = tbl
 	state.Env().Column = tbl.Columns.Rand()
 	for i := 0; i < 100; i++ {
-		pred := sqlgen.Predicate.Eval(state)
+		pred, err := sqlgen.Predicate.Eval(state)
+		require.NoError(t, err)
 		fmt.Println(pred)
 	}
 }
@@ -176,7 +186,10 @@ func generateCreateTable(state *sqlgen.State, tblCount, colCount, idxCount int) 
 	state.SetRepeat(sqlgen.ColumnDefinition, colCount, colCount)
 	state.SetRepeat(sqlgen.IndexDefinition, idxCount, idxCount)
 	for i := 0; i < tblCount; i++ {
-		sql := sqlgen.CreateTable.Eval(state)
+		sql, err := sqlgen.CreateTable.Eval(state)
+		if err != nil {
+			panic(err)
+		}
 		result = append(result, sql)
 	}
 	return result
@@ -187,7 +200,10 @@ func generateInsertInto(state *sqlgen.State, rowCount int) []string {
 	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < rowCount; i++ {
-			sql := sqlgen.InsertInto.Eval(state)
+			sql, err := sqlgen.InsertInto.Eval(state)
+			if err != nil {
+				panic(err)
+			}
 			result = append(result, sql)
 		}
 	}
@@ -199,7 +215,10 @@ func generateQuery(state *sqlgen.State, count int) []string {
 	for _, tb := range state.Tables {
 		state.Env().Table = tb
 		for i := 0; i < count; i++ {
-			sql := sqlgen.Query.Eval(state)
+			sql, err := sqlgen.Query.Eval(state)
+			if err != nil {
+				panic(err)
+			}
 			result = append(result, sql)
 		}
 	}

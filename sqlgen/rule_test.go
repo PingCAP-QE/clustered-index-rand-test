@@ -15,7 +15,8 @@ func TestStart(t *testing.T) {
 	state := sqlgen.NewState()
 	defer state.CheckIntegrity()
 	for i := 0; i < 300; i++ {
-		res := sqlgen.Start.Eval(state)
+		res, err := sqlgen.Start.Eval(state)
+		require.NoError(t, err)
 		require.Greater(t, len(res), 0, i)
 	}
 	require.Equal(t, state.Env().Depth(), 0)
@@ -25,7 +26,8 @@ func TestCreateTable(t *testing.T) {
 	state := sqlgen.NewState()
 	defer state.CheckIntegrity()
 	for i := 0; i < 300; i++ {
-		res := sqlgen.CreateTable.Eval(state)
+		res, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		require.Greater(t, len(res), 0, i)
 	}
 }
@@ -38,7 +40,8 @@ func TestCreateColumnTypes(t *testing.T) {
 	state.SetRepeat(sqlgen.ColumnDefinition, 5, 5)
 	intColCount := 0
 	for i := 0; i < 100; i++ {
-		res := sqlgen.CreateTable.Eval(state)
+		res, err := sqlgen.CreateTable.Eval(state)
+		require.NoError(t, err)
 		require.Greater(t, len(res), 0, i)
 		intColCount += strings.Count(res, "int")
 	}
@@ -48,18 +51,22 @@ func TestCreateColumnTypes(t *testing.T) {
 func TestCreateTableLike(t *testing.T) {
 	state := sqlgen.NewState()
 	defer state.CheckIntegrity()
-	sqlgen.CreateTable.Eval(state)
+	_, err := sqlgen.CreateTable.Eval(state)
+	require.NoError(t, err)
 	for i := 0; i < 100; i++ {
-		sqlgen.CreateTableLike.Eval(state)
+		_, err = sqlgen.CreateTableLike.Eval(state)
+		require.NoError(t, err)
 		state.Env().Table = state.Tables.Rand()
-		sqlgen.AddColumn.Eval(state)
+		_, err = sqlgen.AddColumn.Eval(state)
+		require.NoError(t, err)
 		dropColTbls := state.Tables.Filter(func(t *sqlgen.Table) bool {
 			state.Env().Table = t
 			return sqlgen.MoreThan1Columns(state) && sqlgen.HasDroppableColumn(state)
 		})
 		if len(dropColTbls) > 0 {
 			state.Env().Table = dropColTbls.Rand()
-			sqlgen.DropColumn.Eval(state)
+			_, err = sqlgen.DropColumn.Eval(state)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -68,13 +75,16 @@ func TestAlterColumnPosition(t *testing.T) {
 	state := sqlgen.NewState()
 	defer state.CheckIntegrity()
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
-	_ = sqlgen.CreateTable.Eval(state)
+	_, err := sqlgen.CreateTable.Eval(state)
+	require.NoError(t, err)
 	state.Env().Table = state.Tables.Rand()
 	for i := 0; i < 10; i++ {
-		_ = sqlgen.InsertInto.Eval(state)
+		_, err = sqlgen.InsertInto.Eval(state)
+		require.NoError(t, err)
 	}
 	for i := 0; i < 100; i++ {
-		_ = sqlgen.AlterColumn.Eval(state)
+		_, err = sqlgen.AlterColumn.Eval(state)
+		require.NoError(t, err)
 	}
 	// TODO: implement the type-value compatibility check.
 	tbl := state.Tables.Rand()
@@ -94,9 +104,9 @@ func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {
 	state.SetRepeat(sqlgen.ColumnDefinition, 10, 10)
 	state.SetRepeat(sqlgen.IndexDefinition, 1, 1)
 	state.ReplaceRule(sqlgen.IndexDefinitionType, sqlgen.IndexDefinitionTypePrimary)
-	state.ReplaceRule(sqlgen.AlterColumn, sqlgen.AlterColumnNoPK)
 
-	_ = sqlgen.CreateTable.Eval(state)
+	_, err := sqlgen.CreateTable.Eval(state)
+	require.NoError(t, err)
 	tbl := state.Tables.Rand()
 	pk := tbl.Indexes.Rand()
 	require.Equal(t, sqlgen.IndexTypePrimary, pk.Tp)
@@ -105,7 +115,8 @@ func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {
 	})
 	state.Env().Table = tbl
 	for i := 0; i < 30; i++ {
-		sqlgen.AlterColumn.Eval(state)
+		_, err := sqlgen.AlterColumn.Eval(state)
+		require.NoError(t, err)
 	}
 	for _, pkCol := range pkCols {
 		require.True(t, tbl.Columns.Contain(pkCol))
@@ -119,7 +130,8 @@ func TestSyntax(t *testing.T) {
 
 	state.Config().SetMaxTable(200)
 	for i := 0; i < 1000; i++ {
-		sql := sqlgen.Start.Eval(state)
+		sql, err := sqlgen.Start.Eval(state)
+		require.NoError(t, err)
 		_, warn, err := tidbParser.ParseSQL(sql)
 		require.Lenf(t, warn, 0, "sql: %s", sql)
 		require.Nilf(t, err, "sql: %s", sql)
