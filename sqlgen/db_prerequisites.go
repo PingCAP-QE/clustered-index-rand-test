@@ -39,6 +39,19 @@ var HasDroppableColumn = func(s *State) bool {
 	return false
 }
 
+var HasShardableColumn = func(s *State) bool {
+	tbl := s.env.Table
+	if tbl == nil {
+		return false
+	}
+	if tbl.Columns == nil {
+		return false
+	}
+	return tbl.Indexes.Found(func(i *Index) bool {
+		return isShardableColumn(i.Columns[0])
+	})
+}
+
 var IndexColumnPrefixable = func(s *State) bool {
 	col := s.env.IdxColumn
 	return col.Tp.IsStringType() && col.arg1 > 0
@@ -47,6 +60,21 @@ var IndexColumnPrefixable = func(s *State) bool {
 var IndexColumnCanHaveNoPrefix = func(s *State) bool {
 	col := s.env.IdxColumn
 	return !col.Tp.NeedKeyLength()
+}
+
+var HasNonPKCol = func(s *State) bool {
+	tbl := s.env.Table
+	pk := tbl.Indexes.Primary()
+	if pk == nil {
+		return true
+	}
+	return tbl.Columns.Found(func(c *Column) bool {
+		return !pk.HasColumn(c)
+	})
+}
+
+var isShardableColumn = func(c *Column) bool {
+	return c.Tp != ColumnTypeJSON && c.Tp != ColumnTypeSet && c.Tp != ColumnTypeBit && c.Tp != ColumnTypeEnum
 }
 
 var HasSameColumnType = func(s *State) bool {

@@ -54,7 +54,7 @@ func checkSyntaxCmd() *cobra.Command {
 
 			state := cases.NewMultiSchemaChangeState()
 			queries := generatePlainSQLs(state, stmtCount)
-			//queries := generateCreateTables(state, stmtCount)
+			// queries := generateCreateTables(state, stmtCount)
 
 			for i, query := range queries {
 				if debug {

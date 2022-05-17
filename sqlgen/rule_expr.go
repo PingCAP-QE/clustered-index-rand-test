@@ -103,7 +103,7 @@ var AggFunction = NewFn(func(state *State) Fn {
 		Strf("var_samp([%fn])", c1),
 		Strf("stddev_pop([%fn])", c1),
 		Strf("stddev_samp([%fn])", c1),
-		//Strf("json_objectagg([%fn], [%fn])", c1, c2),
+		// Strf("json_objectagg([%fn], [%fn])", c1, c2),
 		Strf("approx_count_distinct([%fn])", c1),
 		Strf("approx_percentile([%fn], [%fn])", c1, Str(RandomNum(0, 100))),
 	)

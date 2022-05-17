@@ -36,7 +36,7 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	// https://docs.pingcap.com/tidb/stable/data-type-numeric
 	case ColumnTypeFloat, ColumnTypeDouble:
 		// Float/Double precision is deprecated.
-		//https://github.com/pingcap/tidb/issues/21692
+		// https://github.com/pingcap/tidb/issues/21692
 		col.arg1 = 0
 		col.arg2 = 0
 	case ColumnTypeDecimal:
