@@ -61,6 +61,7 @@ var AlterTableChangeSingle = NewFn(func(state *State) Fn {
 		DropColumn,
 		DropIndex,
 		AlterColumn,
+		AlterIndex,
 	)
 })
 
@@ -110,7 +111,7 @@ var CreateTable = NewFn(func(state *State) Fn {
 		return NoneBecauseOf(err)
 	}
 	eIdxDefs, err := IndexDefinitions.Eval(state)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "<nil>") {
 		return NoneBecauseOf(err)
 	}
 	if len(strings.Trim(eIdxDefs, " ")) != 0 {
@@ -445,6 +446,33 @@ var AlterColumn = NewFn(func(state *State) Fn {
 	)
 })
 
+var AlterIndex = NewFn(func(state *State) Fn {
+	tbl := state.Env().Table
+	pk := tbl.Indexes.Primary()
+	idxes := tbl.Indexes.Filter(func(index *Index) bool {
+		// Not support operate the same object in multi-schema change.
+		if state.Env().MultiObjs.SameObject(index.Name) {
+			return false
+		}
+		// A primary key index cannot be invisible
+		if index == pk {
+			return false
+		}
+		return true
+	})
+	if len(idxes) == 0 {
+		return None("no suitable index")
+	}
+	idx := idxes.Rand()
+	if state.Env().MultiObjs != nil {
+		state.Env().MultiObjs.AddName(idx.Name)
+	}
+	return Or(
+		Strs("alter index", idx.Name, "visible"),
+		Strs("alter index", idx.Name, "invisible"),
+	)
+})
+
 var AlterColumnChange = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	col := state.env.Column
@@ -495,6 +523,29 @@ var AlterColumnModify = NewFn(func(state *State) Fn {
 		state.env.MultiObjs.AddName(col.Name)
 	}
 	return And(Str(ret), ColumnPositionOpt)
+})
+
+var AlterColumnSet = NewFn(func(state *State) Fn {
+	col := state.env.Column
+	return And(
+		Strs("alter column", col.Name),
+		Or(
+			AlterColumnSetDefault,
+			AlterColumnDropDefault,
+		),
+	)
+})
+
+var AlterColumnSetDefault = NewFn(func(state *State) Fn {
+	col := state.env.Column
+	col.defaultVal = col.RandomValue()
+	return Strs("set default", col.defaultVal)
+})
+
+var AlterColumnDropDefault = NewFn(func(state *State) Fn {
+	col := state.env.Column
+	col.defaultVal = ""
+	return Str("drop default")
 })
 
 var ColumnPositionOpt = NewFn(func(state *State) Fn {

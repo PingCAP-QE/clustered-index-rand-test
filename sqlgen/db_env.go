@@ -75,11 +75,11 @@ func (e *Env) GetCurrentStack() string {
 	return sb.String()
 }
 
-func (e *Env) IsIn(fn Fn) bool {
+func (e *Env) IsIn(fnStr string) bool {
 	for _, prev := range e.prev {
-		if fn.Info == prev.FnInfo {
+		if fnStr == prev.FnInfo {
 			return true
 		}
 	}
-	return fn.Info == e.FnInfo
+	return fnStr == e.FnInfo
 }

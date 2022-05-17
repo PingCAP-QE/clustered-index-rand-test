@@ -163,7 +163,7 @@ var IndexDefinitionClustered = NewFn(func(state *State) Fn {
 })
 
 var IndexDefinitionKeywordClustered = NewFn(func(state *State) Fn {
-	if state.env.IsIn(AddIndex2) {
+	if state.env.IsIn("AddIndex") {
 		return None("add clustered primary key is not supported")
 	}
 	tbl := state.env.Table

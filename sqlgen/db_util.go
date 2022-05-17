@@ -126,3 +126,15 @@ func gFold[T Entity](is []T, init T, fn func(a, b T) T) T {
 	}
 	return total
 }
+
+func gEqual[T Entity](is []T, other []T) bool {
+	if len(is) != len(other) {
+		return false
+	}
+	for i := 0; i < len(is); i++ {
+		if is[i] != other[i] {
+			return false
+		}
+	}
+	return true
+}
