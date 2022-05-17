@@ -276,20 +276,39 @@ var NonTransactionalDelete = NewFn(func(state *State) Fn {
 		Str("on"),
 		Str(shardCol.Name),
 		Str("limit"),
-		Str("1000"),
-		Str("delete"),
-		Str("from"),
-		Str(tbl.Name),
-		Str("where"),
-		Or(
-			And(Predicates),
+		Or( // large batch with predicates, or small batch without predicates
 			And(
-				Str(fmt.Sprintf("%s.%s", tbl.Name, col.Name)),
-				Str("in"),
-				Str("("),
-				Repeat(randRowVal.R(1, 9), Str(",")),
-				Str(")")),
-			And(Str(col.Name), Str("is null")),
+				Str("1000"),
+				Str("delete"),
+				Str("from"),
+				Str(tbl.Name),
+				Str("where"),
+				Or(
+					And(Predicates),
+					And(
+						Str(fmt.Sprintf("%s.%s", tbl.Name, col.Name)),
+						Str("in"),
+						Str("("),
+						Repeat(randRowVal.R(1, 9), Str(",")),
+						Str(")")),
+					And(Str(col.Name), Str("is null")),
+				),
+			),
+			And(
+				Or(Str("1"), Str("2"), Str("3"), Str("4")),
+				Str("delete"),
+				Str("from"),
+				Str(tbl.Name),
+				Str("where"),
+				Or(
+					And(
+						Str(fmt.Sprintf("%s.%s", tbl.Name, col.Name)),
+						Str("in"),
+						Str("("),
+						Repeat(randRowVal.R(1, 9), Str(",")),
+						Str(")")),
+					And(Str(col.Name), Str("is null")),
+				)),
 		),
 	)
 })
