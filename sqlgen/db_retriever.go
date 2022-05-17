@@ -164,8 +164,7 @@ func (cols Columns) RandN() Columns {
 	if len(cols) == 0 {
 		return nil
 	}
-	cnt := rand.Intn(len(cols))
-	return gRandN(cols, rand.Intn(cnt))
+	return gRandN(cols, rand.Intn(len(cols)))
 }
 
 func (cols Columns) RandNNotNil() Columns {
@@ -186,6 +185,14 @@ func (cols Columns) Concat(other Columns) Columns {
 
 func (cols Columns) Diff(other Columns) Columns {
 	return gDiff(cols, other)
+}
+
+func (cols Columns) Copy() Columns {
+	return gCopy(cols)
+}
+
+func (cols Columns) Equal(other Columns) bool {
+	return gEqual(cols, other)
 }
 
 func (cols Columns) Span(pred func(column *Column) bool) (Columns, Columns) {

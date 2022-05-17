@@ -16,12 +16,6 @@ var HasModifiableIndexes = func(s *State) bool {
 	}
 }
 
-var AddIndex2 Fn
-
-func init() {
-	AddIndex2 = AddIndex
-}
-
 var HasTables = func(s *State) bool {
 	return len(s.Tables) >= 1
 }

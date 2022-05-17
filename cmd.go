@@ -367,6 +367,7 @@ func ValidateErrs(err1 error, err2 error) bool {
 		"Invalid JSON text",                              // TiDB JSON is different from MySQL.
 		"admin check",
 		"approx_count_distinct",
+		"approx_percentile",
 		"intersect",
 		"except",
 		"split table",

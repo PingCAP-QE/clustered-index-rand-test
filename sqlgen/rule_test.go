@@ -1,7 +1,6 @@
 package sqlgen_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -82,20 +81,19 @@ func TestAlterColumnPosition(t *testing.T) {
 		_, err = sqlgen.InsertInto.Eval(state)
 		require.NoError(t, err)
 	}
+	originCols := state.Env().Table.Columns.Copy()
+	positionChanged := false
 	for i := 0; i < 100; i++ {
-		_, err = sqlgen.AlterColumn.Eval(state)
+		query, err := sqlgen.AlterColumn.Eval(state)
 		require.NoError(t, err)
+		if strings.Contains(query, "first") || strings.Contains(query, "after") {
+			positionChanged = true
+		}
 	}
-	// TODO: implement the type-value compatibility check.
-	tbl := state.Tables.Rand()
-	for _, c := range tbl.Columns {
-		fmt.Printf("%s ", c.Tp)
+	if positionChanged {
+		eq := originCols.Equal(state.Env().Table.Columns)
+		require.False(t, eq)
 	}
-	fmt.Println()
-	for _, v := range tbl.GetRandRow(nil) {
-		fmt.Printf("%s ", v)
-	}
-	fmt.Println()
 }
 
 func TestConfigKeyUnitAvoidAlterPKColumn(t *testing.T) {

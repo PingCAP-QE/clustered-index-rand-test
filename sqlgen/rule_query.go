@@ -363,7 +363,14 @@ var RandVal = NewFn(func(state *State) Fn {
 })
 
 var SubSelect = NewFn(func(state *State) Fn {
-	subTbl := state.Tables.Rand()
+	tbl := state.Env().Table
+	availableTbls := state.Tables
+	if state.Env().IsIn("CommonDelete") || state.Env().IsIn("CommonUpdate") {
+		availableTbls = availableTbls.Filter(func(t *Table) bool {
+			return t.ID != tbl.ID
+		})
+	}
+	subTbl := availableTbls.Rand()
 	subCol := subTbl.Columns.Rand()
 	return And(
 		Str("select"), Str(subCol.Name), Str("from"), Str(subTbl.Name),
