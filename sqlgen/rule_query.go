@@ -17,12 +17,9 @@ var Query = NewFn(func(state *State) Fn {
 }).P(HasTables)
 
 var QueryAll = NewFn(func(state *State) Fn {
-	table := state.Tables.Rand()
-	fields := make([]string, 0)
-	for _, c := range table.Columns {
-		fields = append(fields, c.Name)
-	}
-	return And(Str("SELECT * FROM"), Str(table.Name), Str("ORDER BY"), Str(strings.Join(fields, ", ")))
+	tbl := state.Tables.Rand()
+	orderByAllCols := PrintColumnNamesWithoutPar(tbl.Columns, "")
+	return Strs("select * from", tbl.Name, "order by", orderByAllCols)
 }).P(HasTables)
 
 var UnionSelect = NewFn(func(state *State) Fn {

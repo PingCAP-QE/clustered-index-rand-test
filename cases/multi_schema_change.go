@@ -2,14 +2,6 @@ package cases
 
 import "github.com/PingCAP-QE/clustered-index-rand-test/sqlgen"
 
-var QueryForMultiSchemaChange = sqlgen.NewFn(func(state *sqlgen.State) sqlgen.Fn {
-	if len(state.Tables) == 0 {
-		return sqlgen.None("no tables")
-	}
-	tbl := state.Tables.Rand()
-	return sqlgen.Strs("select * from", tbl.Name)
-})
-
 func NewMultiSchemaChangeState() *sqlgen.State {
 	state := NewStateForTiDB600()
 	state.SetWeight(sqlgen.PartitionDefinition, 0)
@@ -18,7 +10,9 @@ func NewMultiSchemaChangeState() *sqlgen.State {
 	state.SetWeight(sqlgen.ColumnDefinitionTypesFloat, 0)
 	state.SetWeight(sqlgen.ColumnDefinitionTypesDouble, 0)
 	state.SetWeight(sqlgen.ColumnDefinitionTypesJSON, 0)
-	state.ReplaceRule(sqlgen.Query, QueryForMultiSchemaChange)
+	// We only care about the correctness of data after multi-schema change.
+	state.ReplaceRule(sqlgen.Query, sqlgen.QueryAll)
+	// Increase the alter table weight.
 	state.SetWeight(sqlgen.AlterTable, 15)
 	return state
 }

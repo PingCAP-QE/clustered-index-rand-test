@@ -267,6 +267,9 @@ var NonTransactionalDelete = NewFn(func(state *State) Fn {
 	indexes := tbl.Indexes.Filter(func(i *Index) bool {
 		return isShardableColumn(i.Columns[0])
 	})
+	if len(indexes) == 0 {
+		return None("no suitable index for shard")
+	}
 	shardCol := indexes.Rand().Columns[0]
 	// shardCol := tbl.Columns.Filter(isShardableColumn).Rand()
 	var randRowVal = NewFn(func(state *State) Fn {
