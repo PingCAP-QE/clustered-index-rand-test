@@ -5,6 +5,7 @@ type IDAllocator struct {
 	columnID int
 	indexID  int
 	cteID    int
+	renameID int
 }
 
 func (a *IDAllocator) AllocTableID() int {
@@ -25,4 +26,9 @@ func (a *IDAllocator) AllocIndexID() int {
 func (a *IDAllocator) AllocCTEID() int {
 	a.cteID++
 	return a.cteID
+}
+
+func (a *IDAllocator) AllocRenameID() int {
+	a.renameID++
+	return a.renameID
 }

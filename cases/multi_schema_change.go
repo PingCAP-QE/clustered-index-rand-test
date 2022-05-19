@@ -14,5 +14,7 @@ func NewMultiSchemaChangeState() *sqlgen.State {
 	state.ReplaceRule(sqlgen.Query, sqlgen.QueryAll)
 	// Increase the alter table weight.
 	state.SetWeight(sqlgen.AlterTable, 15)
+	state.SetRepeat(sqlgen.ColumnDefinition, 5, 10)
+	state.SetRepeat(sqlgen.IndexDefinition, 3, 7)
 	return state
 }

@@ -153,7 +153,7 @@ func TestExampleColumnTypeChangeWithGivenTypes(t *testing.T) {
 			if pk != nil {
 				require.Len(t, randTable.Columns.Diff(pk.Columns), 0)
 			}
-		} else {
+		} else if strings.Contains(query, "modify") || strings.Contains(query, "change") {
 			require.Contains(t, query, "tinyint", query)
 		}
 	}

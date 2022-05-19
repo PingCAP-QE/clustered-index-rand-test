@@ -164,6 +164,18 @@ func (t *Table) RemoveColumn(c *Column) {
 	}
 }
 
+func (t *Table) RenameColumn(c *Column, newName string) {
+	oldName := c.Name
+	c.Name = newName
+	for _, idx := range t.Indexes {
+		for _, idxCol := range idx.Columns {
+			if idxCol.Name == oldName {
+				idxCol.Name = newName
+			}
+		}
+	}
+}
+
 func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
 	for _, idx := range t.Indexes {
 		for i, idxCol := range idx.Columns {

@@ -35,7 +35,7 @@ var DMLStmt = NewFn(func(state *State) Fn {
 		CommonDelete.W(1),
 		CommonInsertOrReplace.W(3),
 		CommonUpdate.W(1),
-		NonTransactionalDelete.W(1).P(HasShardableColumn),
+		NonTransactionalDelete.W(0).P(HasShardableColumn),
 	)
 })
 
@@ -62,6 +62,8 @@ var AlterTableChangeSingle = NewFn(func(state *State) Fn {
 		DropIndex,
 		AlterColumn,
 		AlterIndex,
+		RenameColumn,
+		RenameIndex,
 	)
 })
 
@@ -443,9 +445,13 @@ var AlterColumn = NewFn(func(state *State) Fn {
 		return None("no columns can be modified")
 	}
 	state.env.Column = cols.Rand()
+	if state.Env().MultiObjs != nil {
+		state.Env().MultiObjs.AddName(state.env.Column.Name)
+	}
 	return Or(
 		AlterColumnChange,
 		AlterColumnModify,
+		AlterColumnSet,
 	)
 })
 
@@ -458,7 +464,7 @@ var AlterIndex = NewFn(func(state *State) Fn {
 			return false
 		}
 		// A primary key index cannot be invisible
-		if index == pk {
+		if pk != nil && pk.ID == index.ID {
 			return false
 		}
 		return true
@@ -474,6 +480,50 @@ var AlterIndex = NewFn(func(state *State) Fn {
 		Strs("alter index", idx.Name, "visible"),
 		Strs("alter index", idx.Name, "invisible"),
 	)
+})
+
+var RenameColumn = NewFn(func(state *State) Fn {
+	tbl := state.Env().Table
+	cols := tbl.Columns.Filter(func(c *Column) bool {
+		// Not support operate the same object in multi-schema change.
+		return !state.Env().MultiObjs.SameObject(c.Name)
+	})
+	if len(cols) == 0 {
+		return None("no suitable column to rename")
+	}
+	col := cols.Rand()
+	oldName, newColName := col.Name, fmt.Sprintf("col_%d_%d", col.ID, state.alloc.AllocRenameID())
+	tbl.RenameColumn(col, newColName)
+	if state.Env().MultiObjs != nil {
+		state.Env().MultiObjs.AddName(newColName)
+	}
+	return Strs("rename column", oldName, "to", newColName)
+})
+
+var RenameIndex = NewFn(func(state *State) Fn {
+	tbl := state.Env().Table
+	pk := tbl.Indexes.Primary()
+	idxes := tbl.Indexes.Filter(func(i *Index) bool {
+		// Not support operate the same object in multi-schema change.
+		if state.Env().MultiObjs.SameObject(i.Name) {
+			return false
+		}
+		// Not support renaming primary key.
+		if pk != nil && i.ID == pk.ID {
+			return false
+		}
+		return true
+	})
+	if len(idxes) == 0 {
+		return None("no suitable index to rename")
+	}
+	idx := idxes.Rand()
+	oldName, newIdxName := idx.Name, fmt.Sprintf("idx_%d_%d", idx.ID, state.alloc.AllocRenameID())
+	idx.Name = newIdxName
+	if state.Env().MultiObjs != nil {
+		state.Env().MultiObjs.AddName(newIdxName)
+	}
+	return Strs("rename index", oldName, "to", newIdxName)
 })
 
 var AlterColumnChange = NewFn(func(state *State) Fn {
