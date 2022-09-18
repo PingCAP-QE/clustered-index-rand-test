@@ -59,6 +59,10 @@ var IndexDefinitionColumns = NewFn(func(state *State) Fn {
 	return And(Str("("), Repeat(IndexDefinitionColumn.R(1, 3), Str(",")), Str(")"))
 })
 
+var IndexDefinitionSingleColumn = NewFn(func(state *State) Fn {
+	return And(Str("("), IndexDefinitionColumn, Str(")"))
+})
+
 var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	idx := state.env.Index
