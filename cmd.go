@@ -223,10 +223,10 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 		debug       bool
 	)
 	cmd := &cobra.Command{
-		Use:   "ucc",
-		Short: "Run unique constraint check",
-		// SilenceErrors: true,
-		// SilenceUsage:  true,
+		Use:           "ucc",
+		Short:         "Run unique constraint check",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parseAndSetSeed(seed)
 
@@ -318,10 +318,10 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 									if !ok {
 										return errors.New("can't read from rs")
 									}
-									if string(v1) == string(v2) {
+									if string(v1) == string(v2) && len(v1) > 0 {
 										if debug {
-											println("duplicated index value found: ")
-											println(rs.PrettyPrint)
+											println("duplicated index value found: ", v1)
+											rs.PrettyPrint(os.Stdout)
 										}
 										mustNotCommit = true
 									}
@@ -331,10 +331,6 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 					}
 
 				}
-				// TODO:
-				// 1. [x] reject assertion failure
-				// 2. [x] find unique constraint violation in a `select` query and make sure it cannot commit;
-				// 3. [ ] admin check in the last
 			}
 
 			_, err := executeQuery(conn1, "commit")
