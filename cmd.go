@@ -269,7 +269,7 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 			for _, query := range queries {
 				inOriginSession := rand.Int()%2 == 0
 				if debug {
-					sessionNum := 1
+					sessionNum := 2
 					if inOriginSession {
 						sessionNum = 1
 					}
