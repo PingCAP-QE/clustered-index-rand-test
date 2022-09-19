@@ -249,7 +249,9 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 
 			initQueries := generateInitialSQLs(state)
 			for _, query := range initQueries {
-				println(query + ";")
+				if debug {
+					println(query + ";")
+				}
 				_, err := executeQuery(conn1, query)
 				if err != nil {
 					println("failed to initialize")
