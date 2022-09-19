@@ -249,6 +249,7 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 
 			initQueries := generateInitialSQLs(state)
 			for _, query := range initQueries {
+				println(query + ";")
 				_, err := executeQuery(conn1, query)
 				if err != nil {
 					println("failed to initialize")
@@ -262,14 +263,15 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 			executeQuery(conn1, "set @@tidb_constraint_check_in_place_pessimistic=0")
 			executeQuery(conn1, "begin pessimistic")
 
+		QUERIES:
 			for _, query := range queries {
 				inOriginSession := rand.Int()%2 == 0
 				if debug {
 					sessionNum := 1
 					if inOriginSession {
-						sessionNum = 2
+						sessionNum = 1
 					}
-					fmt.Println("in session", sessionNum, ", "+query)
+					fmt.Println("in session", sessionNum, ", "+query+";")
 				}
 				if !inOriginSession {
 					// ignore anything in session 2, we don't care about them
@@ -324,6 +326,8 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 											rs.PrettyPrint(os.Stdout)
 										}
 										mustNotCommit = true
+										// try to commit now
+										break QUERIES
 									}
 								}
 							}
@@ -343,7 +347,7 @@ func uniqueConstraintCheckCmd() *cobra.Command {
 				if debug {
 					println("check: " + query)
 				}
-				_, err = executeQuery(conn1, query)
+				_, err := executeQuery(conn1, query)
 				if err != nil {
 					return err
 				}
