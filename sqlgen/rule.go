@@ -36,6 +36,7 @@ var DMLStmt = NewFn(func(state *State) Fn {
 		CommonInsertOrReplace.W(3),
 		CommonUpdate.W(1),
 		NonTransactionalDelete.W(0).P(HasShardableColumn),
+		NonTransactionalUpdate.W(0).P(HasShardableColumn),
 	)
 })
 
@@ -315,6 +316,41 @@ var NonTransactionalDelete = NewFn(func(state *State) Fn {
 						Str(")")),
 					And(Str(col.Name), Str("is null")),
 				)),
+		),
+	)
+})
+
+var NonTransactionalUpdate = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	indexes := tbl.Indexes.Filter(func(i *Index) bool {
+		return isShardableColumn(i.Columns[0])
+	})
+	if len(indexes) == 0 {
+		return None("no suitable index for shard")
+	}
+	shardCol := indexes.Rand().Columns[0]
+	return And(
+		Str("batch"),
+		Str("on"),
+		Str(shardCol.Name),
+		Str("limit"),
+		Or( // large batch with predicates, or small batch without predicates
+			And(
+				Str("1000"),
+				Str("update"),
+				Str(tbl.Name),
+				Str("set"),
+				Repeat(AssignClause.R(1, 3), Str(",")),
+				Str("where"),
+				Predicates,
+			),
+			And(
+				Or(Str("1"), Str("2"), Str("3"), Str("4")),
+				Str("update"),
+				Str(tbl.Name),
+				Str("set"),
+				Repeat(AssignClause.R(1, 3), Str(",")),
+			),
 		),
 	)
 })
