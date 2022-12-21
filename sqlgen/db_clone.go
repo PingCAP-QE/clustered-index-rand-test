@@ -36,19 +36,19 @@ func (t *Table) Clone() *Table {
 		newIdx.ColumnPrefix = cloneInts(idx.ColumnPrefix)
 		newTable.Indexes = append(newTable.Indexes, &newIdx)
 	}
-	newTable.colForPrefixIndex = make([]*Column, 0, len(t.colForPrefixIndex))
-	for _, c := range t.colForPrefixIndex {
+	newTable.ColForPrefixIndex = make([]*Column, 0, len(t.ColForPrefixIndex))
+	for _, c := range t.ColForPrefixIndex {
 		offset := t.Columns.ByID(c.ID)
-		newTable.colForPrefixIndex = append(newTable.colForPrefixIndex, newTable.Columns[offset])
+		newTable.ColForPrefixIndex = append(newTable.ColForPrefixIndex, newTable.Columns[offset])
 	}
 	// TODO: DROP TABLE need to remove itself from children tables.
-	newTable.childTables = []*Table{&newTable}
+	newTable.ChildTables = []*Table{&newTable}
 	return &newTable
 }
 
 func (c *Column) Clone() *Column {
 	newCol := *c
-	newCol.args = cloneStrings(c.args)
+	newCol.Args = cloneStrings(c.Args)
 	return &newCol
 }
 

@@ -144,7 +144,7 @@ func (t *Table) CloneCreateTableLike(state *State) *Table {
 		idx.ID = state.alloc.AllocIndexID()
 	}
 	newTable.values = nil
-	newTable.colForPrefixIndex = nil
+	newTable.ColForPrefixIndex = nil
 	return newTable
 }
 

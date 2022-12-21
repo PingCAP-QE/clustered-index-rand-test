@@ -54,7 +54,7 @@ var HasShardableColumn = func(s *State) bool {
 
 var IndexColumnPrefixable = func(s *State) bool {
 	col := s.env.IdxColumn
-	return col.Tp.IsStringType() && col.arg1 > 0
+	return col.Tp.IsStringType() && col.Arg1 > 0
 }
 
 var IndexColumnCanHaveNoPrefix = func(s *State) bool {

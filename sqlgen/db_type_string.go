@@ -35,16 +35,16 @@ func (c *Column) String() string {
 	sb.WriteString(" ")
 	sb.WriteString(c.Tp.String())
 	switch {
-	case c.arg1 == 0 && c.arg2 == 0:
-	case c.arg1 != 0 && c.arg2 == 0:
+	case c.Arg1 == 0 && c.Arg2 == 0:
+	case c.Arg1 != 0 && c.Arg2 == 0:
 		sb.WriteString("(")
-		sb.WriteString(strconv.Itoa(c.arg1))
+		sb.WriteString(strconv.Itoa(c.Arg1))
 		sb.WriteString(")")
 	default:
 		sb.WriteString("(")
-		sb.WriteString(strconv.Itoa(c.arg1))
+		sb.WriteString(strconv.Itoa(c.Arg1))
 		sb.WriteString(",")
-		sb.WriteString(strconv.Itoa(c.arg2))
+		sb.WriteString(strconv.Itoa(c.Arg2))
 		sb.WriteString(")")
 	}
 	return sb.String()

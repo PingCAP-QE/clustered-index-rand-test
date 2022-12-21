@@ -24,11 +24,11 @@ func (c *Column) EstimateSizeInBytes() int {
 	case ColumnTypeDouble, ColumnTypeDecimal:
 		return 8
 	case ColumnTypeBit:
-		return mathutil.Max(c.arg1, 1)
+		return mathutil.Max(c.Arg1, 1)
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob:
-		return bytesPerChar * c.arg1
+		return bytesPerChar * c.Arg1
 	case ColumnTypeBinary, ColumnTypeVarBinary:
-		return c.arg1
+		return c.Arg1
 	case ColumnTypeEnum:
 		return 2
 	case ColumnTypeSet:
@@ -40,7 +40,7 @@ func (c *Column) EstimateSizeInBytes() int {
 	case ColumnTypeTimestamp:
 		return 4
 	case ColumnTypeJSON:
-		return c.arg1
+		return c.Arg1
 	}
 	panic(fmt.Sprintf("unknown column type %d", c.Tp))
 	return 0
