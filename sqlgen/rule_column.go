@@ -85,7 +85,7 @@ var ColumnDefinitionCollation = NewFn(func(state *State) Fn {
 var ColumnDefinitionNotNull = NewFn(func(state *State) Fn {
 	col := state.env.Column
 	if RandomBool() {
-		col.isNotNull = true
+		col.IsNotNull = true
 		return Str("not null")
 	} else {
 		return Empty
@@ -106,7 +106,7 @@ var ColumnDefinitionUnsigned = NewFn(func(state *State) Fn {
 		return Empty
 	}
 	if RandomBool() {
-		col.isUnsigned = true
+		col.IsUnsigned = true
 		return Str("unsigned")
 	} else {
 		return Empty
@@ -202,27 +202,27 @@ var ColumnDefinitionTypesIntegerBig = NewFn(func(state *State) Fn {
 
 var ColumnDefinitionTypesFloat = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 0
-	col.arg2 = 0
+	col.Arg1 = 0
+	col.Arg2 = 0
 	col.Tp = ColumnTypeFloat
 	return Str("float")
 })
 
 var ColumnDefinitionTypesDouble = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 0
-	col.arg2 = 0
+	col.Arg1 = 0
+	col.Arg2 = 0
 	col.Tp = ColumnTypeDouble
 	return Str("double")
 })
 
 var ColumnDefinitionTypesDecimal = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(65)
-	upper := mathutil.Min(col.arg1, 30)
-	col.arg2 = 1 + rand.Intn(upper)
+	col.Arg1 = 1 + rand.Intn(65)
+	upper := mathutil.Min(col.Arg1, 30)
+	col.Arg2 = 1 + rand.Intn(upper)
 	col.Tp = ColumnTypeDecimal
-	return Strs("decimal", "(", Num(col.arg1), ",", Num(col.arg2), ")")
+	return Strs("decimal", "(", Num(col.Arg1), ",", Num(col.Arg2), ")")
 })
 
 var ColumnDefinitionTypesBit = NewFn(func(state *State) Fn {
@@ -230,51 +230,51 @@ var ColumnDefinitionTypesBit = NewFn(func(state *State) Fn {
 		return None("unsupported change to bit")
 	}
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(62)
+	col.Arg1 = 1 + rand.Intn(62)
 	col.Tp = ColumnTypeBit
-	return Strs("bit", "(", Num(col.arg1), ")")
+	return Strs("bit", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesChar = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(255)
+	col.Arg1 = 1 + rand.Intn(255)
 	col.Tp = ColumnTypeChar
-	return Strs("char", "(", Num(col.arg1), ")")
+	return Strs("char", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesBinary = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(255)
+	col.Arg1 = 1 + rand.Intn(255)
 	col.Tp = ColumnTypeBinary
-	return Strs("binary", "(", Num(col.arg1), ")")
+	return Strs("binary", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesVarchar = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(512)
+	col.Arg1 = 1 + rand.Intn(512)
 	col.Tp = ColumnTypeVarchar
-	return Strs("varchar", "(", Num(col.arg1), ")")
+	return Strs("varchar", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesText = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(512)
+	col.Arg1 = 1 + rand.Intn(512)
 	col.Tp = ColumnTypeText
-	return Strs("text", "(", Num(col.arg1), ")")
+	return Strs("text", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesBlob = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(512)
+	col.Arg1 = 1 + rand.Intn(512)
 	col.Tp = ColumnTypeBlob
-	return Strs("blob", "(", Num(col.arg1), ")")
+	return Strs("blob", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesVarbinary = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.arg1 = 1 + rand.Intn(512)
+	col.Arg1 = 1 + rand.Intn(512)
 	col.Tp = ColumnTypeVarBinary
-	return Strs("varbinary", "(", Num(col.arg1), ")")
+	return Strs("varbinary", "(", Num(col.Arg1), ")")
 })
 
 var ColumnDefinitionTypesEnum = NewFn(func(state *State) Fn {
@@ -282,10 +282,10 @@ var ColumnDefinitionTypesEnum = NewFn(func(state *State) Fn {
 		return None("unsupported change to enum")
 	}
 	col := state.env.Column
-	col.args = []string{"Alice", "Bob", "Charlie", "David"}
+	col.Args = []string{"Alice", "Bob", "Charlie", "David"}
 	col.Tp = ColumnTypeEnum
 	var sb strings.Builder
-	for i, v := range col.args {
+	for i, v := range col.Args {
 		if i != 0 {
 			sb.WriteString(",")
 		}
@@ -301,10 +301,10 @@ var ColumnDefinitionTypesSet = NewFn(func(state *State) Fn {
 		return None("unsupported change to set")
 	}
 	col := state.env.Column
-	col.args = []string{"Alice", "Bob", "Charlie", "David"}
+	col.Args = []string{"Alice", "Bob", "Charlie", "David"}
 	col.Tp = ColumnTypeSet
 	var sb strings.Builder
-	for i, v := range col.args {
+	for i, v := range col.Args {
 		if i != 0 {
 			sb.WriteString(",")
 		}

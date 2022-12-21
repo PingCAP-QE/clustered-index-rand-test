@@ -243,7 +243,7 @@ func (t *Table) AppendIndex(idx *Index) {
 	t.Indexes = append(t.Indexes, idx)
 	if idx.Tp == IndexTypePrimary {
 		for _, c := range idx.Columns {
-			c.isNotNull = true
+			c.IsNotNull = true
 		}
 	}
 }

@@ -77,7 +77,7 @@ var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 	if idx.Tp == IndexTypePrimary {
 		// All parts of a PRIMARY KEY must be NOT NULL.
 		totalCols = totalCols.Filter(func(c *Column) bool {
-			return c.defaultVal != "null"
+			return c.DefaultVal != "null"
 		})
 	}
 	if len(totalCols) == 0 {
@@ -116,7 +116,7 @@ var IndexDefinitionColumnNoPrefix = NewFn(func(state *State) Fn {
 var IndexDefinitionColumnPrefix = NewFn(func(state *State) Fn {
 	idx := state.env.Index
 	col := state.env.IdxColumn
-	maxLength := mathutil.Min(col.arg1, 5)
+	maxLength := mathutil.Min(col.Arg1, 5)
 	if maxLength == 0 {
 		maxLength = 5
 	}
@@ -142,7 +142,7 @@ var IndexDefinitionTypePrimary = NewFn(func(state *State) Fn {
 		return None("pk exists")
 	}
 	if !state.env.Table.Columns.Found(func(c *Column) bool {
-		return c.defaultVal != "null"
+		return c.DefaultVal != "null"
 	}) {
 		return None("all columns are default null")
 	}

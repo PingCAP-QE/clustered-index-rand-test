@@ -41,7 +41,7 @@ var FlashBackTable = NewFn(func(state *State) Fn {
 
 var SetTiFlashReplica = NewFn(func(state *State) Fn {
 	tbl := state.Tables.Rand()
-	tbl.tiflashReplica = 1
+	tbl.TiflashReplica = 1
 	return Strs("alter table", tbl.Name, "set tiflash replica 1")
 })
 

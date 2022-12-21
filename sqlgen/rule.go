@@ -148,7 +148,7 @@ var CommonInsertOrReplace = NewFn(func(state *State) Fn {
 	state.env.Table = tbl
 	if RandomBool() {
 		cWithDef, cWithoutDef := tbl.Columns.Span(func(c *Column) bool {
-			return c.defaultVal != ""
+			return c.DefaultVal != ""
 		})
 		state.env.Columns = cWithoutDef.Concat(cWithDef.RandN())
 	}
@@ -591,13 +591,13 @@ var AlterColumnSet = NewFn(func(state *State) Fn {
 
 var AlterColumnSetDefault = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.defaultVal = col.RandomValue()
-	return Strs("set default", col.defaultVal)
+	col.DefaultVal = col.RandomValue()
+	return Strs("set default", col.DefaultVal)
 })
 
 var AlterColumnDropDefault = NewFn(func(state *State) Fn {
 	col := state.env.Column
-	col.defaultVal = ""
+	col.DefaultVal = ""
 	return Str("drop default")
 })
 
@@ -663,7 +663,7 @@ var CreateTableLike = NewFn(func(state *State) Fn {
 //	tbl := state.env.Get(ScopeKeyLastOutFileTable).ToTable()
 //	id := state.env.Get(ScopeKeyTmpFileID).ToInt()
 //	tmpFile := path.Join(SelectOutFileDir, fmt.Sprintf("%s_%d.txt", tbl.Name, id))
-//	randChildTable := tbl.childTables[rand.Intn(len(tbl.childTables))]
+//	randChildTable := tbl.ChildTables[rand.Intn(len(tbl.ChildTables))]
 //	return Strs("load data local infile", fmt.Sprintf("'%s'", tmpFile), "into table", randChildTable.Name)
 // })
 
