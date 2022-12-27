@@ -404,7 +404,7 @@ var HintTiFlash = NewFn(func(state *State) Fn {
 	queryState := state.env.QState
 	var tbs []string
 	for t := range queryState.SelectedCols {
-		if t.tiflashReplica > 0 {
+		if t.TiflashReplica > 0 {
 			tbs = append(tbs, t.Name)
 		}
 	}

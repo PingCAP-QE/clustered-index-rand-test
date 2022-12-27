@@ -32,15 +32,15 @@ type Table struct {
 	Collate   *Collation
 	Clustered bool
 
-	tiflashReplica int
+	TiflashReplica int
 
 	values            [][]string
-	colForPrefixIndex Columns
+	ColForPrefixIndex Columns
 
-	// childTables records tables that have the same structure.
-	// A table is also its childTables.
+	// ChildTables records tables that have the same structure.
+	// A table is also its ChildTables.
 	// This is used for SELECT OUT FILE and LOAD DATA.
-	childTables []*Table
+	ChildTables []*Table
 }
 
 type Column struct {
@@ -49,13 +49,13 @@ type Column struct {
 	Tp        ColumnType
 	Collation *Collation
 
-	isUnsigned bool
-	arg1       int // optional
-	arg2       int // optional
+	IsUnsigned bool
+	Arg1       int // optional
+	Arg2       int // optional
 
-	args       []string // for ColumnTypeSet and ColumnTypeEnum
-	defaultVal string
-	isNotNull  bool
+	Args       []string // for ColumnTypeSet and ColumnTypeEnum
+	DefaultVal string
+	IsNotNull  bool
 }
 
 type Index struct {

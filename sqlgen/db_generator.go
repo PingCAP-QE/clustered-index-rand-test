@@ -16,7 +16,7 @@ func (s *State) GenNewTable() *Table {
 	tblName := fmt.Sprintf("tbl_%d", id)
 	newTbl := &Table{ID: id, Name: tblName}
 	newTbl.Collate = Collations[CollationType(rand.Intn(int(CollationTypeMax)-1)+1)]
-	newTbl.childTables = []*Table{newTbl}
+	newTbl.ChildTables = []*Table{newTbl}
 	return newTbl
 }
 
@@ -37,23 +37,23 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	case ColumnTypeFloat, ColumnTypeDouble:
 		// Float/Double precision is deprecated.
 		// https://github.com/pingcap/tidb/issues/21692
-		col.arg1 = 0
-		col.arg2 = 0
+		col.Arg1 = 0
+		col.Arg2 = 0
 	case ColumnTypeDecimal:
-		col.arg1 = 1 + rand.Intn(65)
-		upper := mathutil.Min(col.arg1, 30)
-		col.arg2 = 1 + rand.Intn(upper)
+		col.Arg1 = 1 + rand.Intn(65)
+		upper := mathutil.Min(col.Arg1, 30)
+		col.Arg2 = 1 + rand.Intn(upper)
 	case ColumnTypeBit:
-		col.arg1 = 1 + rand.Intn(62)
+		col.Arg1 = 1 + rand.Intn(62)
 	case ColumnTypeChar, ColumnTypeBinary:
-		col.arg1 = 1 + rand.Intn(255)
+		col.Arg1 = 1 + rand.Intn(255)
 	case ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeVarBinary:
-		col.arg1 = 1 + rand.Intn(512)
+		col.Arg1 = 1 + rand.Intn(512)
 	case ColumnTypeEnum, ColumnTypeSet:
-		col.args = []string{"Alice", "Bob", "Charlie", "David"}
+		col.Args = []string{"Alice", "Bob", "Charlie", "David"}
 	}
 	if !col.Tp.RequiredFieldLength() && rand.Intn(5) == 0 {
-		col.arg1, col.arg2 = 0, 0
+		col.Arg1, col.Arg2 = 0, 0
 	}
 	// Set collation
 	if col.Tp == ColumnTypeBinary || col.Tp == ColumnTypeBlob || col.Tp == ColumnTypeVarBinary {
@@ -63,11 +63,11 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 	}
 
 	if col.Tp.IsIntegerType() {
-		col.isUnsigned = RandomBool()
+		col.IsUnsigned = RandomBool()
 	}
-	col.isNotNull = RandomBool()
+	col.IsNotNull = RandomBool()
 	if !col.Tp.DisallowDefaultValue() && RandomBool() {
-		col.defaultVal = col.RandomValue()
+		col.DefaultVal = col.RandomValue()
 	}
 	return col
 }
@@ -75,8 +75,8 @@ func (s *State) GenNewColumnWithType(tps ...ColumnType) *Column {
 func GenPrefixLen(state *State, cols []*Column) []int {
 	prefixLens := make([]int, len(cols))
 	for i, c := range cols {
-		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() && c.arg1 > 0 && RandomBool()) {
-			maxLength := mathutil.Min(c.arg1, 5)
+		if c.Tp.NeedKeyLength() || (c.Tp.IsStringType() && c.Arg1 > 0 && RandomBool()) {
+			maxLength := mathutil.Min(c.Arg1, 5)
 			if maxLength == 0 {
 				maxLength = 5
 			}
@@ -179,7 +179,7 @@ func (c *Column) ZeroValue() string {
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeText, ColumnTypeBlob, ColumnTypeBinary, ColumnTypeVarBinary:
 		return "''"
 	case ColumnTypeEnum, ColumnTypeSet:
-		return fmt.Sprintf("'%s'", c.args[0])
+		return fmt.Sprintf("'%s'", c.Args[0])
 	case ColumnTypeDate, ColumnTypeDatetime, ColumnTypeTimestamp:
 		return fmt.Sprintf("'2000-01-01'")
 	case ColumnTypeTime:
@@ -192,7 +192,7 @@ func (c *Column) ZeroValue() string {
 }
 
 func (c *Column) RandomValue() string {
-	if !c.isNotNull && rand.Intn(30) == 0 {
+	if !c.IsNotNull && rand.Intn(30) == 0 {
 		return "null"
 	}
 	return c.RandomValuesAsc(1)[0]
@@ -207,7 +207,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 	if count == 0 {
 		return nil
 	}
-	if c.isUnsigned {
+	if c.IsUnsigned {
 		switch c.Tp {
 		case ColumnTypeTinyInt:
 			return RandomNums(0, 255, count)
@@ -235,17 +235,17 @@ func (c *Column) RandomValuesAsc(count int) []string {
 	case ColumnTypeBoolean:
 		return RandomNums(0, 1, count)
 	case ColumnTypeFloat, ColumnTypeDouble:
-		return RandFloats(c.arg1, c.arg2, count)
+		return RandFloats(c.Arg1, c.Arg2, count)
 	case ColumnTypeDecimal:
-		m, d := c.arg1, c.arg2
+		m, d := c.Arg1, c.Arg2
 		if m == 0 && d == 0 {
 			m = 10
 		}
 		return RandFloats(m, d, count)
 	case ColumnTypeBit:
-		return RandomNums(0, (1<<c.arg1)-1, count)
+		return RandomNums(0, (1<<c.Arg1)-1, count)
 	case ColumnTypeChar, ColumnTypeVarchar, ColumnTypeBinary, ColumnTypeVarBinary:
-		length := c.arg1
+		length := c.Arg1
 		if length == 0 {
 			length = 1
 		} else if length > 20 {
@@ -253,7 +253,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		}
 		return RandStrings(length, count, c.Collation.CharsetName == "gbk")
 	case ColumnTypeText, ColumnTypeBlob:
-		length := c.arg1
+		length := c.Arg1
 		if length == 0 {
 			length = 5
 		} else if length > 20 {
@@ -261,7 +261,7 @@ func (c *Column) RandomValuesAsc(count int) []string {
 		}
 		return RandStrings(length, count, c.Collation.CharsetName == "gbk")
 	case ColumnTypeEnum, ColumnTypeSet:
-		return RandEnums(c.args, count)
+		return RandEnums(c.Args, count)
 	case ColumnTypeDate, ColumnTypeDatetime, ColumnTypeTimestamp:
 		return RandDates(count)
 	case ColumnTypeTime:
