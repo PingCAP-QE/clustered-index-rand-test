@@ -346,6 +346,9 @@ var Predicate = NewFn(func(state *State) Fn {
 })
 
 var InValues = NewFn(func(state *State) Fn {
+	if len(state.Tables) <= 1 {
+		return RandColVals
+	}
 	return Or(
 		RandColVals,
 		SubSelect,
