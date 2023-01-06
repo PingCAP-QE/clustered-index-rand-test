@@ -117,8 +117,8 @@ func (s *State) RemovePrepare(p *Prepare) {
 
 func (t *Table) AppendColumn(c *Column) {
 	t.Columns = append(t.Columns, c)
-	for i := range t.values {
-		t.values[i] = append(t.values[i], c.ZeroValue())
+	for i := range t.Values {
+		t.Values[i] = append(t.Values[i], c.ZeroValue())
 	}
 }
 
@@ -159,8 +159,8 @@ func (t *Table) RemoveColumn(c *Column) {
 		}
 	}
 	t.Columns = append(t.Columns[:pos], t.Columns[pos+1:]...)
-	for i := range t.values {
-		t.values[i] = append(t.values[i][:pos], t.values[i][pos+1:]...)
+	for i := range t.Values {
+		t.Values[i] = append(t.Values[i][:pos], t.Values[i][pos+1:]...)
 	}
 }
 
@@ -191,10 +191,10 @@ func (t *Table) ReplaceColumn(oldCol, newCol *Column) {
 			continue
 		}
 		t.Columns[colIdx] = newCol
-		for rowIdx := range t.values {
+		for rowIdx := range t.Values {
 			if incompatibleTp {
 				// TODO: support reasonable data change.
-				t.values[rowIdx][colIdx] = newCol.ZeroValue()
+				t.Values[rowIdx][colIdx] = newCol.ZeroValue()
 			}
 		}
 		break
@@ -223,7 +223,7 @@ func (t *Table) moveColumnCommon(src, dest int) {
 	get := func(i int) interface{} { return t.Columns[i] }
 	set := func(i int, v interface{}) { t.Columns[i] = v.(*Column) }
 	Move(src, dest, get, set)
-	for _, row := range t.values {
+	for _, row := range t.Values {
 		get := func(i int) interface{} { return row[i] }
 		set := func(i int, v interface{}) { row[i] = v.(string) }
 		Move(src, dest, get, set)
@@ -260,7 +260,7 @@ func (t *Table) RemoveIndex(idx *Index) {
 }
 
 func (t *Table) AppendRow(row []string) {
-	t.values = append(t.values, row)
+	t.Values = append(t.Values, row)
 }
 
 func (i *Index) AppendColumn(col *Column, prefix int) {

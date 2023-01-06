@@ -34,7 +34,7 @@ type Table struct {
 
 	TiflashReplica int
 
-	values            [][]string
+	Values            [][]string
 	ColForPrefixIndex Columns
 
 	// ChildTables records tables that have the same structure.
