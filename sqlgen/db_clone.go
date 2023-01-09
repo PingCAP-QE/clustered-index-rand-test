@@ -24,7 +24,7 @@ func (t *Table) Clone() *Table {
 	for _, col := range t.Columns {
 		newTable.Columns = append(newTable.Columns, col.Clone())
 	}
-	newTable.values = cloneValues(t.values)
+	newTable.Values = cloneValues(t.Values)
 	newTable.Indexes = make([]*Index, 0, len(t.Indexes))
 	for _, idx := range t.Indexes {
 		newIdx := *idx

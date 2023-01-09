@@ -93,9 +93,9 @@ var MultiSelect = NewFn(func(state *State) Fn {
 var CommonSelect = NewFn(func(state *State) Fn {
 	NotNil(state.env.QState)
 	return And(
-		Str("select"), HintTiFlash, HintIndexMerge, Opt(HintAggToCop), HintJoin,
+		Str("select"), HintTiFlash, Opt(HintIndexMerge), Opt(HintAggToCop), HintJoin,
 		SelectFields, Str("from"), TableReference,
-		WhereClause, GroupByColumnsOpt, WindowClause, OrderByLimit, ForUpdateOpt,
+		WhereClause, GroupByColumnsOpt, WindowClause, Opt(OrderByLimit), ForUpdateOpt,
 	)
 })
 
@@ -363,7 +363,7 @@ var RandVal = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	randCol := state.env.Column
 	var v string
-	if rand.Intn(3) == 0 || len(tbl.values) == 0 {
+	if rand.Intn(3) == 0 || len(tbl.Values) == 0 {
 		v = randCol.RandomValue()
 	} else {
 		v = tbl.GetRandRowVal(randCol)

@@ -90,14 +90,14 @@ func (ts Tables) Copy() Tables {
 type Indexes []*Index
 
 func (t *Table) GetRandRow(cols []*Column) []string {
-	if len(t.values) == 0 {
+	if len(t.Values) == 0 {
 		return nil
 	}
 	if len(cols) == 0 {
-		return t.values[rand.Intn(len(t.values))]
+		return t.Values[rand.Intn(len(t.Values))]
 	}
 	vals := make([]string, 0, len(cols))
-	randRow := t.values[rand.Intn(len(t.values))]
+	randRow := t.Values[rand.Intn(len(t.Values))]
 	for _, targetCol := range cols {
 		for i, tableCol := range t.Columns {
 			if tableCol.ID == targetCol.ID {
@@ -110,7 +110,7 @@ func (t *Table) GetRandRow(cols []*Column) []string {
 }
 
 func (t *Table) GetRandRows(cols []*Column, rowCount int) [][]string {
-	if len(t.values) == 0 {
+	if len(t.Values) == 0 {
 		return nil
 	}
 	rows := make([][]string, rowCount)
@@ -121,10 +121,10 @@ func (t *Table) GetRandRows(cols []*Column, rowCount int) [][]string {
 }
 
 func (t *Table) GetRandRowVal(col *Column) string {
-	if len(t.values) == 0 {
+	if len(t.Values) == 0 {
 		return ""
 	}
-	randRow := t.values[rand.Intn(len(t.values))]
+	randRow := t.Values[rand.Intn(len(t.Values))]
 	for i, c := range t.Columns {
 		if c.ID == col.ID {
 			return randRow[i]
@@ -143,7 +143,7 @@ func (t *Table) CloneCreateTableLike(state *State) *Table {
 	for _, idx := range newTable.Indexes {
 		idx.ID = state.alloc.AllocIndexID()
 	}
-	newTable.values = nil
+	newTable.Values = nil
 	newTable.ColForPrefixIndex = nil
 	return newTable
 }
