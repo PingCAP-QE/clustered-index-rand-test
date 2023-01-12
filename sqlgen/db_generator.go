@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cznic/mathutil"
@@ -302,10 +303,23 @@ func init() {
 
 func RandJsons(count int) []string {
 	res := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		jsonType := JSONType(rand.Intn(len(jMap)))
-		length := len(jMap[jsonType])
-		res = append(res, jMap[jsonType][rand.Intn(length)])
+	if rand.Intn(1) == 0 {
+		for i := 0; i < count; i++ {
+			jsonType := JSONType(rand.Intn(len(jMap)))
+			length := len(jMap[jsonType])
+			res = append(res, jMap[jsonType][rand.Intn(length)])
+		}
+	} else {
+		for i := 0; i < count; i++ {
+			var val []string
+			if rand.Intn(2) == 0 {
+				val = RandBigInts(rand.Intn(128))
+			} else {
+				val = RandStrings(128, 128, false)
+			}
+
+			res = append(res, fmt.Sprintf("json_object(\"tags\", '[%s]')", strings.Join(val, ",")))
+		}
 	}
 	return res
 }
@@ -347,7 +361,7 @@ func RandNumRunes(n int) string {
 func RandStrings(strLen int, count int, mixCNChar bool) []string {
 	result := make([]string, count)
 	for i := 0; i < count; i++ {
-		result[i] = fmt.Sprintf("'%s'", RandStringRunes(rand.Intn(strLen), mixCNChar))
+		result[i] = fmt.Sprintf("\"%s\"", RandStringRunes(rand.Intn(strLen), mixCNChar))
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i] < result[j]
