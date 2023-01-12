@@ -313,9 +313,9 @@ func RandJsons(count int) []string {
 		for i := 0; i < count; i++ {
 			var val []string
 			if rand.Intn(2) == 0 {
-				val = RandBigInts(rand.Intn(128))
+				val = RandBigInts(rand.Intn(127) + 1)
 			} else {
-				val = RandStrings(128, 128, false)
+				val = RandStrings(128, rand.Intn(127)+1, false)
 			}
 
 			res = append(res, fmt.Sprintf("json_object(\"tags\", '[%s]')", strings.Join(val, ",")))
