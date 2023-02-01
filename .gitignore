@@ -11,3 +11,4 @@
 /bin
 clustered-index-rand-test
 .DS_Store
+/vendor
