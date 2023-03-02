@@ -352,11 +352,11 @@ var JSONPredicate = NewFn(func(state *State) Fn {
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
 	pre := Or(
 		And(RandVal, Str("MEMBER OF"), Str("("), Str(colName), Str(")")),
-		And(Str("JSON_CONTAINS("), Str(colName), RandVal, Str(")")),
-		And(Str("JSON_CONTAINS("), RandVal, Str(colName), Str(")")),
-		And(Str("JSON_OVERLAPS("), Str(colName), RandVal, Str(")")),
-		And(Str("JSON_OVERLAPS("), RandVal, Str(colName), Str(")")),
-		And(Str("IsNull("), Str("JSON_OVERLAPS("), RandVal, Str(colName), Str(")"), Str(")")),
+		And(Str("JSON_CONTAINS("), Str(colName), Str(","), RandVal, Str(")")),
+		And(Str("JSON_CONTAINS("), RandVal, Str(","), Str(colName), Str(")")),
+		And(Str("JSON_OVERLAPS("), Str(colName), Str(","), RandVal, Str(")")),
+		And(Str("JSON_OVERLAPS("), RandVal, Str(","), Str(colName), Str(")")),
+		And(Str("IsNull("), Str("JSON_OVERLAPS("), RandVal, Str(","), Str(colName), Str(")"), Str(")")),
 	)
 	return Or(
 		pre,
