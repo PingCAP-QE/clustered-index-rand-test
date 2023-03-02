@@ -338,6 +338,25 @@ var Predicate = NewFn(func(state *State) Fn {
 		And(Str(colName), Str("in"), Str("("), InValues, Str(")")),
 		And(Str("IsNull("), Str(colName), Str(")")),
 		And(Str(colName), Str("between"), RandVal, Str("and"), RandVal),
+		JSONPredicate,
+	)
+	return Or(
+		pre,
+		And(Str("not("), pre, Str(")")),
+	)
+})
+
+var JSONPredicate = NewFn(func(state *State) Fn {
+	tbl := state.env.Table
+	randCol := state.env.Column
+	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
+	pre := Or(
+		And(RandVal, Str("MEMBER OF"), Str("("), Str(colName), Str(")")),
+		And(Str("JSON_CONTAINS("), Str(colName), RandVal, Str(")")),
+		And(Str("JSON_CONTAINS("), RandVal, Str(colName), Str(")")),
+		And(Str("JSON_OVERLAPS("), Str(colName), RandVal, Str(")")),
+		And(Str("JSON_OVERLAPS("), RandVal, Str(colName), Str(")")),
+		And(Str("IsNull("), Str("JSON_OVERLAPS("), RandVal, Str(colName), Str(")"), Str(")")),
 	)
 	return Or(
 		pre,
@@ -363,7 +382,7 @@ var RandVal = NewFn(func(state *State) Fn {
 	tbl := state.env.Table
 	randCol := state.env.Column
 	var v string
-	if rand.Intn(3) == 0 || len(tbl.Values) == 0 {
+	if len(tbl.Values) == 0 || rand.Intn(3) == 0 {
 		v = randCol.RandomValue()
 	} else {
 		v = tbl.GetRandRowVal(randCol)
