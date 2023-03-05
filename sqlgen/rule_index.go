@@ -71,13 +71,12 @@ var IndexDefinitionColumn = NewFn(func(state *State) Fn {
 		)
 	}
 	totalCols := tbl.Columns.Filter(func(c *Column) bool {
-		// json column can't be used as index column.
-		return !idx.HasColumn(c) && c.Tp != ColumnTypeJSON && !state.env.MultiObjs.SameObject(c.Name)
+		return !idx.HasColumn(c) && !state.env.MultiObjs.SameObject(c.Name)
 	})
 	if idx.Tp == IndexTypePrimary {
 		// All parts of a PRIMARY KEY must be NOT NULL.
 		totalCols = totalCols.Filter(func(c *Column) bool {
-			return c.DefaultVal != "null"
+			return c.DefaultVal != "null" && c.Tp != ColumnTypeJSON
 		})
 	}
 	if len(totalCols) == 0 {
@@ -103,10 +102,15 @@ var IndexDefinitionColumnCheckLen = NewFn(func(state *State) Fn {
 	)
 })
 
+var randTp = []string{"SIGNED", "UNSIGNED", "CHAR(64)", "binary(64)", "SIGNED", "UNSIGNED", "CHAR(64)", "binary(64)", "date", "datetime", "time"}
+
 var IndexDefinitionColumnNoPrefix = NewFn(func(state *State) Fn {
 	idx := state.env.Index
 	col := state.env.IdxColumn
 	idx.AppendColumn(col, 0)
+	if col.Tp == ColumnTypeJSON {
+		return Str(fmt.Sprintf("(cast(%s as %s array))", col.Name, randTp[rand.Intn(len(randTp))]))
+	}
 	return Str(col.Name)
 }).P(func(state *State) bool {
 	col := state.env.IdxColumn

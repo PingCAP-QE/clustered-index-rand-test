@@ -200,7 +200,7 @@ var GroupByColumnsOpt = NewFn(func(state *State) Fn {
 var WhereClause = NewFn(func(state *State) Fn {
 	return Or(
 		Empty,
-		And(Str("where"), Predicates).W(3),
+		And(Str("where"), Or(Predicates, Predicate)).W(3),
 	)
 })
 
@@ -330,18 +330,26 @@ func init() {
 }
 
 var Predicate = NewFn(func(state *State) Fn {
+	if state.env.QState != nil {
+		state.env.Table = state.env.QState.GetRandTable()
+	} else if state.env.Table == nil {
+		state.env.Table = state.Tables.Rand()
+	}
+	state.env.Column = state.env.Table.Columns.Rand()
 	tbl := state.env.Table
 	randCol := state.env.Column
 	colName := fmt.Sprintf("%s.%s", tbl.Name, randCol.Name)
 	pre := Or(
-		And(Str(colName), CompareSymbol, RandVal),
-		And(Str(colName), Str("in"), Str("("), InValues, Str(")")),
-		And(Str("IsNull("), Str(colName), Str(")")),
-		And(Str(colName), Str("between"), RandVal, Str("and"), RandVal),
+		Or(
+			And(Str(colName), CompareSymbol, RandVal),
+			And(Str(colName), Str("in"), Str("("), InValues, Str(")")),
+			And(Str("IsNull("), Str(colName), Str(")")),
+			And(Str(colName), Str("between"), RandVal, Str("and"), RandVal),
+		),
 		JSONPredicate,
 	)
 	return Or(
-		pre,
+		pre.W(5),
 		And(Str("not("), pre, Str(")")),
 	)
 })

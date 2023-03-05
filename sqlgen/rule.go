@@ -14,7 +14,7 @@ var Start = NewFn(func(state *State) Fn {
 		CreateTableLike.W(6).P(HasTables, NoTooMuchTables),
 		Query.W(20).P(HasTables),
 		// QueryPrepare.W(2).P(HasTables),
-		DMLStmt.W(20).P(HasTables),
+		DMLStmt.W(17).P(HasTables),
 		AlterTable.W(5).P(HasTables),
 		SplitRegion.W(1).P(HasTables),
 		AnalyzeTable.W(0).P(HasTables),
