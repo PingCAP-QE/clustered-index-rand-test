@@ -215,7 +215,7 @@ var HintJoin = NewFn(func(state *State) Fn {
 	}
 	t1, t2 := tbl[0], tbl[1]
 	return Or(
-		Empty,
+		Strs("/*+  */"),
 		Strs("/*+ merge_join(", t1.Name, ",", t2.Name, "*/"),
 		Strs("/*+ hash_join(", t1.Name, ",", t2.Name, "*/"),
 		Strs("/*+ inl_join(", t1.Name, ",", t2.Name, ") */"),
