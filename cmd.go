@@ -152,7 +152,6 @@ func (f *fileWriter) writeSQL(query string) {
 func abtestCmd() *cobra.Command {
 	var (
 		stmtCount   int
-		tableCnt    int
 		dsn1        string
 		dsn2        string
 		sqlFilePath string
@@ -168,29 +167,19 @@ func abtestCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedSeed := parseAndSetSeed(seed)
 
-			var conn1, conn2 *sql.Conn
-			if !debug {
-				conn1 = setUpDatabaseConnection(dsn1)
-				conn2 = setUpDatabaseConnection(dsn2)
-			}
+			conn1 := setUpDatabaseConnection(dsn1)
+			conn2 := setUpDatabaseConnection(dsn2)
 
 			state := cases.NewMultiSchemaChangeState()
-			queries := generateInitialSQLs(state, tableCnt, rand.Intn(15)+3)
+			queries := generateInitialSQLs(state)
 			queries = append(queries, generatePlainSQLs(state, stmtCount)...)
-
-			var rs1, rs2 *resultset.ResultSet
-			var err1, err2 error
 
 			for _, query := range queries {
 				if debug {
-					fmt.Print(query + ";")
+					fmt.Println(query + ";")
 				}
-
-				if !debug {
-					rs1, err1 = executeQuery(conn1, query)
-					rs2, err2 = executeQuery(conn2, query)
-				}
-
+				rs1, err1 := executeQuery(conn1, query)
+				rs2, err2 := executeQuery(conn2, query)
 				if debug {
 					fmt.Println(colorizeErrorMsg(err1))
 					fmt.Println(colorizeErrorMsg(err2))
@@ -214,12 +203,11 @@ func abtestCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
-	cmd.Flags().IntVar(&tableCnt, "table", 10, "number of table")
 	cmd.Flags().StringVar(&dsn1, "dsn1", "", "dsn for 1st database")
 	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
 	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
 	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
-	cmd.Flags().StringVar(&seed, "seed", "now", "random seed")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
 	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
 	return cmd
 }
@@ -276,8 +264,9 @@ func executeAndPrint(conn *sql.Conn, query string) {
 	rs.PrettyPrint(os.Stdout)
 }
 
-func generateInitialSQLs(state *sqlgen.State, tableCount, columnCount int) []string {
-	indexCount, rowCount := rand.Intn(5)+1, rand.Intn(1000)+30
+func generateInitialSQLs(state *sqlgen.State) []string {
+	tableCount, columnCount := 5, 5
+	indexCount, rowCount := 2, 10
 	sqls := make([]string, 0, tableCount+tableCount*rowCount)
 	state.SetRepeat(sqlgen.ColumnDefinition, columnCount, columnCount)
 	state.SetRepeat(sqlgen.IndexDefinition, indexCount, indexCount)

@@ -18,8 +18,7 @@ func FilterUniqueColumns(c ColumnTypeGroup) ColumnTypeGroup {
 
 // SwapOutParameterizedColumns substitute random Columns with `?` for prepare statements.
 // It returns the substituted column in order. For example,
-//
-//	it may changes [a, b, c, d] to [a, ?, c, ?] and returns [b, d]
+//   it may changes [a, b, c, d] to [a, ?, c, ?] and returns [b, d]
 func SwapOutParameterizedColumns(cols []*Column) []*Column {
 	if len(cols) == 0 {
 		return nil
@@ -39,8 +38,7 @@ func SwapOutParameterizedColumns(cols []*Column) []*Column {
 }
 
 // Make a list of string into random groups, and filter the empty groups. For example,
-//
-//	[a, b, c, d, e] -> [[b, e], [c], [a, d]]
+//   [a, b, c, d, e] -> [[b, e], [c], [a, d]]
 func RandomGroups(ss []string, groupCount int) [][]string {
 	groups := make([][]string, groupCount)
 	for _, s := range ss {
