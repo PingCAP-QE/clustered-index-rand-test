@@ -314,7 +314,7 @@ func randomJSON() string {
 }
 
 func init() {
-	generator = append(generator, randNumber, randString, randNull, randBool, randObj, randArray)
+	generator = append(generator, randNumber, randFloat64, randString, randNull, randBool, randObj, randArray)
 }
 
 var generator []func(bytes.Buffer) string
@@ -327,7 +327,7 @@ func randArray(buf bytes.Buffer) string {
 	arr := make([]string, int(distuv.Poisson{Lambda: 30}.Rand()))
 	gIdx := rand.Intn(2)
 	for i := range arr {
-		arr[i] = randItem(func() int { return gIdx + randN(len(arr)*10, len(generator)-2) }, buf)
+		arr[i] = randItem(func() int { return gIdx + randN(len(arr)*10, len(generator)-3) }, buf)
 	}
 	return "[" + strings.Join(arr, ",") + "]"
 }
@@ -360,7 +360,7 @@ func randObj(buf bytes.Buffer) string {
 	arr := make([]string, lens)
 	for i := 0; i < lens; i++ {
 		arr[i] = randString(buf) + ":" + randItem(func() int {
-			return randN(4, len(generator)-4)
+			return randN(len(generator)-2, len(generator)-2)
 		}, buf)
 	}
 	return "{" + strings.Join(arr, ",") + "}"
@@ -382,12 +382,11 @@ func randString(arr bytes.Buffer) string {
 }
 
 func randNumber(_ bytes.Buffer) string {
-	switch rand.Intn(500) {
-	case 1:
-		return strconv.FormatFloat(float64(rand.Intn(2147483647*2)-2147483648)/float64(rand.Intn(30000)), 'f', -1, 64)
-	default:
-		return strconv.Itoa(rand.Intn(2147483647*2) - 2147483648)
-	}
+	return strconv.Itoa(rand.Intn(2147483647*2) - 2147483648)
+}
+
+func randFloat64(_ bytes.Buffer) string {
+	return strconv.FormatFloat(float64(rand.Intn(2147483647*2)-2147483648)/float64(rand.Intn(30000)), 'f', -1, 64)
 }
 
 func RandJsons(count int) []string {
