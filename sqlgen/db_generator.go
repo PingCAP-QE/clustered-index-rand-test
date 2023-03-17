@@ -1,14 +1,17 @@
 package sqlgen
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cznic/mathutil"
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
 func (s *State) GenNewTable() *Table {
@@ -300,12 +303,98 @@ func init() {
 	jMap[JSONTypeCodeString] = []string{`"\"json string1\""`, `"\"json string2\""`, `"\"json string3\""`}
 }
 
+func randomJSON() string {
+	var buf bytes.Buffer
+	return randItem(func() int {
+		if rand.Intn(3) == 0 {
+			return len(generator) - 1
+		}
+		return rand.Intn(len(generator))
+	}, buf)
+}
+
+func init() {
+	generator = append(generator, randNumber, randFloat64, randString, randNull, randBool, randObj, randArray)
+}
+
+var generator []func(bytes.Buffer) string
+
+func randItem(f func() int, buf bytes.Buffer) string {
+	return generator[f()%len(generator)](buf)
+}
+
+func randArray(buf bytes.Buffer) string {
+	arr := make([]string, int(distuv.Poisson{Lambda: 30}.Rand()))
+	gIdx := rand.Intn(2)
+	for i := range arr {
+		arr[i] = randItem(func() int { return gIdx + randN(len(arr)*10, len(generator)-3) }, buf)
+	}
+	return "[" + strings.Join(arr, ",") + "]"
+}
+
+func randN(probability int, n int) int {
+	intn := rand.Intn(probability)
+	switch {
+	case intn < n:
+		return intn
+	default:
+		return 0
+	}
+}
+
+var randChars = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ")
+
+func randNull(_ bytes.Buffer) string {
+	return "null"
+}
+
+func randBool(_ bytes.Buffer) string {
+	if rand.Intn(2) == 0 {
+		return "false"
+	}
+	return "true"
+}
+
+func randObj(buf bytes.Buffer) string {
+	lens := rand.Intn(64)
+	arr := make([]string, lens)
+	for i := 0; i < lens; i++ {
+		arr[i] = randString(buf) + ":" + randItem(func() int {
+			return randN(len(generator)-2, len(generator)-2)
+		}, buf)
+	}
+	return "{" + strings.Join(arr, ",") + "}"
+}
+
+func randString(arr bytes.Buffer) string {
+	lens := rand.Intn(64)
+	arr.WriteByte('"')
+	for i := 0; i < lens; i++ {
+		arr.WriteByte(randChars[rand.Intn(len(randChars))])
+	}
+	if rand.Intn(500) == 0 {
+		arr.WriteByte(' ')
+	}
+	arr.WriteByte('"')
+	s := arr.String()
+	arr.Reset()
+	return s
+}
+
+func randNumber(_ bytes.Buffer) string {
+	return strconv.Itoa(rand.Intn(2147483647*2) - 2147483648)
+}
+
+func randFloat64(_ bytes.Buffer) string {
+	return strconv.FormatFloat(float64(rand.Intn(2147483647*2)-2147483648)/float64(rand.Intn(30000)), 'f', -1, 64)
+}
+
 func RandJsons(count int) []string {
-	res := make([]string, 0, count)
-	for i := 0; i < count; i++ {
-		jsonType := JSONType(rand.Intn(len(jMap)))
-		length := len(jMap[jsonType])
-		res = append(res, jMap[jsonType][rand.Intn(length)])
+	res := make([]string, count)
+	for i := range res {
+		json := randomJSON()
+		json = strings.Replace(json, "\"", "\\\"", -1)
+		res[i] = "\"" + json + "\""
 	}
 	return res
 }
@@ -347,7 +436,7 @@ func RandNumRunes(n int) string {
 func RandStrings(strLen int, count int, mixCNChar bool) []string {
 	result := make([]string, count)
 	for i := 0; i < count; i++ {
-		result[i] = fmt.Sprintf("'%s'", RandStringRunes(rand.Intn(strLen), mixCNChar))
+		result[i] = fmt.Sprintf("\"%s\"", RandStringRunes(rand.Intn(strLen), mixCNChar))
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i] < result[j]

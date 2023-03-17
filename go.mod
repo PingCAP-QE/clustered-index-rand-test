@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/zyguan/sqlz v0.0.0-20210309141421-491a44ab6d63
 	go.uber.org/zap v1.18.1
+	gonum.org/v1/gonum v0.12.0
 )
 
 require (
@@ -26,7 +27,8 @@ require (
 	github.com/zyguan/just v0.0.0-20201209133552-9791f5cd031c // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
