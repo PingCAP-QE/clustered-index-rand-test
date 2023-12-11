@@ -29,6 +29,7 @@ func rootCmd() *cobra.Command {
 	cmd.AddCommand(printCmd())
 	cmd.AddCommand(abtestCmd())
 	cmd.AddCommand(checkSyntaxCmd())
+	cmd.AddCommand(uniqueConstraintCheckCmd())
 
 	return cmd
 }
@@ -273,6 +274,160 @@ func abtestCmd() *cobra.Command {
 	return cmd
 }
 
+func uniqueConstraintCheckCmd() *cobra.Command {
+	var (
+		stmtCount   int
+		dsn         string
+		sqlFilePath string
+		logPath     string
+		seed        string
+		debug       bool
+	)
+	cmd := &cobra.Command{
+		Use:           "ucc",
+		Short:         "Run unique constraint check",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			parseAndSetSeed(seed)
+
+			conn1 := setUpDatabaseConnection(dsn)
+			conn2 := setUpDatabaseConnection(dsn)
+
+			// session 1: begin; xxx...; query; commit; admin check;
+			// session 2: xxx... (auto commit), so should not block?
+
+			state := cases.NewStateForTiDB600()
+			state.SetWeight(sqlgen.PartitionDefinition, 0)
+			state.SetWeight(sqlgen.AlterTableChangeMulti, 0)
+			// TiDB implementation of float and double is different from MySQL.
+			state.SetWeight(sqlgen.ColumnDefinitionTypesFloat, 0)
+			state.SetWeight(sqlgen.ColumnDefinitionTypesDouble, 0)
+			state.SetWeight(sqlgen.ColumnDefinitionTypesJSON, 0)
+			state.SetWeight(sqlgen.Query, 0) // no queries, we will handle it manually
+			state.SetWeight(sqlgen.AlterTable, 0)
+			state.ReplaceRule(sqlgen.IndexDefinitionColumns, sqlgen.IndexDefinitionSingleColumn)
+
+			initQueries := generateInitialSQLs(state)
+			for _, query := range initQueries {
+				if debug {
+					println(query + ";")
+				}
+				_, err := executeQuery(conn1, query)
+				if err != nil {
+					println("failed to initialize")
+					// but just ignore it
+					return nil
+				}
+			}
+			queries := generatePlainDMLs(state, stmtCount)
+			mustNotCommit := false
+
+			executeQuery(conn1, "set @@tidb_constraint_check_in_place_pessimistic=0")
+			executeQuery(conn1, "begin pessimistic")
+
+		QUERIES:
+			for _, query := range queries {
+				inOriginSession := rand.Int()%2 == 0
+				if debug {
+					sessionNum := 2
+					if inOriginSession {
+						sessionNum = 1
+					}
+					fmt.Println("in session", sessionNum, ", "+query+";")
+				}
+				if !inOriginSession {
+					// ignore anything in session 2, we don't care about them
+					_, _ = executeQuery(conn2, query)
+					continue
+				}
+				rs, err := executeQuery(conn1, query)
+				if debug {
+					fmt.Println(colorizeErrorMsg(err))
+				}
+				if err != nil {
+					if strings.Contains(err.Error(), "8147") {
+						// txn aborted. This is considered success
+						println("found error 8147. This is all good.")
+						return nil
+					}
+					if strings.Contains(strings.ToLower(err.Error()), "assertion") {
+						println("ERROR: ASSERTION FAILURE" + err.Error())
+						println("seed: ", seed)
+						return err
+					}
+				}
+				if rs != nil && debug {
+					fmt.Println(rs.String())
+				}
+				// perform a query for each table
+				for _, t := range state.Tables {
+					for _, idx := range t.Indexes {
+						if idx.IsUnique() && len(idx.Columns) == 1 {
+							query := "select " + idx.Columns[0].Name + " from " + t.Name + " order by " + idx.Columns[0].Name
+							if debug {
+								println("query: " + query)
+							}
+							rs, err = executeQuery(conn1, query)
+							if err != nil {
+								println("query error: ", err.Error())
+								return err
+							}
+							if rs != nil {
+								for rid := 1; rid < rs.NRows(); rid++ {
+									v1, ok := rs.RawValue(rid, 0)
+									if !ok {
+										return errors.New("can't read from rs")
+									}
+									v2, ok := rs.RawValue(rid-1, 0)
+									if !ok {
+										return errors.New("can't read from rs")
+									}
+									if string(v1) == string(v2) && len(v1) > 0 {
+										if debug {
+											println("duplicated index value found: ", v1)
+											rs.PrettyPrint(os.Stdout)
+										}
+										mustNotCommit = true
+										// try to commit now
+										break QUERIES
+									}
+								}
+							}
+						}
+					}
+
+				}
+			}
+
+			_, err := executeQuery(conn1, "commit")
+			if mustNotCommit && err == nil {
+				return errors.New("txn should not commit! Because inconsistent result has been read")
+			}
+
+			for _, t := range state.Tables {
+				query := "admin check table " + t.Name
+				if debug {
+					println("check: " + query)
+				}
+				_, err := executeQuery(conn1, query)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
+	cmd.Flags().StringVar(&dsn, "dsn", "", "dsn for database")
+	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
+	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
+	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
+	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
+	return cmd
+}
+
 func setUpDatabaseConnection(dsn string) *sql.Conn {
 	ctx := context.Background()
 	db, err := sql.Open("mysql", dsn)
@@ -356,6 +511,20 @@ func generatePlainSQLs(state *sqlgen.State, count int) []string {
 	sqls := make([]string, 0, count)
 	for i := 0; i < count; i++ {
 		query, err := sqlgen.Start.Eval(state)
+		if err != nil {
+			panic(err)
+		}
+		sqls = append(sqls, query)
+	}
+	return sqls
+}
+
+// DMLs, so no DDL, no set variable, no admin check, etc.
+func generatePlainDMLs(state *sqlgen.State, count int) []string {
+	state.Env().Clean()
+	sqls := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		query, err := sqlgen.DMLStmt.Eval(state)
 		if err != nil {
 			panic(err)
 		}
