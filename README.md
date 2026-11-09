@@ -227,6 +227,47 @@ Finally, let's look back to `state *State`. Except sharing information between `
 
 This project also integrates a simple AB test framework.
 
+### Approve disposable test targets
+
+Commands that connect to a database require `--target-policy /absolute/path/targets.json`.
+The file must be a regular owner-only (`0600`) file owned by the process user,
+provisioned by the test target owner outside an untrusted working directory.
+Symlinks, wildcard targets and root users are rejected. For example:
+
+```json
+{
+  "targets": [
+    {"host": "127.0.0.1", "port": 4000, "user": "sqlgen_test_runner"},
+    {"host": "127.0.0.1", "port": 3306, "user": "sqlgen_test_runner"}
+  ],
+  "tls_ca": "/run/secrets/disposable-test-ca.pem"
+}
+```
+
+Only the exact endpoint/user tuples in this file are allowed. Omit `tls_ca` to use
+system roots. TLS 1.2+, certificate and hostname verification are required. DSNs
+must use TCP and a nonempty password, select no database, and contain no session
+variable parameters or unsafe driver options. Have the owner provision a dedicated
+account limited to the disposable `sqlgen_test_*` schema namespace; do not use
+production/shared targets or grant instance administration privileges.
+
+Inject DSNs from your secret manager into `SQLGEN_DSN` (syntax check) or
+`SQLGEN_DSN1` / `SQLGEN_DSN2` (AB test). They are resolved at execution, never shown
+as flag defaults. Legacy DSN flags remain supported; prefer environment injection
+to avoid secrets in command-line arguments.
+
+Each connection creates a fresh `sqlgen_test_<random hex>` schema with plain
+`CREATE DATABASE`: it never resets or reuses an existing database. Only a schema
+successfully created by this run may be deleted during cleanup. Normal returns,
+setup failures and graceful interruption close the connections and attempt cleanup;
+cleanup errors are reported. A forced kill or lost database connection may leave
+an isolated test schema for its owner to remove.
+
+`sql_mode`, row-format and clustered-index switches affect only the current
+session; the tool does not enable `tidb_general_log` or mutate instance globals.
+Exported reproduction SQL also creates a fresh schema and has no destructive
+prelude against `test_syntax` or another existing database.
+
 ### Run AB Test
 
 Send 200 random SQLs to `127.0.0.1:4000` and `127.0.0.1:3306` database instances, and compare the result between them:
@@ -234,8 +275,7 @@ Send 200 random SQLs to `127.0.0.1:4000` and `127.0.0.1:3306` database instances
 ```bash
 make
 ./bin/sqlgen abtest \
-  --dsn1 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
-  --dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200 --debug
+  --target-policy /run/approvals/sqlgen-targets.json --count 200 --debug
 ```
 
 ### Run quick syntax test
@@ -244,7 +284,7 @@ Send 100 random SQLs to `127.0.0.1:4000` and using the random seed `1621496851`:
 
 ```bash
 make
-./bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
+./bin/sqlgen check-syntax --target-policy /run/approvals/sqlgen-targets.json \
    --debug --seed 1621496851
 ```
 

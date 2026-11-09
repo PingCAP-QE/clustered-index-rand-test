@@ -13,11 +13,10 @@ test: build
 
 abtest: build
 	@bin/sqlgen abtest \
-		--dsn1 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' \
-		--dsn2 'root:@tcp(127.0.0.1:3306)/?time_zone=UTC' --count 200 --debug --seed=1652779915
+		--target-policy "$(SQLGEN_TARGET_POLICY)" --count 200 --debug --seed=1652779915
 
 test-syntax: build
-	@bin/sqlgen check-syntax --dsn 'root:@tcp(127.0.0.1:4000)/?time_zone=UTC' --count 200 --debug
+	@bin/sqlgen check-syntax --target-policy "$(SQLGEN_TARGET_POLICY)" --count 200 --debug
 
 gen: build
 	@bin/sqlgen print --count 200

@@ -18,7 +18,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/zyguan/sqlz"
 	"github.com/zyguan/sqlz/resultset"
 )
 
@@ -36,6 +35,7 @@ func rootCmd() *cobra.Command {
 func checkSyntaxCmd() *cobra.Command {
 	var (
 		stmtCount  int
+		policyPath string
 		seed       string
 		debug      bool
 		dsn        string
@@ -47,22 +47,40 @@ func checkSyntaxCmd() *cobra.Command {
 		Short:         "Run syntax check test",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
+			policy, err := loadTargetPolicy(policyPath)
+			if err != nil {
+				return err
+			}
+			if dsn == "" {
+				dsn = os.Getenv("SQLGEN_DSN")
+			}
 			parseAndSetSeed(seed)
-			fileWriter := newFileWriter(outputFile)
-			conn := setUpDatabaseConnection(dsn)
+			database, err := openTestDatabase(cmd.Context(), policy, dsn)
+			if err != nil {
+				return err
+			}
+			defer func() { runErr = combineCleanupError(runErr, database.Close()) }()
+			conn := database.Conn
+			fileWriter := newFileWriter(outputFile, database.name)
+			if fileWriter.file != nil {
+				defer fileWriter.file.Close()
+			}
 
 			state := cases.NewMultiSchemaChangeState()
 			queries := generatePlainSQLs(state, stmtCount)
 			// queries := generateCreateTables(state, stmtCount)
 
 			for i, query := range queries {
+				if err := cmd.Context().Err(); err != nil {
+					return err
+				}
 				if debug {
 					fmt.Printf("-- statement seq: %d\n", i)
 					fmt.Println(query + ";")
 				}
 				fileWriter.writeSQL(query)
-				_, err := executeQuery(conn, query)
+				_, err := executeQuery(cmd.Context(), conn, query)
 				if err != nil {
 					fmt.Println(query)
 					errMsg := strings.ToLower(err.Error())
@@ -79,7 +97,8 @@ func checkSyntaxCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&dsn, "dsn", "", "dsn for database")
+	cmd.Flags().StringVar(&dsn, "dsn", "", "DSN for approved target; defaults to SQLGEN_DSN at execution")
+	cmd.Flags().StringVar(&policyPath, "target-policy", "", "absolute path to owner-only target approval JSON")
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
 	cmd.Flags().BoolVar(&debug, "debug", false, "print generated SQLs")
@@ -115,7 +134,7 @@ type fileWriter struct {
 	file *os.File
 }
 
-func newFileWriter(path string) *fileWriter {
+func newFileWriter(path, database string) *fileWriter {
 	if len(path) == 0 {
 		return &fileWriter{}
 	}
@@ -125,9 +144,8 @@ func newFileWriter(path string) *fileWriter {
 		return &fileWriter{}
 	}
 	prependSQLs := []string{
-		"drop database if exists test_syntax;",
-		"create database test_syntax;",
-		"use test_syntax",
+		"CREATE DATABASE " + quotedDatabase(database) + ";",
+		"USE " + quotedDatabase(database) + ";",
 	}
 	for _, s := range prependSQLs {
 		_, err = file.WriteString(fmt.Sprintf("%s\n", s))
@@ -152,6 +170,7 @@ func (f *fileWriter) writeSQL(query string) {
 func abtestCmd() *cobra.Command {
 	var (
 		stmtCount   int
+		policyPath  string
 		dsn1        string
 		dsn2        string
 		sqlFilePath string
@@ -165,10 +184,36 @@ func abtestCmd() *cobra.Command {
 		Short:         "Run AB test",
 		SilenceErrors: true,
 		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (runErr error) {
+			policy, err := loadTargetPolicy(policyPath)
+			if err != nil {
+				return err
+			}
+			if dsn1 == "" {
+				dsn1 = os.Getenv("SQLGEN_DSN1")
+			}
+			if dsn2 == "" {
+				dsn2 = os.Getenv("SQLGEN_DSN2")
+			}
+			// Authorize both targets before creating anything on either one.
+			if _, err := policy.authorize(dsn1); err != nil {
+				return err
+			}
+			if _, err := policy.authorize(dsn2); err != nil {
+				return err
+			}
 			parsedSeed := parseAndSetSeed(seed)
-			conn1 := setUpDatabaseConnection(dsn1)
-			conn2 := setUpDatabaseConnection(dsn2)
+			first, err := openTestDatabase(cmd.Context(), policy, dsn1)
+			if err != nil {
+				return err
+			}
+			defer func() { runErr = combineCleanupError(runErr, first.Close()) }()
+			second, err := openTestDatabase(cmd.Context(), policy, dsn2)
+			if err != nil {
+				return err
+			}
+			defer func() { runErr = combineCleanupError(runErr, second.Close()) }()
+			conn1, conn2 := first.Conn, second.Conn
 
 			state := sqlgen.NewState()
 			if testNT {
@@ -194,16 +239,17 @@ func abtestCmd() *cobra.Command {
 					}
 					queries = append(queries, query)
 				}
-				executeQuery(conn1, "set tidb_general_log=1")
-				executeQuery(conn2, "set tidb_general_log=1")
 			}
 
 			for i, query := range queries {
+				if err := cmd.Context().Err(); err != nil {
+					return err
+				}
 				testNT := testNT && strings.HasPrefix(query, "batch on")
 				if debug {
 					fmt.Println(query + ";\n")
 				}
-				rs1, err1 := executeQuery(conn1, query)
+				rs1, err1 := executeQuery(cmd.Context(), conn1, query)
 				if testNT {
 					if strings.Contains(query, " delete ") {
 						query = query[strings.Index(query, "delete"):]
@@ -213,7 +259,7 @@ func abtestCmd() *cobra.Command {
 						panic("unexpected query: delete or update not found")
 					}
 				}
-				rs2, err2 := executeQuery(conn2, query)
+				rs2, err2 := executeQuery(cmd.Context(), conn2, query)
 				if testNT {
 					// If either of the normal dml or nt-dml fails, we should not compare the results. We cannot guarantee that the results are the same.
 					// because we assure there is at most 1 batch. Errors in nt-dml are always early returned, thus captured in err1.
@@ -263,8 +309,9 @@ func abtestCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
-	cmd.Flags().StringVar(&dsn1, "dsn1", "", "dsn for 1st database")
-	cmd.Flags().StringVar(&dsn2, "dsn2", "", "dsn for 2nd database")
+	cmd.Flags().StringVar(&dsn1, "dsn1", "", "DSN for first approved target; defaults to SQLGEN_DSN1 at execution")
+	cmd.Flags().StringVar(&policyPath, "target-policy", "", "absolute path to owner-only target approval JSON")
+	cmd.Flags().StringVar(&dsn2, "dsn2", "", "DSN for second approved target; defaults to SQLGEN_DSN2 at execution")
 	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
 	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
@@ -273,38 +320,7 @@ func abtestCmd() *cobra.Command {
 	return cmd
 }
 
-func setUpDatabaseConnection(dsn string) *sql.Conn {
-	ctx := context.Background()
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		panic(err)
-	}
-	dbName := "sqlgen_test"
-	conn, err := sqlz.Connect(ctx, db)
-	if err != nil {
-		panic(err)
-	}
-	_, err = conn.ExecContext(ctx, "drop database if exists "+dbName)
-	if err != nil {
-		panic(err)
-	}
-	_, err = conn.ExecContext(ctx, "create database "+dbName)
-	if err != nil {
-		panic(err)
-	}
-	_, err = conn.ExecContext(ctx, "use "+dbName)
-	if err != nil {
-		panic(err)
-	}
-	_, err = conn.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
-	if err != nil {
-		panic(err)
-	}
-	return conn
-}
-
-func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
-	ctx := context.Background()
+func executeQuery(ctx context.Context, conn *sql.Conn, query string) (*resultset.ResultSet, error) {
 	err := conn.PingContext(ctx)
 	if err != nil {
 		return nil, err
@@ -318,7 +334,7 @@ func executeQuery(conn *sql.Conn, query string) (*resultset.ResultSet, error) {
 }
 
 func executeAndPrint(conn *sql.Conn, query string) {
-	rs, err := executeQuery(conn, query)
+	rs, err := executeQuery(context.Background(), conn, query)
 	if err != nil {
 		fmt.Println(err.Error())
 	}

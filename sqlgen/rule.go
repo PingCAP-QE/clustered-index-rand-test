@@ -76,11 +76,11 @@ var SetSystemVars = NewFn(func(state *State) Fn {
 })
 
 var SwitchRowFormatVer = NewFn(func(state *State) Fn {
-	return Strs("set @@global.tidb_row_format_version =", RandomNum(1, 2))
+	return Strs("set @@session.tidb_row_format_version =", RandomNum(1, 2))
 })
 
 var SwitchClustered = NewFn(func(state *State) Fn {
-	return Strs("set @@global.tidb_enable_clustered_index =", RandomNum(0, 1))
+	return Strs("set @@session.tidb_enable_clustered_index =", RandomNum(0, 1))
 })
 
 var DropTable = NewFn(func(state *State) Fn {
