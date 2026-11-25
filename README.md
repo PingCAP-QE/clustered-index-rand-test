@@ -240,30 +240,40 @@ Symlinks, wildcard targets and root users are rejected. For example:
     {"host": "127.0.0.1", "port": 4000, "user": "sqlgen_test_runner"},
     {"host": "127.0.0.1", "port": 3306, "user": "sqlgen_test_runner"}
   ],
-  "tls_ca": "/run/secrets/disposable-test-ca.pem"
+  "tls_ca": "/run/secrets/disposable-test-ca.pem",
+  "tls_ca_sha256": "9f2c...e41b",
+  "tls_crl": "/run/secrets/disposable-test-ca.crl"
 }
 ```
 
-Only the exact endpoint/user tuples in this file are allowed. Omit `tls_ca` to use
-system roots. TLS 1.2+, certificate and hostname verification are required. DSNs
-must use TCP and a nonempty password, select no database, and contain no session
-variable parameters or unsafe driver options. Have the owner provision a dedicated
-account limited to the disposable `sqlgen_test_*` schema namespace; do not use
-production/shared targets or grant instance administration privileges.
+Only the exact endpoint/user tuples in this file are allowed. The three TLS
+fields are required: there is no fallback to the system roots and no connection
+without a revocation check. TLS 1.2+ with certificate and hostname verification
+is required. DSNs must use TCP and a nonempty password, select no database, and
+contain no session variable parameters or unsafe driver options. Have the owner
+provision a dedicated account limited to the disposable `sqlgen_test_*` schema
+namespace; do not use production/shared targets or grant instance
+administration privileges.
 
-`tls_ca` is the trust anchor every connection sends its credentials to, so the
-file is validated: a regular file of at most 1 MiB, owned by root or the process
-user, and not writable by group or others. It is read through the descriptor that
-was checked, and anything else is rejected before a connection is opened, such as
-a directory or a file others can rewrite. Symlinks are followed, as secret
-volumes mount them; the file they lead to is what is checked. To also reject a
-substituted CA that has safe ownership and permissions, optionally add
-`tls_ca_sha256`, the SHA-256 of the PEM file (`sha256sum disposable-test-ca.pem`).
+`tls_ca` is the trust anchor every connection sends its credentials to. The file
+is validated before any connection is opened: a regular file of at most 1 MiB,
+owned by root or the process user, and not writable by group or others. It is
+read through the descriptor that was checked, so a directory or a file others can
+rewrite is rejected. Symlinks are followed, as secret volumes mount them; the
+file they lead to is what is checked. The owner also pins it with
+`tls_ca_sha256`, the SHA-256 of the PEM file (`sha256sum disposable-test-ca.pem`),
+so a substituted CA is rejected even when it has safe ownership and permissions.
+Rotate the CA and its pin together.
+
+`tls_crl` holds the PEM certificate revocation lists issued by that CA (an
+empty, signed list when nothing is revoked). It is validated like the CA file
+and must contain only revocation lists. Every server certificate must be covered
+by a current list signed by its issuer and must not be listed in it; otherwise
+the connection fails. Keep the list renewed before it expires.
 
 Inject DSNs from your secret manager into `SQLGEN_DSN` (syntax check) or
-`SQLGEN_DSN1` / `SQLGEN_DSN2` (AB test). They are resolved at execution, never shown
-as flag defaults. Legacy DSN flags remain supported; prefer environment injection
-to avoid secrets in command-line arguments.
+`SQLGEN_DSN1` / `SQLGEN_DSN2` (AB test). There are no command-line DSN flags, so
+credentials never appear in the command line.
 
 Each connection creates a fresh `sqlgen_test_<random hex>` schema with plain
 `CREATE DATABASE`: it never resets or reuses an existing database. Only a schema

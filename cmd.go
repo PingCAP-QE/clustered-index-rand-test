@@ -38,7 +38,6 @@ func checkSyntaxCmd() *cobra.Command {
 		policyPath string
 		seed       string
 		debug      bool
-		dsn        string
 		failfast   bool
 		outputFile string
 	)
@@ -52,8 +51,11 @@ func checkSyntaxCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// A DSN carries credentials: it is read from the environment only,
+			// never from the command line.
+			dsn := os.Getenv("SQLGEN_DSN")
 			if dsn == "" {
-				dsn = os.Getenv("SQLGEN_DSN")
+				return errors.New("SQLGEN_DSN must be set")
 			}
 			parseAndSetSeed(seed)
 			database, err := openTestDatabase(cmd.Context(), policy, dsn)
@@ -97,7 +99,6 @@ func checkSyntaxCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&dsn, "dsn", "", "DSN for approved target; defaults to SQLGEN_DSN at execution")
 	cmd.Flags().StringVar(&policyPath, "target-policy", "", "absolute path to owner-only target approval JSON")
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")
@@ -171,8 +172,6 @@ func abtestCmd() *cobra.Command {
 	var (
 		stmtCount   int
 		policyPath  string
-		dsn1        string
-		dsn2        string
 		sqlFilePath string
 		logPath     string
 		seed        string
@@ -189,11 +188,11 @@ func abtestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if dsn1 == "" {
-				dsn1 = os.Getenv("SQLGEN_DSN1")
-			}
-			if dsn2 == "" {
-				dsn2 = os.Getenv("SQLGEN_DSN2")
+			// A DSN carries credentials: it is read from the environment only,
+			// never from the command line.
+			dsn1, dsn2 := os.Getenv("SQLGEN_DSN1"), os.Getenv("SQLGEN_DSN2")
+			if dsn1 == "" || dsn2 == "" {
+				return errors.New("SQLGEN_DSN1 and SQLGEN_DSN2 must be set")
 			}
 			// Authorize both targets before creating anything on either one.
 			if _, err := policy.authorize(dsn1); err != nil {
@@ -309,9 +308,7 @@ func abtestCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&stmtCount, "count", 100, "number of statements to run")
-	cmd.Flags().StringVar(&dsn1, "dsn1", "", "DSN for first approved target; defaults to SQLGEN_DSN1 at execution")
 	cmd.Flags().StringVar(&policyPath, "target-policy", "", "absolute path to owner-only target approval JSON")
-	cmd.Flags().StringVar(&dsn2, "dsn2", "", "DSN for second approved target; defaults to SQLGEN_DSN2 at execution")
 	cmd.Flags().StringVar(&sqlFilePath, "sqlfile", "rand.sql", "running SQLs")
 	cmd.Flags().StringVar(&logPath, "log", "", "The output of 2 databases")
 	cmd.Flags().StringVar(&seed, "seed", "1", "random seed")

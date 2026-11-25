@@ -6,8 +6,11 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -26,18 +30,22 @@ type allowedTarget struct {
 	User string `json:"user"`
 }
 
+// targetPolicy is the target owner's approval. Its TLS fields are all
+// required, so no connection falls back to system roots or skips revocation.
 type targetPolicy struct {
 	Targets []allowedTarget `json:"targets"`
-	CAFile  string          `json:"tls_ca,omitempty"`
-	// CASHA256 is the hex SHA-256 of the CAFile bytes. The target owner may pin
+	CAFile  string          `json:"tls_ca"`
+	// CASHA256 is the hex SHA-256 of the CAFile bytes. The target owner pins
 	// it here, so a substituted trust anchor is rejected even when the
 	// replacement has safe ownership and permissions.
-	CASHA256 string `json:"tls_ca_sha256,omitempty"`
+	CASHA256 string `json:"tls_ca_sha256"`
+	// CRLFile holds the PEM certificate revocation lists issued by the CA.
+	CRLFile string `json:"tls_crl"`
 }
 
-// maxCAFile bounds the trust anchor so a hostile or misconfigured file
-// cannot exhaust memory.
-const maxCAFile = 1 << 20 // 1 MiB
+// maxTLSFile bounds the trust anchor and the revocation lists so a hostile or
+// misconfigured file cannot exhaust memory.
+const maxTLSFile = 1 << 20 // 1 MiB
 
 func loadTargetPolicy(path string) (*targetPolicy, error) {
 	if !filepath.IsAbs(path) {
@@ -75,18 +83,15 @@ func loadTargetPolicy(path string) (*targetPolicy, error) {
 			return nil, fmt.Errorf("target policy must list exact endpoints and dedicated non-root users")
 		}
 	}
-	if policy.CAFile != "" && !filepath.IsAbs(policy.CAFile) {
-		return nil, fmt.Errorf("TLS CA path must be absolute")
-	}
-	if policy.CASHA256 != "" {
-		if policy.CAFile == "" {
-			return nil, fmt.Errorf("tls_ca_sha256 is set but tls_ca is not")
+	for _, field := range []struct{ name, path string }{{"tls_ca", policy.CAFile}, {"tls_crl", policy.CRLFile}} {
+		if !filepath.IsAbs(field.path) {
+			return nil, fmt.Errorf("target policy must name %s, an absolute path", field.name)
 		}
-		if !isSHA256(policy.CASHA256) {
-			return nil, fmt.Errorf("tls_ca_sha256 must be the SHA-256 of the PEM file")
-		}
-		policy.CASHA256 = strings.ToLower(policy.CASHA256)
 	}
+	if !isSHA256(policy.CASHA256) {
+		return nil, fmt.Errorf("target policy must pin tls_ca with tls_ca_sha256, the SHA-256 of the PEM file")
+	}
+	policy.CASHA256 = strings.ToLower(policy.CASHA256)
 	return policy, nil
 }
 
@@ -124,64 +129,131 @@ func (policy *targetPolicy) authorize(dsn string) (*mysql.Config, error) {
 	return nil, fmt.Errorf("database target is not authorized by --target-policy")
 }
 
+// tlsConfig is the TLS policy of every connection: the pinned trust anchor,
+// chain and hostname verification, and a revocation check of the server
+// certificate against the pinned revocation lists.
 func (policy *targetPolicy) tlsConfig(host string) (*tls.Config, error) {
-	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host}
-	if policy.CAFile != "" {
-		data, err := readTrustAnchor(policy.CAFile, policy.CASHA256)
-		if err != nil {
-			return nil, err
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(data) {
-			return nil, fmt.Errorf("invalid target CA file")
-		}
-		config.RootCAs = pool
+	data, err := readTLSFile(policy.CAFile, "CA")
+	if err != nil {
+		return nil, err
 	}
-	return config, nil
+	digest := sha256.Sum256(data)
+	if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(digest[:])), []byte(policy.CASHA256)) != 1 {
+		return nil, fmt.Errorf("target CA file does not match tls_ca_sha256 pinned by the target policy")
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(data) {
+		return nil, fmt.Errorf("invalid target CA file")
+	}
+	revocations, err := readRevocationLists(policy.CRLFile)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: pool,
+		// Go verifies the chain first; the server certificate must then
+		// also pass the revocation lists the target owner pinned.
+		VerifyPeerCertificate: revocations.verifyLeaf,
+	}, nil
 }
 
-// readTrustAnchor loads the CA bundle that every database connection trusts
-// with its credentials. The file must be a regular file owned by root or the
-// process user and not writable by group or others, so no other account can
-// plant a rogue CA. When a digest is pinned in the policy, the bytes must match
-// it as well. The file is read through the descriptor that was checked, so
-// the validated bytes are exactly the trusted ones. Symlinks are followed on
-// purpose, as secret volumes mount them: the opened file is what is checked,
-// not the path.
-func readTrustAnchor(path, pinnedSHA256 string) ([]byte, error) {
+// readTLSFile loads a file every database connection depends on: the trust
+// anchor or the revocation lists. It must be a regular file of at most 1 MiB,
+// owned by root or the process user, and not writable by group or others, so
+// no other account can replace its content. It is read through the descriptor
+// that was checked, so the validated bytes are exactly the used ones. Symlinks
+// are followed on purpose, as secret volumes mount them: the opened file is
+// what is checked, not the path.
+func readTLSFile(path, kind string) ([]byte, error) {
 	// O_NONBLOCK keeps a FIFO planted at the path from blocking the open.
 	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open target CA file")
+		return nil, fmt.Errorf("cannot open target %s file", kind)
 	}
 	file := os.NewFile(uintptr(descriptor), path)
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("cannot inspect target CA file")
+		return nil, fmt.Errorf("cannot inspect target %s file", kind)
 	}
 	owner, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return nil, fmt.Errorf("cannot inspect target CA file")
+		return nil, fmt.Errorf("cannot inspect target %s file", kind)
 	}
-	if !info.Mode().IsRegular() || info.Size() > maxCAFile {
-		return nil, fmt.Errorf("target CA must be a regular file, at most 1 MiB")
+	if !info.Mode().IsRegular() || info.Size() > maxTLSFile {
+		return nil, fmt.Errorf("target %s must be a regular file, at most 1 MiB", kind)
 	}
 	if (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) || info.Mode().Perm()&0022 != 0 {
-		return nil, fmt.Errorf("target CA must be owned by root or the process user and not writable by group or others")
+		return nil, fmt.Errorf("target %s must be owned by root or the process user and not writable by group or others", kind)
 	}
-	data, err := io.ReadAll(io.LimitReader(file, maxCAFile+1))
-	if err != nil || len(data) > maxCAFile {
-		return nil, fmt.Errorf("cannot read target CA file")
-	}
-	if pinnedSHA256 == "" {
-		return data, nil
-	}
-	digest := sha256.Sum256(data)
-	if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(digest[:])), []byte(pinnedSHA256)) != 1 {
-		return nil, fmt.Errorf("target CA file does not match tls_ca_sha256 pinned by the target policy")
+	data, err := io.ReadAll(io.LimitReader(file, maxTLSFile+1))
+	if err != nil || len(data) > maxTLSFile {
+		return nil, fmt.Errorf("cannot read target %s file", kind)
 	}
 	return data, nil
+}
+
+// revocationLists are the certificate revocation lists the target owner pinned.
+type revocationLists []*pkix.CertificateList
+
+func readRevocationLists(path string) (revocationLists, error) {
+	data, err := readTLSFile(path, "CRL")
+	if err != nil {
+		return nil, err
+	}
+	var lists revocationLists
+	for rest := data; len(rest) > 0; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "X509 CRL" {
+			return nil, fmt.Errorf("target CRL file must contain only revocation lists")
+		}
+		list, err := x509.ParseDERCRL(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("invalid target CRL file")
+		}
+		lists = append(lists, list)
+	}
+	if len(lists) == 0 {
+		return nil, fmt.Errorf("invalid target CRL file")
+	}
+	return lists, nil
+}
+
+// verifyLeaf is the VerifyPeerCertificate callback of every connection. It
+// fails closed: the server certificate must be covered by a current list
+// signed by its issuer, and must not be listed as revoked.
+func (lists revocationLists) verifyLeaf(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	if len(rawCerts) == 0 || len(verifiedChains) == 0 || len(verifiedChains[0]) == 0 {
+		return errors.New("target presented no verified certificate")
+	}
+	chain := verifiedChains[0]
+	leaf, issuer := chain[0], chain[0]
+	if len(chain) > 1 {
+		issuer = chain[1]
+	}
+	covered, now := false, time.Now()
+	for _, list := range lists {
+		if issuer.CheckCRLSignature(list) != nil {
+			continue
+		}
+		covered = true
+		if list.TBSCertList.NextUpdate.Before(now) {
+			return errors.New("the revocation list of the target certificate has expired")
+		}
+		for _, revoked := range list.TBSCertList.RevokedCertificates {
+			if revoked.SerialNumber.Cmp(leaf.SerialNumber) == 0 {
+				return errors.New("the target certificate has been revoked")
+			}
+		}
+	}
+	if !covered {
+		return errors.New("no revocation list covers the issuer of the target certificate")
+	}
+	return nil
 }
 
 func newTestDatabaseName() (string, error) {
