@@ -237,13 +237,12 @@ func TestFreshSchemaNamesAndExportNeverDropExistingData(t *testing.T) {
 	}
 }
 
-func TestTrustAnchorMustBePinnedByTheTargetPolicy(t *testing.T) {
+func TestTrustAnchorPinIsOptionalButValidatedWhenSet(t *testing.T) {
 	trusted := newTestCA(t, "disposable-test-ca")
 	caFile := writeCAFile(t, trusted.pem, 0644)
 	digest := sha256Hex(trusted.pem)
 	targets := []allowedTarget{{Host: "test.example", Port: 4000, User: "worker"}}
 	for name, policy := range map[string]targetPolicy{
-		"no pin":           {Targets: targets, CAFile: caFile},
 		"truncated pin":    {Targets: targets, CAFile: caFile, CASHA256: digest[:63]},
 		"non-hex pin":      {Targets: targets, CAFile: caFile, CASHA256: strings.Repeat("g", 64)},
 		"pin without CA":   {Targets: targets, CASHA256: digest},
@@ -251,13 +250,16 @@ func TestTrustAnchorMustBePinnedByTheTargetPolicy(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := loadTargetPolicy(writePolicy(t, policy)); err == nil {
-				t.Fatal("accepted a policy without a valid trust anchor pin")
+				t.Fatal("accepted a policy with an invalid trust anchor pin")
 			}
 		})
 	}
 	for name, policy := range map[string]targetPolicy{
 		"system roots": {Targets: targets},
-		"pinned CA":    {Targets: targets, CAFile: caFile, CASHA256: strings.ToUpper(digest)},
+		// The pin is optional: the file still has to pass the ownership and
+		// permission checks.
+		"unpinned CA": {Targets: targets, CAFile: caFile},
+		"pinned CA":   {Targets: targets, CAFile: caFile, CASHA256: strings.ToUpper(digest)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			loaded, err := loadTargetPolicy(writePolicy(t, policy))
