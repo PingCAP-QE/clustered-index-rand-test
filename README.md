@@ -240,7 +240,8 @@ Symlinks, wildcard targets and root users are rejected. For example:
     {"host": "127.0.0.1", "port": 4000, "user": "sqlgen_test_runner"},
     {"host": "127.0.0.1", "port": 3306, "user": "sqlgen_test_runner"}
   ],
-  "tls_ca": "/run/secrets/disposable-test-ca.pem"
+  "tls_ca": "/run/secrets/disposable-test-ca.pem",
+  "tls_ca_sha256": "9f2c...e41b"
 }
 ```
 
@@ -250,6 +251,16 @@ must use TCP and a nonempty password, select no database, and contain no session
 variable parameters or unsafe driver options. Have the owner provision a dedicated
 account limited to the disposable `sqlgen_test_*` schema namespace; do not use
 production/shared targets or grant instance administration privileges.
+
+`tls_ca` is the trust anchor every connection sends its credentials to, so the
+owner pins it: `tls_ca_sha256` is the SHA-256 of the PEM file
+(`sha256sum disposable-test-ca.pem`) and is required whenever `tls_ca` is set.
+The file must be a regular file of at most 1 MiB, owned by root or the process
+user, and not writable by group or others. It is read through the descriptor that
+was checked, and anything else is rejected before a connection is opened: another
+file in its place, a file others can rewrite, or a missing or malformed pin.
+Symlinks are followed, as secret volumes mount them; the file they lead to is what
+is checked. Rotate the CA and its pin together.
 
 Inject DSNs from your secret manager into `SQLGEN_DSN` (syntax check) or
 `SQLGEN_DSN1` / `SQLGEN_DSN2` (AB test). They are resolved at execution, never shown

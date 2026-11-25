@@ -2,6 +2,8 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
@@ -27,7 +29,15 @@ type allowedTarget struct {
 type targetPolicy struct {
 	Targets []allowedTarget `json:"targets"`
 	CAFile  string          `json:"tls_ca,omitempty"`
+	// CASHA256 is the hex SHA-256 of the CAFile bytes. The target owner pins
+	// it here, so a substituted trust anchor is rejected even when the
+	// replacement has safe ownership and permissions.
+	CASHA256 string `json:"tls_ca_sha256,omitempty"`
 }
+
+// maxCAFile bounds the trust anchor so a hostile or misconfigured file
+// cannot exhaust memory.
+const maxCAFile = 1 << 20 // 1 MiB
 
 func loadTargetPolicy(path string) (*targetPolicy, error) {
 	if !filepath.IsAbs(path) {
@@ -65,10 +75,26 @@ func loadTargetPolicy(path string) (*targetPolicy, error) {
 			return nil, fmt.Errorf("target policy must list exact endpoints and dedicated non-root users")
 		}
 	}
-	if policy.CAFile != "" && !filepath.IsAbs(policy.CAFile) {
+	switch {
+	case policy.CAFile == "":
+		if policy.CASHA256 != "" {
+			return nil, fmt.Errorf("tls_ca_sha256 is set but tls_ca is not")
+		}
+	case !filepath.IsAbs(policy.CAFile):
 		return nil, fmt.Errorf("TLS CA path must be absolute")
+	case !isSHA256(policy.CASHA256):
+		return nil, fmt.Errorf("target policy must pin tls_ca with tls_ca_sha256, the SHA-256 of the PEM file")
 	}
+	policy.CASHA256 = strings.ToLower(policy.CASHA256)
 	return policy, nil
+}
+
+func isSHA256(digest string) bool {
+	if len(digest) != sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(digest)
+	return err == nil
 }
 
 // authorize runs before opening a pool or sending any SQL. A caller may not
@@ -100,9 +126,9 @@ func (policy *targetPolicy) authorize(dsn string) (*mysql.Config, error) {
 func (policy *targetPolicy) tlsConfig(host string) (*tls.Config, error) {
 	config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host}
 	if policy.CAFile != "" {
-		data, err := os.ReadFile(policy.CAFile)
+		data, err := readTrustAnchor(policy.CAFile, policy.CASHA256)
 		if err != nil {
-			return nil, fmt.Errorf("cannot read target CA file")
+			return nil, err
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(data) {
@@ -111,6 +137,47 @@ func (policy *targetPolicy) tlsConfig(host string) (*tls.Config, error) {
 		config.RootCAs = pool
 	}
 	return config, nil
+}
+
+// readTrustAnchor loads the CA bundle that every database connection trusts
+// with its credentials. The file must be a regular file owned by root or the
+// process user and not writable by group or others, so no other account can
+// plant a rogue CA. Its bytes must also match the digest the target owner
+// pinned in the policy. The file is read through the descriptor that was
+// checked, so the validated bytes are exactly the trusted ones. Symlinks are
+// followed on purpose, as secret volumes mount them: the opened file is what
+// is checked, not the path.
+func readTrustAnchor(path, pinnedSHA256 string) ([]byte, error) {
+	// O_NONBLOCK keeps a FIFO planted at the path from blocking the open.
+	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open target CA file")
+	}
+	file := os.NewFile(uintptr(descriptor), path)
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("cannot inspect target CA file")
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, fmt.Errorf("cannot inspect target CA file")
+	}
+	if !info.Mode().IsRegular() || info.Size() > maxCAFile {
+		return nil, fmt.Errorf("target CA must be a regular file, at most 1 MiB")
+	}
+	if (owner.Uid != 0 && owner.Uid != uint32(os.Geteuid())) || info.Mode().Perm()&0022 != 0 {
+		return nil, fmt.Errorf("target CA must be owned by root or the process user and not writable by group or others")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxCAFile+1))
+	if err != nil || len(data) > maxCAFile {
+		return nil, fmt.Errorf("cannot read target CA file")
+	}
+	digest := sha256.Sum256(data)
+	if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(digest[:])), []byte(pinnedSHA256)) != 1 {
+		return nil, fmt.Errorf("target CA file does not match tls_ca_sha256 pinned by the target policy")
+	}
+	return data, nil
 }
 
 func newTestDatabaseName() (string, error) {
