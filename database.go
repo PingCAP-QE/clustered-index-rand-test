@@ -35,13 +35,17 @@ func openTestDatabase(ctx context.Context, policy *targetPolicy, dsn string) (_ 
 	if err != nil {
 		return nil, err
 	}
+	// The DSN refers to the pinned TLS policy by name, and the driver looks
+	// that name up when it builds the connector, so the registration is kept
+	// until the database is closed. Every connection of the pool is then
+	// made over that policy: verified chain, hostname and revocation.
 	if err := mysql.RegisterTLSConfig(name, tlsConfig); err != nil {
 		return nil, err
 	}
 	cfg.TLSConfig = name
 	connector, err := mysql.NewConnector(cfg)
-	mysql.DeregisterTLSConfig(name)
 	if err != nil {
+		mysql.DeregisterTLSConfig(name)
 		return nil, fmt.Errorf("cannot configure verified database connection")
 	}
 	database := &testDatabase{pool: sql.OpenDB(connector), name: name}
@@ -100,6 +104,8 @@ func (database *testDatabase) Close() error {
 		cleanupErr = combineCleanupError(cleanupErr, database.pool.Close())
 		database.pool = nil
 	}
+	// The TLS policy was registered for this database's connections only.
+	mysql.DeregisterTLSConfig(database.name)
 	return cleanupErr
 }
 
